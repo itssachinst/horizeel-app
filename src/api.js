@@ -218,7 +218,8 @@ export const getFollowStats = async (userId) => {
   }
 };
 
-export default {
+// Create a named export object instead of an anonymous one
+const apiServices = {
   fetchVideos,
   fetchVideoById,
   registerUser,
@@ -239,3 +240,5 @@ export default {
   checkIsFollowing,
   getFollowStats
 };
+
+export default apiServices;

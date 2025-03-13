@@ -35,7 +35,7 @@ const FollowersPage = () => {
 
   useEffect(() => {
     loadUsers();
-  }, [userId, activeTab]);
+  }, [userId, activeTab, loadUsers]);
 
   const loadUsers = async () => {
     setLoading(true);

@@ -3,7 +3,6 @@ import axios from "axios";
 import { TextField, Button, Card, CardContent, Typography, Box, CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { uploadVideo } from "../api";
 
 const UploadVideo = () => {
   const [videoDetails, setVideoDetails] = useState({
@@ -17,7 +16,6 @@ const UploadVideo = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
 
   const handleChange = (e) => {
     const { name, value } = e.target;

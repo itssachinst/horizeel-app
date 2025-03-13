@@ -9,7 +9,7 @@ const HomePage = () => {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { /* currentUser */ } = useAuth();
 
   useEffect(() => {
     loadVideos();

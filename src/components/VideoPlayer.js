@@ -12,15 +12,12 @@ import {
   VolumeUp,
   Favorite,
   Visibility,
-  Fullscreen,
-  MoreHoriz,
   ExpandMore,
   ExpandLess,
   BookmarkBorder,
   Bookmark,
   Delete,
   PersonAdd,
-  PersonRemove,
   Check
 } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
@@ -132,7 +129,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       window.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
-  }, [currentIndex, setCurrentIndex, videos, initialLoadComplete, currentUser]);
+  }, [currentIndex, setCurrentIndex, videos, initialLoadComplete, currentUser, checkFollowStatus, exitFullScreen]);
 
   const handleVideoEnd = () => {
     if (currentIndex < videos.length - 1) {
