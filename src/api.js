@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Hard-code the IP address for now to fix the issue
-const API_BASE_URL = "http://192.168.29.199:8000/api";
+const API_BASE_URL = "https://horizeel-backend-production.up.railway.app/api";
 
 // Create axios instance with auth header
 const authAxios = axios.create({
