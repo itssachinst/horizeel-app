@@ -44,6 +44,52 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Move the checkSavedStatus and checkFollowStatus functions here, before useEffect
+  // Add a function to check saved status
+  const checkSavedStatus = async (videoId) => {
+    try {
+      const response = await checkVideoSaved(videoId);
+      setIsSaved(response.is_saved);
+    } catch (error) {
+      console.error("Error checking saved status:", error);
+    }
+  };
+
+  // Add a function to check follow status
+  const checkFollowStatus = async (creatorId) => {
+    // Don't check follow status if the current user is the creator
+    if (!currentUser || currentUser.user_id === creatorId) {
+      setIsFollowing(false);
+      return;
+    }
+    
+    try {
+      const isFollowing = await checkIsFollowing(creatorId);
+      setIsFollowing(isFollowing);
+    } catch (error) {
+      console.error("Error checking follow status:", error);
+    }
+  };
+
+  // Define the exitFullScreen function before useEffect
+  const exitFullScreen = () => {
+    try {
+      if (document.exitFullscreen && document.fullscreenElement) {
+        document.exitFullscreen().catch(err => {
+          console.error("Error exiting fullscreen:", err);
+        });
+      }
+      setIsFullScreen(false);
+      
+      // Navigate away from the video page
+      navigate("/");
+    } catch (error) {
+      console.error("Error exiting fullscreen:", error);
+      // Still try to navigate even if exiting fullscreen fails
+      navigate("/");
+    }
+  };
+
   useEffect(() => {
     const video = videoRef.current;
 
@@ -160,24 +206,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       }
     } catch (error) {
       console.error("Error requesting fullscreen:", error);
-    }
-  };
-
-  const exitFullScreen = () => {
-    try {
-      if (document.exitFullscreen && document.fullscreenElement) {
-        document.exitFullscreen().catch(err => {
-          console.error("Error exiting fullscreen:", err);
-        });
-      }
-      setIsFullScreen(false);
-      
-      // Navigate away from the video page
-      navigate("/");
-    } catch (error) {
-      console.error("Error exiting fullscreen:", error);
-      // Still try to navigate even if exiting fullscreen fails
-      navigate("/");
     }
   };
 
@@ -325,16 +353,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     }
   };
 
-  // Add a function to check saved status
-  const checkSavedStatus = async (videoId) => {
-    try {
-      const response = await checkVideoSaved(videoId);
-      setIsSaved(response.is_saved);
-    } catch (error) {
-      console.error("Error checking saved status:", error);
-    }
-  };
-
   // Update the handleSaveVideo function to use the API
   const handleSaveVideo = async () => {
     if (!currentUser) {
@@ -417,22 +435,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       setShowDeleteDialog(false);
       setSnackbarMessage("Failed to delete video");
       setShowSnackbar(true);
-    }
-  };
-
-  // Add a function to check follow status
-  const checkFollowStatus = async (creatorId) => {
-    // Don't check follow status if the current user is the creator
-    if (!currentUser || currentUser.user_id === creatorId) {
-      setIsFollowing(false);
-      return;
-    }
-    
-    try {
-      const isFollowing = await checkIsFollowing(creatorId);
-      setIsFollowing(isFollowing);
-    } catch (error) {
-      console.error("Error checking follow status:", error);
     }
   };
 

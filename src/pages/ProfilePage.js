@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Container, Typography, Box, Paper, Avatar, Button, Grid, Card, 
   CardMedia, CardContent, IconButton, TextField, Dialog, DialogTitle, 
   DialogContent, DialogActions, Snackbar, Alert, Tabs, 
-  Tab, Divider, Chip, Tooltip, Badge, Stack, CircularProgress
+  Tab, Chip, Badge, Stack, CircularProgress
 } from '@mui/material';
 import { 
-  Edit, Save, Cancel, Delete, Bookmark, VideoLibrary, 
+  Edit, Save, Cancel, Delete, VideoLibrary, 
   VideoCall, ThumbUp, Visibility, DateRange, Instagram, 
-  Twitter, Facebook, LinkedIn, BookmarkBorder, Error, Refresh
+  Twitter, Facebook, LinkedIn, Error, Refresh,
+  Bookmark
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchVideos, deleteVideo, getSavedVideos, getFollowStats } from '../api';
@@ -56,7 +57,7 @@ const ProfilePage = () => {
   const totalLikes = userVideos.reduce((sum, video) => sum + (video.likes || 0), 0);
   const totalViews = userVideos.reduce((sum, video) => sum + (video.views || 0), 0);
 
-  useEffect(() => {
+  const loadUserData = useCallback(() => {
     if (currentUser) {
       console.log("Current user data:", currentUser);
       setUpdatedProfile({
@@ -77,6 +78,10 @@ const ProfilePage = () => {
       loadFollowerCounts();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
 
   const loadUserVideos = async () => {
     setLoadingUserVideos(true);

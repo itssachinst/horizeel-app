@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { TextField, Button, Card, CardContent, Typography, Box, CircularProgress } from "@mui/material";
+import { TextField, Button, Card, CardContent, Typography, Box, CircularProgress, Chip, InputAdornment, IconButton } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { Add as AddIcon, Tag as TagIcon } from "@mui/icons-material";
 
 const UploadVideo = () => {
   const [videoDetails, setVideoDetails] = useState({
     title: "",
     description: "",
+    category: "",
+    privacy: "public",
   });
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
@@ -15,6 +18,8 @@ const UploadVideo = () => {
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [hashtag, setHashtag] = useState("");
+  const [hashtags, setHashtags] = useState([]);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -82,6 +87,32 @@ const UploadVideo = () => {
     }
   };
 
+  const handleHashtagChange = (e) => {
+    let value = e.target.value;
+    if (value.startsWith('#')) {
+      value = value.substring(1);
+    }
+    setHashtag(value);
+  };
+
+  const addHashtag = () => {
+    if (hashtag.trim()) {
+      const formattedHashtag = `#${hashtag.trim().replace(/\s+/g, '')}`;
+      
+      if (!hashtags.includes(formattedHashtag)) {
+        setHashtags([...hashtags, formattedHashtag]);
+      }
+      setHashtag("");
+    }
+  };
+
+  const handleHashtagKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addHashtag();
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -94,9 +125,15 @@ const UploadVideo = () => {
       return;
     }
 
+    const descriptionWithHashtags = hashtags.length > 0
+      ? `${videoDetails.description}\n\n${hashtags.join(' ')}`
+      : videoDetails.description;
+
     const formData = new FormData();
     formData.append("title", videoDetails.title);
-    formData.append("description", videoDetails.description);
+    formData.append("description", descriptionWithHashtags);
+    formData.append("category", videoDetails.category);
+    formData.append("privacy", videoDetails.privacy);
     formData.append("vfile", videoFile);
     formData.append("tfile", thumbnailFile);
 
@@ -110,7 +147,7 @@ const UploadVideo = () => {
         return;
       }
       
-      const response = await axios.post("http://localhost:8000/api/videos/", formData, {
+      const response = await axios.post("https://horizeel-backend-production.up.railway.app/api/videos/", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           "Authorization": `Bearer ${token}`
@@ -123,10 +160,11 @@ const UploadVideo = () => {
 
       if (response.status === 201) {
         setMessage("Video uploaded successfully!");
-        setVideoDetails({ title: "", description: "" });
+        setVideoDetails({ title: "", description: "", category: "", privacy: "public" });
         setVideoFile(null);
         setThumbnailFile(null);
         setThumbnailURL(null);
+        setHashtags([]);
         
         // Navigate to the video page after successful upload
         setTimeout(() => {
@@ -267,6 +305,52 @@ const UploadVideo = () => {
                 />
               </Box>
             )}
+            
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1, color: 'white' }}>
+                Add Hashtags
+              </Typography>
+              
+              <TextField
+                placeholder="Enter hashtag..."
+                value={hashtag}
+                onChange={handleHashtagChange}
+                onKeyDown={handleHashtagKeyDown}
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <TagIcon color="primary" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton 
+                        onClick={addHashtag} 
+                        disabled={!hashtag.trim()}
+                        color="primary"
+                      >
+                        <AddIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ mb: 2 }}
+              />
+              
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {hashtags.map((tag, index) => (
+                  <Chip
+                    key={index}
+                    label={tag}
+                    onDelete={() => setHashtags(hashtags.filter((_, i) => i !== index))}
+                    color="primary"
+                    variant="outlined"
+                    icon={<TagIcon />}
+                  />
+                ))}
+              </Box>
+            </Box>
             
             {uploading ? (
               <Box textAlign="center">

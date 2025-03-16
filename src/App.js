@@ -11,6 +11,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import ProfilePage from "./pages/ProfilePage";
 import FollowersPage from "./pages/FollowersPage";
+import SearchPage from "./pages/SearchPage";
 import { Box } from "@mui/material";
 
 const theme = createTheme({
@@ -82,6 +83,11 @@ function App() {
             <Route path="/video/:id" element={
               <AppLayout>
                 <VideoPage />
+              </AppLayout>
+            } />
+            <Route path="/search" element={
+              <AppLayout>
+                <SearchPage />
               </AppLayout>
             } />
             <Route path="/login" element={

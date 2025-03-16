@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Hard-code the IP address for now to fix the issue
-const API_BASE_URL = "http://192.168.29.199:8000/api";
+const API_BASE_URL = "http://localhost:8000/api";
 
 // Create axios instance with auth header
 const authAxios = axios.create({
@@ -123,7 +123,19 @@ export const incrementVideoDislike = async (videoId) => {
 // Search videos
 export const searchVideos = async (query) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/videos/search?q=${query}`);
+    // Check if the query is a hashtag search
+    const isHashtagSearch = query.startsWith('#');
+    
+    // If it's a hashtag search, format it properly for the backend
+    // Remove the # symbol if present but indicate hashtag search mode
+    const searchParam = isHashtagSearch ? 
+      `q=${encodeURIComponent(query.substring(1))}&type=hashtag` : 
+      `q=${encodeURIComponent(query)}`;
+    
+    // Make the API call with appropriate parameters
+    const response = await axios.get(`${API_BASE_URL}/videos/search?${searchParam}`);
+    
+    console.log("Search results:", response.data);
     return response.data;
   } catch (error) {
     console.error("Error searching videos:", error);

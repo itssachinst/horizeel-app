@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -12,7 +12,12 @@ import {
   Divider, 
   ListItemIcon,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Chip,
+  Tooltip,
+  Autocomplete,
+  Paper,
+  Typography
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -85,6 +90,8 @@ const Header = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [trendingHashtags, setTrendingHashtags] = useState(['#shorts', '#music', '#gaming', '#tutorial', '#funny']);
+  const [showTrending, setShowTrending] = useState(false);
   
   const isMenuOpen = Boolean(anchorEl);
   const isMobileMenuOpen = Boolean(mobileMenuAnchorEl);
@@ -108,10 +115,29 @@ const Header = () => {
     handleMenuClose();
   };
 
+  // Handle search input change with hashtag highlighting
+  const handleSearchInputChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    // Show trending hashtags when the input is empty or starts with #
+    setShowTrending(value === '' || value.startsWith('#'));
+  };
+
+  // Handle hashtag selection
+  const handleHashtagClick = (hashtag) => {
+    setSearchQuery(hashtag);
+    // Auto-submit the search with the hashtag
+    navigate(`/search?q=${encodeURIComponent(hashtag)}`);
+    setShowTrending(false);
+  };
+
+  // Handle search form submission
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+      setShowTrending(false);
     }
   };
 
@@ -249,39 +275,103 @@ const Header = () => {
     </Menu>
   );
 
+  // Replace the existing Search component in the return statement with this new search component
+  const renderSearchBox = () => (
+    <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', position: 'relative' }}>
+      <Search>
+        <form onSubmit={handleSearch} style={{ width: '100%' }}>
+          <SearchIconWrapper>
+            <SearchIcon />
+          </SearchIconWrapper>
+          <StyledInputBase
+            placeholder="Search videos or #hashtags..."
+            inputProps={{ 'aria-label': 'search' }}
+            value={searchQuery}
+            onChange={handleSearchInputChange}
+            onFocus={() => setShowTrending(true)}
+            onBlur={() => setTimeout(() => setShowTrending(false), 200)}
+          />
+          {searchQuery && (
+            <IconButton 
+              type="submit" 
+              aria-label="search"
+              sx={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}
+            >
+              <SearchIcon />
+            </IconButton>
+          )}
+        </form>
+      </Search>
+      
+      {/* Trending hashtags dropdown */}
+      {showTrending && (
+        <Paper
+          elevation={3}
+          sx={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            mt: 0.5,
+            p: 2,
+            maxWidth: 600,
+            mx: 'auto',
+            background: alpha('#121212', 0.95),
+            backdropFilter: 'blur(5px)',
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
+            Trending Hashtags
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {trendingHashtags.map((hashtag) => (
+              <Chip
+                key={hashtag}
+                label={hashtag}
+                clickable
+                color="primary"
+                variant="outlined"
+                size="small"
+                onClick={() => handleHashtagClick(hashtag)}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: alpha('#3f51b5', 0.2),
+                  }
+                }}
+              />
+            ))}
+          </Box>
+        </Paper>
+      )}
+    </Box>
+  );
+
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="fixed" sx={{ backgroundColor: '#000', borderBottom: '1px solid #262626' }}>
-        <Toolbar sx={{ justifyContent: 'space-between', height: 56 }}>
-          {/* Logo */}
+      <AppBar position="sticky" sx={{ background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)' }}>
+        <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Logo onClick={() => navigate('/')} />
+            <IconButton
+              size="large"
+              edge="start"
+              color="inherit"
+              aria-label="menu"
+              sx={{ display: { xs: 'flex', md: 'none' }, mr: 1 }}
+              onClick={handleMobileMenuOpen}
+            >
+              <MenuIcon />
+            </IconButton>
+            
+            <Box sx={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+              <Logo height={40} />
+            </Box>
           </Box>
-
-          {/* Search Bar */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', maxWidth: 600, mx: 2 }}>
-            <form onSubmit={handleSearch} style={{ width: '100%' }}>
-              <Search>
-                <SearchIconWrapper>
-                  <SearchIcon />
-                </SearchIconWrapper>
-                <StyledInputBase
-                  placeholder="Search videos..."
-                  inputProps={{ 'aria-label': 'search' }}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  fullWidth
-                />
-                <IconButton 
-                  sx={{ position: 'absolute', right: 8, color: 'white' }}
-                  aria-label="voice search"
-                >
-                  <MicIcon />
-                </IconButton>
-              </Search>
-            </form>
-          </Box>
-
+          
+          {/* Insert the new search component here */}
+          {renderSearchBox()}
+          
           {/* Desktop Navigation Items */}
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
             <ActionIconButton
@@ -319,23 +409,9 @@ const Header = () => {
               )}
             </ActionIconButton>
           </Box>
-
-          {/* Mobile Navigation Items */}
-          <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-            <IconButton
-              size="large"
-              aria-label="show more"
-              aria-haspopup="true"
-              onClick={handleMobileMenuOpen}
-              color="inherit"
-            >
-              <MenuIcon />
-            </IconButton>
-          </Box>
         </Toolbar>
       </AppBar>
-      {/* Add spacer to prevent content from going under the AppBar */}
-      <Toolbar />
+      {/* Remove this spacer Toolbar */}
       {renderMobileMenu}
       {renderMenu}
     </Box>
