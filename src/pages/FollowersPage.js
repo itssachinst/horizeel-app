@@ -32,10 +32,7 @@ const FollowersPage = () => {
   const [activeTab, setActiveTab] = useState(type === 'following' ? 1 : 0);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 
-                    (window.location.hostname === 'localhost' 
-                      ? 'http://localhost:8000/api'
-                      : `${window.location.origin}/api`);
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:8000/api";
   
   // Add pagination state
   const [page, setPage] = useState(1);
