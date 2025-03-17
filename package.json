@@ -2,7 +2,7 @@
   "name": "horizeel-app",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://127.0.0.1:8000",
+  "proxy": "http://13.60.198.222:8000",
   "dependencies": {
     "@chiragrupani/fullscreen-react": "^1.2.5",
     "@emotion/react": "^11.14.0",

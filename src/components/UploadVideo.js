@@ -147,7 +147,7 @@ const UploadVideo = () => {
         return;
       }
       
-      const response = await axios.post("https://horizeel-backend-production.up.railway.app/api/videos/", formData, {
+      const response = await axios.post("http://13.60.198.222:8000/api/videos/", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           "Authorization": `Bearer ${token}`

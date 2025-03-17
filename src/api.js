@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Hard-code the IP address for now to fix the issue
-const API_BASE_URL = "http://localhost:8000/api";
+const API_BASE_URL = "http://13.60.198.222:8000/api";
 
 // Create axios instance with auth header
 const authAxios = axios.create({

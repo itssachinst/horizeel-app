@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Use the same URL as in your .env file
-const API_URL = "http://localhost:8000/api/videos/";
+const API_URL = "http://13.60.198.222:8000/api/videos/";
 
 console.log("Attempting to connect to:", API_URL);
 
