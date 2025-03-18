@@ -41,7 +41,9 @@ const SearchPage = () => {
   // Extract the search query from URL
   const query = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return params.get('q') || '';
+    const searchQuery = params.get('q') || '';
+    // Decode the URI component to handle special characters
+    return decodeURIComponent(searchQuery);
   }, [location.search]);
   
   // Check if searching for a hashtag
@@ -49,40 +51,57 @@ const SearchPage = () => {
   
   // Function to load search results
   const loadSearchResults = async () => {
+    if (!query.trim()) {
+      setVideos([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+    
     try {
       const results = await searchVideos(query);
-      setVideos(results);
       
-      // Extract and count all hashtags from the results
-      if (results.length > 0) {
-        const hashtagCounts = {};
+      // Check if results is an array
+      if (Array.isArray(results)) {
+        setVideos(results);
         
-        results.forEach(video => {
-          if (!video.description) return;
+        // Extract and count all hashtags from the results
+        if (results.length > 0) {
+          const hashtagCounts = {};
           
-          const hashtagRegex = /#[\w]+/g;
-          const matches = video.description.match(hashtagRegex) || [];
-          
-          matches.forEach(hashtag => {
-            // Don't include the current search hashtag in related
-            if (hashtag.toLowerCase() !== query.toLowerCase()) {
-              hashtagCounts[hashtag] = (hashtagCounts[hashtag] || 0) + 1;
-            }
+          results.forEach(video => {
+            if (!video.description) return;
+            
+            const hashtagRegex = /#[\w]+/g;
+            const matches = video.description.match(hashtagRegex) || [];
+            
+            matches.forEach(hashtag => {
+              // Don't include the current search hashtag in related
+              if (hashtag.toLowerCase() !== query.toLowerCase()) {
+                hashtagCounts[hashtag] = (hashtagCounts[hashtag] || 0) + 1;
+              }
+            });
           });
-        });
-        
-        // Convert to array and sort by frequency
-        const sortedHashtags = Object.entries(hashtagCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10) // Limit to top 10
-          .map(([tag]) => tag);
           
-        setRelatedHashtags(sortedHashtags);
+          // Convert to array and sort by frequency
+          const sortedHashtags = Object.entries(hashtagCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10) // Limit to top 10
+            .map(([tag]) => tag);
+            
+          setRelatedHashtags(sortedHashtags);
+        }
+      } else {
+        console.error('Invalid search results format:', results);
+        setError('Invalid response format from server');
+        setVideos([]);
       }
     } catch (err) {
       console.error('Error searching videos:', err);
-      setError('Failed to load search results. Please try again.');
+      setError(err.message || 'Failed to load search results. Please try again.');
+      setVideos([]);
     } finally {
       setLoading(false);
     }
@@ -90,13 +109,8 @@ const SearchPage = () => {
   
   // Load results when query changes
   useEffect(() => {
-    if (query) {
-      loadSearchResults();
-    } else {
-      // Redirect to home if no query
-      navigate('/');
-    }
-  }, [query, navigate]);
+    loadSearchResults();
+  }, [query]);
   
   // Function to handle video click
   const handleVideoClick = (videoId) => {

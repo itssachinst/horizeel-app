@@ -1,11 +1,15 @@
 import axios from "axios";
 
-// Hard-code the IP address for now to fix the issue
-const API_BASE_URL = "http://13.60.198.222:8000/api";
+// Use environment variable or fallback to localhost
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
 
 // Create axios instance with auth header
 const authAxios = axios.create({
-  baseURL: API_BASE_URL
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
 // Add request interceptor to include token in requests
@@ -48,18 +52,8 @@ export const registerUser = async (userData) => {
 
 export const loginUser = async (credentials) => {
   try {
-    // For login, we need to use form data format as required by the backend
-    const formData = new FormData();
-    formData.append('username', credentials.email);
-    formData.append('password', credentials.password);
-    
-    const response = await axios.post(`${API_BASE_URL}/users/login`, formData);
-    
-    // Save token to localStorage for future requests
-    if (response.data.access_token) {
-      localStorage.setItem('token', response.data.access_token);
-    }
-    
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, credentials);
+    localStorage.setItem('token', response.data.access_token);
     return response.data;
   } catch (error) {
     throw error.response?.data || { detail: "Login failed" };
@@ -75,7 +69,7 @@ export const getCurrentUser = async () => {
     const response = await authAxios.get(`${API_BASE_URL}/users/me`);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { detail: "Failed to fetch user data" };
+    throw error.response?.data || { detail: "Failed to get current user" };
   }
 };
 
@@ -123,6 +117,10 @@ export const incrementVideoDislike = async (videoId) => {
 // Search videos
 export const searchVideos = async (query) => {
   try {
+    if (!query || !query.trim()) {
+      return [];
+    }
+
     // Check if the query is a hashtag search
     const isHashtagSearch = query.startsWith('#');
     
@@ -135,11 +133,22 @@ export const searchVideos = async (query) => {
     // Make the API call with appropriate parameters
     const response = await axios.get(`${API_BASE_URL}/videos/search?${searchParam}`);
     
-    console.log("Search results:", response.data);
-    return response.data;
+    // Ensure we have a valid response
+    if (!response.data) {
+      throw new Error('No data received from server');
+    }
+
+    // If the response is not an array, check if it's wrapped in a data property
+    const videos = Array.isArray(response.data) ? response.data : 
+                  Array.isArray(response.data.videos) ? response.data.videos :
+                  Array.isArray(response.data.data) ? response.data.data : [];
+
+    console.log("Search results:", videos);
+    return videos;
   } catch (error) {
     console.error("Error searching videos:", error);
-    return []; // Return an empty array on error
+    // Throw a more descriptive error
+    throw new Error(error.response?.data?.detail || error.message || 'Failed to search videos');
   }
 };
 
@@ -230,6 +239,50 @@ export const getFollowStats = async (userId) => {
   }
 };
 
+// Password reset API calls
+export const requestPasswordReset = async (email) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/reset-password`, { email });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { detail: "Failed to send password reset email" };
+  }
+};
+
+export const verifyResetToken = async (token) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/auth/verify-reset-token?token=${token}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { detail: "Invalid or expired token" };
+  }
+};
+
+export const resetPassword = async (token, newPassword) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/reset-password-confirm`, {
+      token,
+      new_password: newPassword
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { detail: "Failed to reset password" };
+  }
+};
+
+// Direct password reset (without email verification)
+export const directResetPassword = async (email, newPassword) => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/direct-reset-password`, {
+      email,
+      new_password: newPassword
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { detail: "Failed to reset password" };
+  }
+};
+
 // Create a named export object instead of an anonymous one
 const apiServices = {
   fetchVideos,
@@ -250,7 +303,11 @@ const apiServices = {
   followUser,
   unfollowUser,
   checkIsFollowing,
-  getFollowStats
+  getFollowStats,
+  requestPasswordReset,
+  verifyResetToken,
+  resetPassword,
+  directResetPassword
 };
 
 export default apiServices;
