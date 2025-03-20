@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import VideoPage from "./pages/VideoPage";
@@ -70,6 +70,24 @@ const AppLayout = ({ children }) => {
 };
 
 function App() {
+  useEffect(() => {
+    // Apply global styles for proper scrolling
+    document.documentElement.style.overflow = 'auto';
+    document.documentElement.style.height = '100%';
+    document.body.style.overflow = 'auto';
+    document.body.style.height = '100%';
+    document.body.style.margin = '0';
+    
+    return () => {
+      // Clean up styles when component unmounts
+      document.documentElement.style.overflow = '';
+      document.documentElement.style.height = '';
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+      document.body.style.margin = '';
+    };
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <AuthProvider>

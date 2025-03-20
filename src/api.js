@@ -24,20 +24,79 @@ authAxios.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Add response interceptor for standardized error handling
+authAxios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle network errors
+    if (!error.response) {
+      return Promise.reject({
+        status: 'network_error',
+        message: 'Network error. Please check your internet connection.',
+        originalError: error
+      });
+    }
+    
+    // Handle API errors with standard format
+    const errorData = {
+      status: error.response.status,
+      message: error.response.data?.detail || 'An unexpected error occurred',
+      data: error.response.data,
+      originalError: error
+    };
+    
+    // Log errors for debugging (could be conditionally disabled in production)
+    console.error(`API Error (${error.response.status}):`, errorData.message);
+    
+    return Promise.reject(errorData);
+  }
+);
+
+// Same interceptor for the regular axios instance
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle network errors
+    if (!error.response) {
+      return Promise.reject({
+        status: 'network_error',
+        message: 'Network error. Please check your internet connection.',
+        originalError: error
+      });
+    }
+    
+    // Handle API errors with standard format
+    const errorData = {
+      status: error.response.status,
+      message: error.response.data?.detail || 'An unexpected error occurred',
+      data: error.response.data,
+      originalError: error
+    };
+    
+    console.error(`API Error (${error.response.status}):`, errorData.message);
+    
+    return Promise.reject(errorData);
+  }
+);
+
 export const fetchVideos = async () => {
   try {
     const response = await axios.get(`${API_BASE_URL}/videos/`);
-    console.log("API Response:", response.data); // Debugging
     return response.data;
   } catch (error) {
-    console.error("Error fetching videos:", error);
+    console.error("Error fetching videos:", error.message || error);
     return []; // Return an empty array on error
   }
 };
 
 export const fetchVideoById = async (id) => {
-  const response = await axios.get(`${API_BASE_URL}/videos/${id}`);
-  return response.data;
+  try {
+    const response = await axios.get(`${API_BASE_URL}/videos/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching video ${id}:`, error.message || error);
+    throw error; // Re-throw to allow component-level handling
+  }
 };
 
 // Authentication API calls
@@ -46,7 +105,8 @@ export const registerUser = async (userData) => {
     const response = await axios.post(`${API_BASE_URL}/users/register`, userData);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { detail: "Registration failed" };
+    console.error("Registration error:", error.message || error);
+    throw error;
   }
 };
 
@@ -56,7 +116,8 @@ export const loginUser = async (credentials) => {
     localStorage.setItem('token', response.data.access_token);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { detail: "Login failed" };
+    console.error("Login error:", error.message || error);
+    throw error;
   }
 };
 
@@ -69,7 +130,8 @@ export const getCurrentUser = async () => {
     const response = await authAxios.get(`${API_BASE_URL}/users/me`);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { detail: "Failed to get current user" };
+    console.error("Error getting current user:", error.message || error);
+    throw error;
   }
 };
 
@@ -79,7 +141,8 @@ export const uploadVideo = async (videoData) => {
     const response = await authAxios.post(`${API_BASE_URL}/videos/`, videoData);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { detail: "Upload failed" };
+    console.error("Upload error:", error.message || error);
+    throw error;
   }
 };
 
@@ -89,7 +152,8 @@ export const incrementVideoView = async (videoId) => {
     const response = await axios.post(`${API_BASE_URL}/videos/${videoId}/view`);
     return response.data;
   } catch (error) {
-    console.error("Error incrementing views:", error);
+    console.error("Error incrementing views:", error.message || error);
+    return { views: null, error: error.message || "Failed to increment view count" };
   }
 };
 
@@ -99,18 +163,19 @@ export const incrementVideoLike = async (videoId) => {
     const response = await axios.post(`${API_BASE_URL}/videos/${videoId}/like`);
     return response.data;
   } catch (error) {
-    console.error("Error incrementing likes:", error);
+    console.error("Error incrementing likes:", error.message || error);
+    return { likes: null, error: error.message || "Failed to increment like count" };
   }
 };
 
 // Add dislike count
 export const incrementVideoDislike = async (videoId) => {
   try {
-    const response = await authAxios.post(`${API_BASE_URL}/videos/${videoId}/dislike`);
+    const response = await axios.post(`${API_BASE_URL}/videos/${videoId}/dislike`);
     return response.data;
   } catch (error) {
-    console.error("Error disliking video:", error);
-    throw error.response?.data || { detail: "Failed to dislike video" };
+    console.error("Error incrementing dislikes:", error.message || error);
+    return { dislikes: null, error: error.message || "Failed to increment dislike count" };
   }
 };
 

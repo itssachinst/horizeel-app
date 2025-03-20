@@ -469,6 +469,23 @@ const ProfilePage = () => {
     linkedin: <LinkedIn />
   };
 
+  // Apply global styles to fix scrolling
+  useEffect(() => {
+    // Save original styles to restore when component unmounts
+    const originalStyle = document.body.style.cssText;
+    
+    // Apply styles needed for proper scrolling
+    document.body.style.overflow = 'auto';
+    document.body.style.height = 'auto';
+    document.documentElement.style.height = 'auto';
+    document.documentElement.style.overflow = 'auto';
+    
+    // Cleanup function to restore original styles when component unmounts
+    return () => {
+      document.body.style.cssText = originalStyle;
+    };
+  }, []);
+
   // Check if user is not authenticated
   if (!currentUser) {
     return (
@@ -489,7 +506,14 @@ const ProfilePage = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ pt: 4, pb: 8, bgcolor: '#000' }}>
+    <Container maxWidth="lg" sx={{ 
+      pt: 4, 
+      pb: 8, 
+      bgcolor: '#000',
+      position: 'relative',
+      height: 'auto',
+      minHeight: '100vh'
+    }}>
       {/* Profile Header with Cover Image */}
       <Paper 
         elevation={0} 

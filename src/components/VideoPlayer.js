@@ -26,8 +26,64 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { incrementVideoLike, incrementVideoDislike, saveVideo, checkVideoSaved, deleteVideo, followUser, unfollowUser, checkIsFollowing } from "../api";
 
+// Define all browser-specific fullscreen functions at component level
+const fullscreenAPI = {
+  enterFullscreen: (element) => {
+    if (element.requestFullscreen) {
+      return element.requestFullscreen();
+    } else if (element.mozRequestFullScreen) { // Firefox
+      return element.mozRequestFullScreen();
+    } else if (element.webkitRequestFullscreen) { // Chrome, Safari and Opera
+      return element.webkitRequestFullscreen();
+    } else if (element.msRequestFullscreen) { // IE/Edge
+      return element.msRequestFullscreen();
+    } else {
+      return Promise.reject(new Error("No fullscreen API available"));
+    }
+  },
+  
+  exitFullscreen: () => {
+    if (document.exitFullscreen) {
+      return document.exitFullscreen();
+    } else if (document.mozCancelFullScreen) { // Firefox
+      return document.mozCancelFullScreen();
+    } else if (document.webkitExitFullscreen) { // Chrome, Safari and Opera
+      return document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) { // IE/Edge
+      return document.msExitFullscreen();
+    } else {
+      return Promise.reject(new Error("No fullscreen API available"));
+    }
+  },
+  
+  getFullscreenElement: () => {
+    return document.fullscreenElement ||
+           document.mozFullScreenElement ||
+           document.webkitFullscreenElement ||
+           document.msFullscreenElement;
+  },
+  
+  isFullscreen: () => {
+    return !!fullscreenAPI.getFullscreenElement();
+  },
+  
+  fullscreenChangeEventName: () => {
+    if ('onfullscreenchange' in document) {
+      return 'fullscreenchange';
+    } else if ('onmozfullscreenchange' in document) {
+      return 'mozfullscreenchange';
+    } else if ('onwebkitfullscreenchange' in document) {
+      return 'webkitfullscreenchange';
+    } else if ('onmsfullscreenchange' in document) {
+      return 'MSFullscreenChange';
+    }
+    return 'fullscreenchange'; // Default fallback
+  }
+};
+
 const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   const videoRef = useRef(null);
+  const videoContainerRef = useRef(null);
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [likes, setLikes] = useState(0);
@@ -82,22 +138,72 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     }
   };
 
+  const enterFullScreen = () => {
+    try {
+      const videoContainer = videoContainerRef.current;
+      if (!videoContainer) return;
+      
+      // First try using our unified API
+      fullscreenAPI.enterFullscreen(videoContainer)
+        .then(() => {
+          setIsFullScreen(true);
+        })
+        .catch((err) => {
+          console.error("Failed to enter fullscreen:", err);
+          
+          // Fallback: try to simulate fullscreen with CSS
+          if (videoContainer) {
+            videoContainer.style.position = 'fixed';
+            videoContainer.style.top = '0';
+            videoContainer.style.left = '0';
+            videoContainer.style.width = '100vw';
+            videoContainer.style.height = '100vh';
+            videoContainer.style.zIndex = '9999';
+            document.body.style.overflow = 'hidden';
+            setIsFullScreen(true);
+          } else {
+            // Last resort fallback
+            setSnackbarMessage("Fullscreen not supported by your browser. Try pressing F11.");
+            setShowSnackbar(true);
+          }
+        });
+    } catch (error) {
+      console.error("Error requesting fullscreen:", error);
+      setSnackbarMessage("Fullscreen mode is not supported on this device.");
+      setShowSnackbar(true);
+    }
+  };
+
   const exitFullScreen = () => {
     try {
-      if (document.exitFullscreen && document.fullscreenElement) {
-        document.exitFullscreen().catch(err => {
-          console.error("Error exiting fullscreen:", err);
-        });
+      // Check if we're in browser fullscreen mode
+      if (fullscreenAPI.isFullscreen()) {
+        fullscreenAPI.exitFullscreen()
+          .catch(err => {
+            console.error("Error exiting fullscreen:", err);
+          });
+      } else if (videoContainerRef.current && 
+                 videoContainerRef.current.style.position === 'fixed') {
+        // We're in CSS simulated fullscreen
+        const videoContainer = videoContainerRef.current;
+        videoContainer.style.position = '';
+        videoContainer.style.top = '';
+        videoContainer.style.left = '';
+        videoContainer.style.width = '';
+        videoContainer.style.height = '';
+        videoContainer.style.zIndex = '';
+        document.body.style.overflow = '';
       }
+      
       setIsFullScreen(false);
       
       // Only navigate away if we're in a dedicated video player route
-      // This prevents navigation when we're just exiting fullscreen mode
       if (window.location.pathname.includes('/video/')) {
         navigate("/");
       }
     } catch (error) {
       console.error("Error exiting fullscreen:", error);
+      setIsFullScreen(false);
       // Only navigate away if needed
       if (window.location.pathname.includes('/video/')) {
         navigate("/");
@@ -106,14 +212,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   };
 
   // Define handleKeyDown before using it in useEffect
-  const handleKeyDown = (event) => {
-    if (event.key === "ArrowUp" && currentIndex > 0) {
-      setCurrentIndex((prevIndex) => prevIndex - 1);
-    } else if (event.key === "ArrowDown" && currentIndex < videos.length - 1) {
-      setCurrentIndex((prevIndex) => prevIndex + 1);
-    } else if (event.key === "Escape") {
-      exitFullScreen();
-    } else if (event.key === "F11") {
+    const handleKeyDown = (event) => {
+      if (event.key === "ArrowUp" && currentIndex > 0) {
+        setCurrentIndex((prevIndex) => prevIndex - 1);
+      } else if (event.key === "ArrowDown" && currentIndex < videos.length - 1) {
+        setCurrentIndex((prevIndex) => prevIndex + 1);
+      } else if (event.key === "Escape") {
+        exitFullScreen();
+      } else if (event.key === "F11") {
       event.preventDefault();
     } else if (event.key === " " || event.key === "k") {
       if (videoRef.current.paused) {
@@ -129,12 +235,38 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   };
 
   // Define handleFullscreenChange before using it in useEffect
-  const handleFullscreenChange = () => {
-    setIsFullScreen(!!document.fullscreenElement);
+    const handleFullscreenChange = () => {
+    // Use our unified API to check fullscreen state
+    setIsFullScreen(fullscreenAPI.isFullscreen());
+    
+    // If we exited fullscreen through browser controls (not our button)
+    // but we're in a CSS simulated fullscreen mode, also exit that
+    if (!fullscreenAPI.isFullscreen() && 
+        videoContainerRef.current && 
+        videoContainerRef.current.style.position === 'fixed') {
+      const videoContainer = videoContainerRef.current;
+      videoContainer.style.position = '';
+      videoContainer.style.top = '';
+      videoContainer.style.left = '';
+      videoContainer.style.width = '';
+      videoContainer.style.height = '';
+      videoContainer.style.zIndex = '';
+      document.body.style.overflow = '';
+      setIsFullScreen(false);
+    }
   };
 
   useEffect(() => {
     const video = videoRef.current;
+    const videoContainer = videoContainerRef.current;
+    
+    // Track all the event listeners we add so we can properly clean them up
+    const eventListeners = [];
+    
+    const addEventListenerWithCleanup = (element, event, handler, options) => {
+      element.addEventListener(event, handler, options);
+      eventListeners.push({ element, event, handler, options });
+    };
 
     if (video) {
       console.log("Video source:", videos[currentIndex]?.video_url);
@@ -154,7 +286,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         
         if (currentUser) {
           checkSavedStatus(videos[currentIndex].video_id);
-          checkFollowStatus(videos[currentIndex].user_id);
+          if (videos[currentIndex].user_id) {
+            checkFollowStatus(videos[currentIndex].user_id);
+          }
         } else {
           setIsSaved(false);
           setIsFollowing(false);
@@ -172,13 +306,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         return () => clearTimeout(timer);
       }
 
-      // Add mouse wheel event listener
+      // Add mouse wheel event listener with proper passive option
       const handleWheel = (event) => {
         // Prevent default scrolling behavior
         event.preventDefault();
         
         // Check if the video is in fullscreen
-        if (!document.fullscreenElement) return;
+        if (!fullscreenAPI.isFullscreen()) return;
         
         // Get the scroll direction
         const delta = event.deltaY;
@@ -195,63 +329,51 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         }
       };
 
-      video.addEventListener('timeupdate', handleTimeUpdate);
-      video.addEventListener('loadedmetadata', handleLoadedMetadata);
-      video.addEventListener('mouseover', handleMouseMove);
-      video.addEventListener('mousemove', handleMouseMove);
-      video.addEventListener('touchstart', handleTouchStart);
-      video.addEventListener('touchmove', handleTouchMove);
-      video.addEventListener('touchend', handleTouchEnd);
-      video.addEventListener('touchend', handleDoubleTap);
-      video.addEventListener('dblclick', handleDoubleClick);
-      video.addEventListener('wheel', handleWheel, { passive: false });
-
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown);
-        document.removeEventListener("fullscreenchange", handleFullscreenChange);
-        video.removeEventListener('timeupdate', handleTimeUpdate);
-        video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        video.removeEventListener('mouseover', handleMouseMove);
-        video.removeEventListener('mousemove', handleMouseMove);
-        video.removeEventListener('touchstart', handleTouchStart);
-        video.removeEventListener('touchmove', handleTouchMove);
-        video.removeEventListener('touchend', handleTouchEnd);
-        video.removeEventListener('touchend', handleDoubleTap);
-        video.removeEventListener('dblclick', handleDoubleClick);
-        video.removeEventListener('wheel', handleWheel);
+      // Add all event listeners with our tracking function
+      addEventListenerWithCleanup(video, 'timeupdate', handleTimeUpdate);
+      addEventListenerWithCleanup(video, 'loadedmetadata', handleLoadedMetadata);
+      addEventListenerWithCleanup(video, 'ended', handleVideoEnd);
+      addEventListenerWithCleanup(video, 'play', () => setIsPlaying(true));
+      addEventListenerWithCleanup(video, 'pause', () => setIsPlaying(false));
+      addEventListenerWithCleanup(video, 'volumechange', () => setIsMuted(video.muted));
+      
+      // Mouse and touch events
+      addEventListenerWithCleanup(video, 'mouseover', handleMouseMove);
+      addEventListenerWithCleanup(video, 'mousemove', handleMouseMove);
+      addEventListenerWithCleanup(video, 'touchstart', handleTouchStart);
+      addEventListenerWithCleanup(video, 'touchmove', handleTouchMove);
+      addEventListenerWithCleanup(video, 'touchend', handleTouchEnd);
+      addEventListenerWithCleanup(video, 'touchend', handleDoubleTap);
+      addEventListenerWithCleanup(video, 'dblclick', handleDoubleClick);
+      addEventListenerWithCleanup(video, 'wheel', handleWheel, { passive: false });
+      
+      // Window and document level events
+      addEventListenerWithCleanup(window, 'keydown', handleKeyDown);
+      
+      // Use our custom fullscreen change event
+      const fullscreenChangeEvent = fullscreenAPI.fullscreenChangeEventName();
+      addEventListenerWithCleanup(document, fullscreenChangeEvent, handleFullscreenChange);
+      
+      // Cleanup on unmount
+    return () => {
+        // Clear any active timeouts
+        if (controlsTimeout) {
+          clearTimeout(controlsTimeout);
+        }
+        
+        // Remove all tracked event listeners
+        eventListeners.forEach(({ element, event, handler, options }) => {
+          element.removeEventListener(event, handler, options);
+        });
       };
     }
-
-    window.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-  }, [currentIndex, setCurrentIndex, videos, initialLoadComplete, currentUser, checkFollowStatus, exitFullScreen]);
+  }, [currentIndex, setCurrentIndex, videos, initialLoadComplete, currentUser]);
 
   const handleVideoEnd = () => {
     if (currentIndex < videos.length - 1) {
       setCurrentIndex((prevIndex) => prevIndex + 1);
     } else {
       exitFullScreen();
-    }
-  };
-
-  const enterFullScreen = () => {
-    try {
-      const element = document.documentElement;
-      if (element.requestFullscreen) {
-        element.requestFullscreen().then(() => {
-          setIsFullScreen(true);
-        }).catch(err => {
-          console.error("Couldn't use fullscreen API:", err);
-          
-          setSnackbarMessage("Press F11 for best fullscreen experience");
-          setShowSnackbar(true);
-        });
-      } else {
-        setSnackbarMessage("Press F11 for fullscreen mode");
-        setShowSnackbar(true);
-      }
-    } catch (error) {
-      console.error("Error requesting fullscreen:", error);
     }
   };
 
@@ -269,19 +391,38 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       return;
     }
     
-    if (!isLiked) {
-      try {
-        if (isDisliked) {
-          setIsDisliked(false);
-          setDislikes(prev => Math.max(0, prev - 1));
-        }
-        
-        const response = await incrementVideoLike(videos[currentIndex].video_id);
-        setLikes(response?.likes || likes + 1);
-        setIsLiked(true);
-      } catch (error) {
-        console.error("Error liking video:", error);
+    try {
+      if (isLiked) {
+        // If already liked, just remove the like (toggle behavior)
+        setIsLiked(false);
+        setLikes(prev => Math.max(0, prev - 1));
+        return;
       }
+      
+      // If disliked, remove the dislike
+      if (isDisliked) {
+        setIsDisliked(false);
+        setDislikes(prev => Math.max(0, prev - 1));
+      }
+      
+      // Show optimistic UI update
+      setIsLiked(true);
+      setLikes(prev => prev + 1);
+      
+      // Make API call
+      const response = await incrementVideoLike(videos[currentIndex].video_id);
+      
+      // Update with server response or keep optimistic update if no response
+      if (response && typeof response.likes === 'number') {
+        setLikes(response.likes);
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      setIsLiked(false);
+      setLikes(prev => Math.max(0, prev - 1));
+      console.error("Error liking video:", error);
+      setSnackbarMessage("Failed to like video. Please try again.");
+      setShowSnackbar(true);
     }
   };
 
@@ -291,19 +432,38 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       return;
     }
     
-    if (!isDisliked) {
-      try {
-        if (isLiked) {
-          setIsLiked(false);
-          setLikes(prev => Math.max(0, prev - 1));
-        }
-        
-        const response = await incrementVideoDislike(videos[currentIndex].video_id);
-        setDislikes(response?.dislikes || dislikes + 1);
-        setIsDisliked(true);
-      } catch (error) {
-        console.error("Error disliking video:", error);
+    try {
+      if (isDisliked) {
+        // If already disliked, just remove the dislike (toggle behavior)
+        setIsDisliked(false);
+        setDislikes(prev => Math.max(0, prev - 1));
+        return;
       }
+      
+      // If liked, remove the like
+      if (isLiked) {
+        setIsLiked(false);
+        setLikes(prev => Math.max(0, prev - 1));
+      }
+      
+      // Show optimistic UI update
+      setIsDisliked(true);
+      setDislikes(prev => prev + 1);
+      
+      // Make API call
+      const response = await incrementVideoDislike(videos[currentIndex].video_id);
+      
+      // Update with server response or keep optimistic update if no response
+      if (response && typeof response.dislikes === 'number') {
+        setDislikes(response.dislikes);
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      setIsDisliked(false);
+      setDislikes(prev => Math.max(0, prev - 1));
+      console.error("Error disliking video:", error);
+      setSnackbarMessage("Failed to dislike video. Please try again.");
+      setShowSnackbar(true);
     }
   };
 
@@ -380,7 +540,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     if (video) {
       if (video.paused) {
         video.play().catch(e => console.warn("Play error:", e));
-      } else {
+    } else {
         video.pause();
       }
     }
@@ -452,7 +612,10 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       } else if (currentIndex === videos.length - 1) {
         setCurrentIndex(currentIndex - 1);
       } else {
-        setCurrentIndex(currentIndex);
+        // Force reload of current index
+        const newIndex = currentIndex;
+        setCurrentIndex(0);
+        setTimeout(() => setCurrentIndex(newIndex), 10);
       }
     } catch (error) {
       console.error("Error deleting video:", error);
@@ -648,11 +811,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   };
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
-    return (
-      <Box 
-        sx={{ 
-          width: "100vw", 
-          height: "100vh", 
+  return (
+    <Box
+      sx={{
+        width: "100vw",
+        height: "100vh",
           bgcolor: "black", 
           display: "flex", 
           justifyContent: "center", 
@@ -669,30 +832,292 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
 
   return (
     <Box
+      ref={videoContainerRef}
       sx={{
         position: "relative",
         width: "100%",
         height: "100vh",
-        backgroundColor: "black",
+        backgroundColor: "#000",
+        overflow: "hidden"
+      }}
+    >
+      {/* Video */}
+      <Box
+        sx={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
         justifyContent: "center",
+        alignItems: "center",
+          overflow: "hidden"
       }}
     >
       <video
         ref={videoRef}
-        src={currentVideo?.video_url}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-          touchAction: "none", // Prevents default touch actions
-        }}
+        src={videos[currentIndex]?.video_url}
+        autoPlay
+          muted={isMuted}
+          playsInline
+          loop={false}
+          onClick={handleVideoClick}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleVideoEnd}
-        playsInline
-      />
-      
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            maxHeight: "100vh"
+          }}
+        />
+      </Box>
+
+      {/* Exit Button */}
+      <IconButton
+        onClick={exitFullScreen}
+        sx={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          color: "white",
+          "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+          zIndex: 10,
+        }}
+      >
+        <Close />
+      </IconButton>
+
+      {/* Right Side Action Buttons */}
+      <Box
+        sx={{
+          position: "absolute",
+          right: "20px",
+          top: "50%",
+          transform: "translateY(-50%)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "30px",
+          alignItems: "center",
+          zIndex: 10,
+        }}
+      >
+        {currentIndex > 0 && (
+          <IconButton
+            onClick={goToPrevious}
+            sx={{
+              backgroundColor: "rgba(0, 0, 0, 0.6)",
+              color: "white",
+              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+            }}
+          >
+            <ArrowUpward />
+          </IconButton>
+        )}
+
+        <Tooltip title="Views" placement="left">
+          <Box sx={{ textAlign: "center" }}>
+            <IconButton 
+              sx={{ 
+                color: "white",
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              }}
+            >
+              <Visibility />
+            </IconButton>
+            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
+              {views}
+        </Typography>
+          </Box>
+        </Tooltip>
+
+        <Tooltip title={isLiked ? "Liked" : "Like"} placement="left">
+          <Box sx={{ textAlign: "center" }}>
+            <IconButton 
+              onClick={handleLike} 
+              sx={{ 
+                color: isLiked ? "primary.main" : "white",
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              }}
+            >
+              {isLiked ? <Favorite /> : <ThumbUp />}
+        </IconButton>
+            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
+          {likes}
+        </Typography>
+          </Box>
+        </Tooltip>
+        
+        <Tooltip title={isDisliked ? "Disliked" : "Dislike"} placement="left">
+          <Box sx={{ textAlign: "center" }}>
+            <IconButton 
+              onClick={handleDislike} 
+              sx={{ 
+                color: isDisliked ? "error.main" : "white",
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              }}
+            >
+              <ThumbDown />
+        </IconButton>
+            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
+          {dislikes}
+        </Typography>
+          </Box>
+        </Tooltip>
+
+        <Tooltip title={isSaved ? "Remove from saved" : "Save video"} placement="left">
+          <IconButton 
+            onClick={handleSaveVideo} 
+            sx={{ 
+              color: isSaved ? "primary.main" : "white",
+              backgroundColor: "rgba(0, 0, 0, 0.6)",
+              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+            }}
+          >
+            {isSaved ? <Bookmark /> : <BookmarkBorder />}
+          </IconButton>
+        </Tooltip>
+        
+        {currentUser && videos[currentIndex] && currentUser?.user_id === videos[currentIndex]?.user_id && (
+          <Tooltip title="Delete video" placement="left">
+            <IconButton 
+              onClick={handleDeleteVideo} 
+              sx={{ 
+                color: "white",
+                backgroundColor: "rgba(0, 0, 0, 0.6)",
+                "&:hover": { backgroundColor: "rgba(255, 0, 0, 0.2)" },
+              }}
+            >
+              <Delete />
+            </IconButton>
+          </Tooltip>
+        )}
+        
+        <Tooltip title="Share" placement="left">
+          <IconButton 
+            onClick={handleShare} 
+            sx={{ 
+              color: "white",
+              backgroundColor: "rgba(0, 0, 0, 0.6)",
+              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+            }}
+          >
+            <Share />
+          </IconButton>
+        </Tooltip>
+        
+        {currentIndex < videos.length - 1 && (
+          <IconButton 
+            onClick={goToNext}
+            sx={{ 
+              backgroundColor: "rgba(0, 0, 0, 0.6)",
+              color: "white",
+              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+            }}
+          >
+            <ArrowDownward />
+        </IconButton>
+        )}
+      </Box>
+
+      {/* Bottom User Info & Caption */}
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: "30px",
+          left: "20px",
+          maxWidth: "60%",
+          padding: "15px",
+          borderRadius: "8px",
+          zIndex: 10,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "flex-start", mb: 1 }}>
+          <Avatar 
+            src={currentVideo?.profile_picture || ""}
+            sx={{ 
+              width: 40, 
+              height: 40, 
+              border: "2px solid white",
+              mr: 2
+            }}
+          />
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: "bold", color: "white", mr: 1 }}>
+                @{currentVideo?.username || "Anonymous"}
+              </Typography>
+              
+              {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
+                <Tooltip title={isFollowing ? "Unfollow" : "Follow"} placement="top">
+                  <IconButton
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                    size="small"
+                    sx={{ 
+                      color: isFollowing ? "primary.main" : "white",
+                      bgcolor: isFollowing ? "rgba(25, 118, 210, 0.12)" : "rgba(255, 255, 255, 0.12)",
+                      '&:hover': {
+                        bgcolor: isFollowing ? "rgba(25, 118, 210, 0.2)" : "rgba(255, 255, 255, 0.2)",
+                      },
+                      p: 0.5,
+                      borderRadius: 1
+                    }}
+                  >
+                    {followLoading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : isFollowing ? (
+                      <Check fontSize="small" />
+                    ) : (
+                      <PersonAdd fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: "bold", color: "white", mb: 1 }}>
+              {currentVideo?.title || "Untitled Video"}
+        </Typography>
+            {currentVideo?.description && (
+              <>
+                <Typography 
+                  variant="body2" 
+                  color="lightgray"
+                  sx={{ 
+                    maxWidth: "500px",
+                    lineHeight: 1.3
+                  }}
+                >
+                  {showDescription 
+                    ? currentVideo?.description 
+                    : truncateDescription(currentVideo?.description, 100)}
+        </Typography>
+                {currentVideo?.description?.length > 100 && (
+                  <Button 
+                    onClick={() => setShowDescription(!showDescription)}
+                    startIcon={showDescription ? <ExpandLess /> : <ExpandMore />}
+                    sx={{ 
+                      color: "white", 
+                      padding: "4px", 
+                      minWidth: "auto",
+                      textTransform: "none",
+                      "&:hover": { backgroundColor: "transparent", opacity: 0.8 },
+                    }}
+                  >
+                    {showDescription ? "Show less" : "Show more"}
+                  </Button>
+                )}
+              </>
+            )}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Bottom controls for playback */}
       <Box
         sx={{
           position: "absolute",
@@ -709,7 +1134,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
           <IconButton onClick={handlePlayPause} sx={{ color: "white" }}>
             {isPlaying ? <Pause /> : <PlayArrow />}
           </IconButton>
-          
+
           <Box
             sx={{
               flex: 1,
@@ -769,251 +1194,10 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
             
             <IconButton onClick={enterFullScreen} sx={{ color: "white" }}>
               <Fullscreen />
-            </IconButton>
-          </Box>
-        </Box>
-      </Box>
-
-      <Box
-        sx={{
-          position: "absolute",
-          right: "20px",
-          top: "50%",
-          transform: "translateY(-50%)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "30px",
-          alignItems: "center",
-          zIndex: 10,
-        }}
-      >
-        {currentIndex > 0 && (
-          <IconButton
-            onClick={goToPrevious}
-            sx={{
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              color: "white",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-            }}
-          >
-            <ArrowUpward />
-          </IconButton>
-        )}
-
-        <Tooltip title="Views" placement="left">
-          <Box sx={{ textAlign: "center" }}>
-            <IconButton 
-              sx={{ 
-                color: "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              }}
-            >
-              <Visibility />
-            </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
-              {views}
-            </Typography>
-          </Box>
-        </Tooltip>
-
-        <Tooltip title={isLiked ? "Liked" : "Like"} placement="left">
-          <Box sx={{ textAlign: "center" }}>
-            <IconButton 
-              onClick={handleLike} 
-              sx={{ 
-                color: isLiked ? "primary.main" : "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              }}
-            >
-              {isLiked ? <Favorite /> : <ThumbUp />}
-            </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
-              {likes}
-            </Typography>
-          </Box>
-        </Tooltip>
-
-        <Tooltip title={isDisliked ? "Disliked" : "Dislike"} placement="left">
-          <Box sx={{ textAlign: "center" }}>
-            <IconButton 
-              onClick={handleDislike} 
-              sx={{ 
-                color: isDisliked ? "error.main" : "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              }}
-            >
-              <ThumbDown />
-            </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
-              {dislikes}
-            </Typography>
-          </Box>
-        </Tooltip>
-
-        <Tooltip title={isSaved ? "Remove from saved" : "Save video"} placement="left">
-          <IconButton 
-            onClick={handleSaveVideo} 
-            sx={{ 
-              color: isSaved ? "primary.main" : "white",
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-            }}
-          >
-            {isSaved ? <Bookmark /> : <BookmarkBorder />}
-          </IconButton>
-        </Tooltip>
-
-        {currentUser && videos[currentIndex] && currentUser?.user_id === videos[currentIndex]?.user_id && (
-          <Tooltip title="Delete video" placement="left">
-            <IconButton 
-              onClick={handleDeleteVideo} 
-              sx={{ 
-                color: "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 0, 0, 0.2)" },
-              }}
-            >
-              <Delete />
-            </IconButton>
-          </Tooltip>
-        )}
-
-        <Tooltip title="Share" placement="left">
-          <IconButton 
-            onClick={handleShare} 
-            sx={{ 
-              color: "white",
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-            }}
-          >
-            <Share />
-          </IconButton>
-        </Tooltip>
-
-        {currentIndex < videos.length - 1 && (
-          <IconButton
-            onClick={goToNext}
-            sx={{
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              color: "white",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-            }}
-          >
-            <ArrowDownward />
-          </IconButton>
-        )}
-      </Box>
-
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: "30px",
-          left: "20px",
-          maxWidth: "60%",
-          padding: "15px",
-          borderRadius: "8px",
-          zIndex: 10,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "flex-start", mb: 1 }}>
-          <Avatar 
-            src={currentVideo?.profile_picture || ""}
-            sx={{ 
-              width: 40, 
-              height: 40, 
-              border: "2px solid white",
-              mr: 2
-            }}
-          />
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: "bold", color: "white", mr: 1 }}>
-                @{currentVideo?.username || "Anonymous"}
-              </Typography>
-              
-              {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
-                <Tooltip title={isFollowing ? "Unfollow" : "Follow"} placement="top">
-                  <IconButton
-                    onClick={handleFollowToggle}
-                    disabled={followLoading}
-                    size="small"
-                    sx={{
-                      color: isFollowing ? "primary.main" : "white",
-                      bgcolor: isFollowing ? "rgba(25, 118, 210, 0.12)" : "rgba(255, 255, 255, 0.12)",
-                      '&:hover': {
-                        bgcolor: isFollowing ? "rgba(25, 118, 210, 0.2)" : "rgba(255, 255, 255, 0.2)",
-                      },
-                      p: 0.5,
-                      borderRadius: 1
-                    }}
-                  >
-                    {followLoading ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : isFollowing ? (
-                      <Check fontSize="small" />
-                    ) : (
-                      <PersonAdd fontSize="small" />
-                    )}
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: "bold", color: "white", mb: 1 }}>
-              {currentVideo?.title || "Untitled Video"}
-            </Typography>
-            {currentVideo?.description && (
-              <>
-                <Typography 
-                  variant="body2" 
-                  color="lightgray"
-                  sx={{ 
-                    maxWidth: "500px",
-                    lineHeight: 1.3
-                  }}
-                >
-                  {showDescription 
-                    ? currentVideo?.description 
-                    : truncateDescription(currentVideo?.description, 100)}
-                </Typography>
-                {currentVideo?.description?.length > 100 && (
-                  <Button 
-                    onClick={() => setShowDescription(!showDescription)}
-                    startIcon={showDescription ? <ExpandLess /> : <ExpandMore />}
-                    sx={{ 
-                      color: "white", 
-                      padding: "4px", 
-                      minWidth: "auto",
-                      textTransform: "none",
-                      "&:hover": { backgroundColor: "transparent", opacity: 0.8 },
-                    }}
-                  >
-                    {showDescription ? "Show less" : "Show more"}
-                  </Button>
-                )}
-              </>
-            )}
-          </Box>
-        </Box>
-      </Box>
-
-      <IconButton
-        onClick={exitFullScreen}
-        sx={{
-          position: "absolute",
-          top: "10px",
-          right: "10px",
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          color: "white",
-          "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-          zIndex: 10,
-        }}
-      >
-        <Close />
       </IconButton>
+          </Box>
+        </Box>
+      </Box>
 
       <Dialog
         open={showDeleteDialog}
