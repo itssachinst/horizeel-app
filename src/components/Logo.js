@@ -58,7 +58,7 @@ const Logo = ({ onClick }) => {
     <LogoWrapper onClick={onClick}>
       <LogoCircle />
       <LogoText variant="h6">
-        Horizontal Reel
+        Horizontal Reels
       </LogoText>
     </LogoWrapper>
   );
