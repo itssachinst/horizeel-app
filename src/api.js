@@ -79,9 +79,9 @@ axios.interceptors.response.use(
   }
 );
 
-export const fetchVideos = async () => {
+export const fetchVideos = async (skip = 0, limit = 20) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/videos/`);
+    const response = await axios.get(`${API_BASE_URL}/videos/?skip=${skip}&limit=${limit}`);
     return response.data;
   } catch (error) {
     console.error("Error fetching videos:", error.message || error);
@@ -91,8 +91,8 @@ export const fetchVideos = async () => {
 
 export const fetchVideoById = async (id) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/videos/${id}`);
-    return response.data;
+  const response = await axios.get(`${API_BASE_URL}/videos/${id}`);
+  return response.data;
   } catch (error) {
     console.error(`Error fetching video ${id}:`, error.message || error);
     throw error; // Re-throw to allow component-level handling
@@ -180,7 +180,7 @@ export const incrementVideoDislike = async (videoId) => {
 };
 
 // Search videos
-export const searchVideos = async (query) => {
+export const searchVideos = async (query, skip = 0, limit = 20) => {
   try {
     if (!query || !query.trim()) {
       return [];
@@ -195,8 +195,8 @@ export const searchVideos = async (query) => {
       `q=${encodeURIComponent(query.substring(1))}&type=hashtag` : 
       `q=${encodeURIComponent(query)}`;
     
-    // Make the API call with appropriate parameters
-    const response = await axios.get(`${API_BASE_URL}/videos/search?${searchParam}`);
+    // Make the API call with appropriate parameters including pagination
+    const response = await axios.get(`${API_BASE_URL}/videos/search?${searchParam}&skip=${skip}&limit=${limit}`);
     
     // Ensure we have a valid response
     if (!response.data) {
@@ -335,7 +335,7 @@ export const resetPassword = async (token, newPassword) => {
   }
 };
 
-// Direct password reset (without email verification)
+// Direct password reset (using the new endpoint without email verification)
 export const directResetPassword = async (email, newPassword) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/auth/direct-reset-password`, {

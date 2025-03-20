@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(await getCurrentUser());
       return data;
     } catch (err) {
-      setError(err.detail || 'Login failed');
+      setError(err.message || 'Login failed');
       throw err;
     }
   };
@@ -49,7 +49,7 @@ export const AuthProvider = ({ children }) => {
       const data = await registerUser(userData);
       return data;
     } catch (err) {
-      setError(err.detail || 'Registration failed');
+      setError(err.message || 'Registration failed');
       throw err;
     }
   };

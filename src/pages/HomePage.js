@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Card, 
   CardMedia, 
@@ -20,39 +20,81 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const observer = useRef();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
+  const ITEMS_PER_PAGE = 20;
 
   // Effect to handle URL search parameters
   useEffect(() => {
+    setVideos([]);
+    setPage(0);
+    setHasMore(true);
+    
     const queryParams = new URLSearchParams(location.search);
     const query = queryParams.get('q');
-    
+
     if (query) {
       setSearchQuery(query);
       setIsSearching(true);
-      loadVideos(query);
+      loadVideos(query, 0);
     } else {
       setSearchQuery('');
       setIsSearching(false);
-      loadVideos();
+      loadVideos("", 0);
     }
   }, [location.search]);
 
-  const loadVideos = async (query = "") => {
-    setLoading(true);
+  const loadVideos = async (query = "", currentPage = page) => {
+    if (currentPage === 0) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
-      const videosData = query 
-        ? await searchVideos(query)
-        : await fetchVideos();
-      setVideos(videosData);
+      const skip = currentPage * ITEMS_PER_PAGE;
+      let videosData;
+      
+      if (query) {
+        videosData = await searchVideos(query, skip, ITEMS_PER_PAGE);
+      } else {
+        videosData = await fetchVideos(skip, ITEMS_PER_PAGE);
+      }
+      
+      if (videosData.length < ITEMS_PER_PAGE) {
+        setHasMore(false);
+      }
+      
+      setVideos(prevVideos => 
+        currentPage === 0 ? videosData : [...prevVideos, ...videosData]
+      );
     } catch (error) {
       console.error("Error fetching videos:", error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
+
+  // Set up the intersection observer for infinite scrolling
+  const lastVideoElementRef = useCallback(node => {
+    if (loading || loadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        setPage(prevPage => prevPage + 1);
+        loadVideos(searchQuery, page + 1);
+      }
+    });
+    
+    if (node) observer.current.observe(node);
+  }, [loading, loadingMore, hasMore, searchQuery, page]);
 
   const handleVideoClick = (videoId) => {
     navigate(`/video/${videoId}`);
@@ -102,8 +144,16 @@ const HomePage = () => {
         </Box>
       ) : (
         <Grid container spacing={3} sx={{ mt: 0 }}>
-          {videos.map((video) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={video.video_id}>
+          {videos.map((video, index) => (
+            <Grid 
+              item 
+              xs={12} 
+              sm={6} 
+              md={4} 
+              lg={3} 
+              key={video.video_id}
+              ref={index === videos.length - 1 ? lastVideoElementRef : null}
+            >
               <Card 
                 onClick={() => handleVideoClick(video.video_id)}
                 sx={{ 
@@ -164,6 +214,14 @@ const HomePage = () => {
               </Card>
             </Grid>
           ))}
+          
+          {loadingMore && (
+            <Grid item xs={12}>
+              <Box display="flex" justifyContent="center" p={2}>
+                <CircularProgress size={30} />
+              </Box>
+            </Grid>
+          )}
         </Grid>
       )}
     </Container>
