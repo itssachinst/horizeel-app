@@ -154,7 +154,7 @@ const HomePage = () => {
               key={video.video_id}
               ref={index === videos.length - 1 ? lastVideoElementRef : null}
             >
-              <Card 
+              <Card
                 onClick={() => handleVideoClick(video.video_id)}
                 sx={{ 
                   cursor: 'pointer',
@@ -191,9 +191,9 @@ const HomePage = () => {
                     alignItems: 'center'
                   }}
                 >
-                  <Typography 
+                  <Typography
                     variant="subtitle2" 
-                    sx={{ 
+                    sx={{
                       color: 'white',
                       maxWidth: '70%',
                       overflow: 'hidden',
@@ -221,8 +221,8 @@ const HomePage = () => {
                 <CircularProgress size={30} />
               </Box>
             </Grid>
-          )}
-        </Grid>
+        )}
+      </Grid>
       )}
     </Container>
   );

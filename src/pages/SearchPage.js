@@ -324,9 +324,7 @@ const SearchPage = () => {
                   backgroundColor: '#121212',
                   borderRadius: 2,
                   overflow: 'hidden',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column'
+                  position: 'relative'
                 }}
               >
                 <CardMedia
@@ -336,36 +334,41 @@ const SearchPage = () => {
                   alt={video.title}
                   sx={{ objectFit: 'cover' }}
                 />
-                <CardContent sx={{ flexGrow: 1, color: 'white' }}>
-                  <Typography gutterBottom variant="h6" component="div" noWrap>
+                
+                {/* Overlay with title and views */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    bgcolor: 'rgba(0, 0, 0, 0.7)',
+                    p: 1,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Typography 
+                    variant="subtitle2" 
+                    sx={{ 
+                      color: 'white',
+                      maxWidth: '70%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
                     {video.title}
                   </Typography>
                   
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    {video.username || "Unknown creator"}
-                  </Typography>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Visibility fontSize="small" sx={{ color: 'text.secondary', mr: 0.5 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      {video.views || 0} views
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Visibility sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+                    <Typography variant="caption" color="text.secondary">
+                      {video.views || 0}
                     </Typography>
                   </Box>
-                  
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary"
-                    sx={{ 
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {renderDescriptionWithHashtags(video.description)}
-                  </Typography>
-                </CardContent>
+                </Box>
               </Card>
             </Grid>
           ))}

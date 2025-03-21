@@ -348,6 +348,36 @@ export const directResetPassword = async (email, newPassword) => {
   }
 };
 
+// Function to upload profile image to S3
+export const uploadProfileImage = async (file) => {
+  try {
+    const formData = new FormData();
+    formData.append('profileImage', file);
+    
+    const response = await authAxios.post(`${API_BASE_URL}/users/upload-profile-image`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    return response.data.profileImageUrl; // Return the S3 URL of the uploaded image
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    throw error;
+  }
+};
+
+// Function to update user profile 
+export const updateUserProfile = async (userData) => {
+  try {
+    const response = await authAxios.put(`${API_BASE_URL}/users/profile`, userData);
+    return response.data.user;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw error;
+  }
+};
+
 // Create a named export object instead of an anonymous one
 const apiServices = {
   fetchVideos,
@@ -372,7 +402,9 @@ const apiServices = {
   requestPasswordReset,
   verifyResetToken,
   resetPassword,
-  directResetPassword
+  directResetPassword,
+  uploadProfileImage,
+  updateUserProfile
 };
 
 export default apiServices;

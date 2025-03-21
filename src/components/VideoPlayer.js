@@ -536,18 +536,34 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   };
 
   const handleVideoClick = () => {
-    const video = videoRef.current;
-    if (video) {
-      if (video.paused) {
-        video.play().catch(e => console.warn("Play error:", e));
-    } else {
-        video.pause();
-      }
+    const currentTime = new Date().getTime();
+    const clickLength = currentTime - lastClick;
+    
+    // If this is a double-click, let handleDoubleClick handle it
+    if (clickLength < 300 && clickLength > 0) {
+      return;
     }
     
-    if (!isFullScreen) {
-      enterFullScreen();
-    }
+    // Single click behavior after a short delay to avoid conflicts with double click
+    setTimeout(() => {
+      // Only proceed if it wasn't part of a double click
+      if (new Date().getTime() - lastClick > 300) {
+        const video = videoRef.current;
+        if (video) {
+          if (video.paused) {
+            video.play().catch(e => console.warn("Play error:", e));
+          } else {
+            video.pause();
+          }
+        }
+        
+        if (!isFullScreen) {
+          enterFullScreen();
+        }
+      }
+    }, 300);
+    
+    setLastClick(currentTime);
   };
 
   const handleSaveVideo = async () => {
@@ -608,7 +624,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       
       if (videos.length <= 1) {
         exitFullScreen();
-        navigate("/");
+    navigate("/");
       } else if (currentIndex === videos.length - 1) {
         setCurrentIndex(currentIndex - 1);
       } else {
@@ -750,9 +766,24 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         if (x > width * 0.7) {
           // Right side - Fast forward
           video.currentTime = Math.min(video.currentTime + 10, video.duration);
+          // Show visual feedback
+          setSnackbarMessage("Fast forward 10s");
+          setShowSnackbar(true);
+          setTimeout(() => setShowSnackbar(false), 1000);
         } else if (x < width * 0.3) {
           // Left side - Fast backward
           video.currentTime = Math.max(video.currentTime - 10, 0);
+          // Show visual feedback
+          setSnackbarMessage("Rewind 10s");
+          setShowSnackbar(true);
+          setTimeout(() => setShowSnackbar(false), 1000);
+        } else {
+          // Middle area - Toggle play/pause
+          if (video.paused) {
+            video.play();
+          } else {
+            video.pause();
+          }
         }
       }
     }
@@ -762,20 +793,35 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   const handleDoubleClick = (event) => {
     const currentTime = new Date().getTime();
     const clickLength = currentTime - lastClick;
-    
+
     if (clickLength < 500 && clickLength > 0) {
       const video = videoRef.current;
       if (video) {
         const rect = video.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const width = rect.width;
-        
+
         if (x > width * 0.7) {
           // Right side - Fast forward
           video.currentTime = Math.min(video.currentTime + 10, video.duration);
+          // Show visual feedback
+          setSnackbarMessage("Fast forward 10s");
+          setShowSnackbar(true);
+          setTimeout(() => setShowSnackbar(false), 1000);
         } else if (x < width * 0.3) {
           // Left side - Fast backward
           video.currentTime = Math.max(video.currentTime - 10, 0);
+          // Show visual feedback
+          setSnackbarMessage("Rewind 10s");
+          setShowSnackbar(true);
+          setTimeout(() => setShowSnackbar(false), 1000);
+        } else {
+          // Middle area - Toggle fullscreen
+    if (isFullScreen) {
+      exitFullScreen();
+    } else {
+      enterFullScreen();
+          }
         }
       }
     }
@@ -783,32 +829,188 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   };
 
   const handleTouchStart = (event) => {
-    setTouchStart(event.touches[0].clientY);
+    if (event.touches && event.touches.length) {
+      setTouchStart({
+        y: event.touches[0].clientY,
+        x: event.touches[0].clientX,
+        time: new Date().getTime()
+      });
+      // Prevent default to avoid scrolling the page
+      event.preventDefault();
+    }
   };
 
   const handleTouchMove = (event) => {
-    setTouchEnd(event.touches[0].clientY);
+    if (event.touches && event.touches.length && touchStart) {
+      setTouchEnd({
+        y: event.touches[0].clientY,
+        x: event.touches[0].clientX,
+        time: new Date().getTime()
+      });
+      // Prevent default to avoid scrolling the page
+      event.preventDefault();
+    }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (event) => {
     if (!touchStart || !touchEnd) return;
-    
-    const distance = touchStart - touchEnd;
-    const isSwipe = Math.abs(distance) > 50; // Minimum swipe distance
 
-    if (isSwipe) {
-      if (distance > 0 && currentIndex < videos.length - 1) {
-        // Swipe up - Next video
-        setCurrentIndex(currentIndex + 1);
-      } else if (distance < 0 && currentIndex > 0) {
-        // Swipe down - Previous video
-        setCurrentIndex(currentIndex - 1);
+    // Calculate distance and time
+    const verticalDistance = touchStart.y - touchEnd.y;
+    const horizontalDistance = touchStart.x - touchEnd.x;
+    const timeDiff = touchEnd.time - touchStart.time;
+    
+    // Log for debugging
+    console.log("Touch gesture detected:", {
+      verticalDistance,
+      horizontalDistance,
+      timeDiff,
+      start: touchStart,
+      end: touchEnd
+    });
+    
+    // Decrease threshold for more sensitivity on laptop touchscreens
+    const minSwipeDistance = 30;
+    
+    // Check if swipe is more vertical than horizontal
+    const isVerticalSwipe = Math.abs(verticalDistance) > Math.abs(horizontalDistance);
+    
+    if (isVerticalSwipe && Math.abs(verticalDistance) > minSwipeDistance) {
+      console.log("Vertical swipe detected:", verticalDistance > 0 ? "UP" : "DOWN");
+      
+      if (verticalDistance > 0) {
+        // Swipe UP = finger moved UP (start y is greater than end y)
+        console.log("Navigating to next video (current index:", currentIndex, ")");
+        if (currentIndex < videos.length - 1) {
+          setCurrentIndex(currentIndex + 1);
+          setSnackbarMessage("Next video");
+          setShowSnackbar(true);
+        }
+      } else {
+        // Swipe DOWN = finger moved DOWN (start y is less than end y)
+        console.log("Navigating to previous video (current index:", currentIndex, ")");
+        if (currentIndex > 0) {
+          setCurrentIndex(currentIndex - 1);
+          setSnackbarMessage("Previous video");
+          setShowSnackbar(true);
+        }
+      }
+    } else if (!isVerticalSwipe && Math.abs(horizontalDistance) > minSwipeDistance) {
+      // Horizontal swipe - scrub video timeline
+      const video = videoRef.current;
+      if (video) {
+        const seekAmount = Math.floor(Math.abs(horizontalDistance) / 10); // 10px = 1 second
+        if (horizontalDistance > 0) {
+          // Swipe left - rewind
+          video.currentTime = Math.max(video.currentTime - seekAmount, 0);
+          setSnackbarMessage(`Rewind ${seekAmount}s`);
+          setShowSnackbar(true);
+        } else {
+          // Swipe right - fast forward
+          video.currentTime = Math.min(video.currentTime + seekAmount, video.duration);
+          setSnackbarMessage(`Forward ${seekAmount}s`);
+          setShowSnackbar(true);
+        }
       }
     }
 
+    // Reset touch states
     setTouchStart(null);
     setTouchEnd(null);
+    
+    // Prevent default to avoid unwanted behaviors
+    if (event && event.preventDefault) {
+      event.preventDefault();
+    }
   };
+
+  useEffect(() => {
+    // Add this new effect to directly attach touchscreen event handlers to the container
+    const container = videoContainerRef.current;
+    if (container) {
+      // Keep track of taps for double-tap detection
+      let lastTapTime = 0;
+      let tapPosition = null;
+      
+      const touchStartHandler = (e) => {
+        handleTouchStart(e);
+        // Store position of touch for double-tap detection
+        if (e.touches && e.touches.length) {
+          tapPosition = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY
+          };
+        }
+      };
+      
+      const touchMoveHandler = (e) => handleTouchMove(e);
+      
+      const touchEndHandler = (e) => {
+        handleTouchEnd(e);
+        
+        // Double-tap detection
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+        
+        // Only consider it a double-tap if it's within 300ms of the last tap
+        if (tapLength < 300 && tapLength > 0 && tapPosition) {
+          // Log for debugging
+          console.log("Double tap detected, time between taps:", tapLength);
+          
+          const video = videoRef.current;
+          if (video) {
+            const rect = container.getBoundingClientRect();
+            
+            // Calculate position
+            const x = tapPosition.x - rect.left;
+            const width = rect.width;
+            
+            console.log("Tap position:", x, "Container width:", width);
+            
+            if (x > width * 0.7) {
+              // Right side - Fast forward
+              video.currentTime = Math.min(video.currentTime + 10, video.duration);
+              setSnackbarMessage("Fast forward 10s");
+              setShowSnackbar(true);
+              console.log("Fast forward activated");
+            } else if (x < width * 0.3) {
+              // Left side - Fast backward
+              video.currentTime = Math.max(video.currentTime - 10, 0);
+              setSnackbarMessage("Rewind 10s");
+              setShowSnackbar(true);
+              console.log("Rewind activated");
+            } else {
+              // Middle area - Toggle play/pause
+              if (video.paused) {
+                video.play();
+              } else {
+                video.pause();
+              }
+              console.log("Play/pause toggled");
+            }
+          }
+          
+          // Reset tap position after using it
+          tapPosition = null;
+        }
+        
+        // Update last tap time
+        lastTapTime = currentTime;
+      };
+      
+      // Add touch event listeners directly to the container with passive: false
+      container.addEventListener('touchstart', touchStartHandler, { passive: false });
+      container.addEventListener('touchmove', touchMoveHandler, { passive: false });
+      container.addEventListener('touchend', touchEndHandler, { passive: false });
+      
+      return () => {
+        // Remove event listeners on cleanup
+        container.removeEventListener('touchstart', touchStartHandler);
+        container.removeEventListener('touchmove', touchMoveHandler);
+        container.removeEventListener('touchend', touchEndHandler);
+      };
+    }
+  }, []);
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (

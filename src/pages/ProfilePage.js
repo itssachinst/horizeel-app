@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Container, Typography, Box, Paper, Avatar, Button, Grid, Card, 
   CardMedia, CardContent, IconButton, TextField, Dialog, DialogTitle, 
@@ -9,15 +9,15 @@ import {
   Edit, Save, Cancel, Delete, VideoLibrary, 
   VideoCall, ThumbUp, Visibility, DateRange, Instagram, 
   Twitter, Facebook, LinkedIn, Error, Refresh,
-  Bookmark
+  Bookmark, Person, PhotoCamera, Close
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchVideos, deleteVideo, getSavedVideos, getFollowStats } from '../api';
+import { fetchVideos, deleteVideo, getSavedVideos, getFollowStats, uploadProfileImage, updateUserProfile } from '../api';
 import { useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 
 const ProfilePage = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, updateAuthUser } = useAuth();
   const [userVideos, setUserVideos] = useState([]);
   const [savedVideos, setSavedVideos] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -46,6 +46,10 @@ const ProfilePage = () => {
   const [loadingSavedVideos, setLoadingSavedVideos] = useState(true);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
   // Dummy data for enhancing UI (would come from the API in a real app)
@@ -71,6 +75,10 @@ const ProfilePage = () => {
           linkedin: currentUser.social?.linkedin || ''
         }
       });
+      
+      // Reset image preview when user data changes
+      setImagePreview(currentUser.profile_picture || null);
+      setSelectedImage(null);
       
       // Load user data
       loadUserVideos();
@@ -197,12 +205,74 @@ const ProfilePage = () => {
     }
   };
 
-  const handleSaveProfile = () => {
-    // TODO: Implement profile update
-    console.log('Profile updated:', updatedProfile);
-    setIsEditing(false);
-    showSnackbarMessage("Profile updated successfully", "success");
-    // This would make an API call to update the profile
+  const handleImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Check file type
+      if (!file.type.match('image.*')) {
+        showSnackbarMessage("Please select an image file (JPEG, PNG, etc.)", "error");
+        return;
+      }
+      
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showSnackbarMessage("Image size should be less than 5MB", "error");
+        return;
+      }
+      
+      setSelectedImage(file);
+      
+      // Create image preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(currentUser?.profile_picture || null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsUploading(true);
+      let profileImageUrl = currentUser?.profile_picture;
+      
+      // Upload image if selected
+      if (selectedImage) {
+        profileImageUrl = await uploadProfileImage(selectedImage);
+      }
+      
+      // Update profile data
+      const updatedData = {
+        ...updatedProfile,
+        profile_picture: profileImageUrl
+      };
+      
+      const updatedUser = await updateUserProfile(updatedData);
+      
+      // Update auth context with new user data
+      if (updateAuthUser) {
+        updateAuthUser({
+          ...currentUser,
+          ...updatedUser
+        });
+      }
+      
+      setIsEditing(false);
+      showSnackbarMessage("Profile updated successfully", "success");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showSnackbarMessage(error.message || "Failed to update profile", "error");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -507,396 +577,487 @@ const ProfilePage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ 
-      pt: 4, 
+      pt: 2,
       pb: 8, 
       bgcolor: '#000',
       position: 'relative',
       height: 'auto',
-      minHeight: '100vh'
+      minHeight: '100vh',
+      backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10zm10 8c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8zm40 40c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
     }}>
-      {/* Profile Header with Cover Image */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'flex-end', 
+        mb: 3 
+      }}>
+        {!isEditing && (
+          <Button 
+            variant="contained" 
+            color="error" 
+            onClick={confirmLogout}
+            sx={{ 
+              zIndex: 2,
+              borderRadius: '28px',
+              background: 'rgba(244, 67, 54, 0.8)',
+              backdropFilter: 'blur(8px)',
+              '&:hover': {
+                background: 'rgba(244, 67, 54, 0.9)',
+              },
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 3
+            }}
+          >
+            Logout
+          </Button>
+        )}
+      </Box>
+
+      {/* Profile Section */}
       <Paper 
-        elevation={0} 
-        sx={{ 
+        elevation={3}
+        sx={{
           borderRadius: 4,
-          overflow: 'hidden',
-          mb: 4,
-          background: 'transparent',
-          boxShadow: 'none',
+          p: 4,
+          background: 'rgba(18, 18, 18, 0.90)',
+          backdropFilter: 'blur(20px)',
+          color: 'white',
           position: 'relative',
+          zIndex: 10,
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+          border: '1px solid rgba(80, 80, 80, 0.2)',
+          mb: 4,
+          position: 'relative',
+          overflow: 'hidden'
         }}
       >
-        {/* Cover image background */}
-        <Box
-          sx={{
+        {/* Background light effects */}
+        <Box 
+          sx={{ 
+            position: 'absolute',
+            top: -100,
+            left: -100,
+            width: 300,
+            height: 300,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(80,80,255,0.15) 0%, rgba(80,80,255,0) 70%)',
+            filter: 'blur(30px)',
+            zIndex: 0
+          }}
+        />
+        
+        <Box 
+          sx={{ 
+            position: 'absolute',
+            bottom: -50,
+            right: -50,
+            width: 200,
             height: 200,
-            width: '100%',
-            background: 'linear-gradient(135deg, #3f51b5 0%, #f50057 100%)',
-            position: 'relative',
-            borderRadius: 4,
-            mb: 10,
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'flex-end',
-            p: 2
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255,80,100,0.1) 0%, rgba(255,80,100,0) 70%)',
+            filter: 'blur(30px)',
+            zIndex: 0
           }}
-        >
-          {/* Pattern overlay */}
-          <Box 
-            sx={{ 
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              opacity: 0.1,
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10s-10-4.477-10-10 4.477-10 10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c0 5.523-4.477 10-10 10S0 25.523 0 20s4.477-10 10-10zm10 8c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8zm40 40c4.418 0 8-3.582 8-8s-3.582-8-8-8-8 3.582-8 8 3.582 8 8 8z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            }}
-          />
-          
-          {!isEditing && (
-            <Button 
-              variant="contained" 
-              color="error" 
-              onClick={confirmLogout}
-              sx={{ 
-                zIndex: 2,
-                background: 'rgba(244, 67, 54, 0.8)',
-                backdropFilter: 'blur(8px)',
-                '&:hover': {
-                  background: 'rgba(244, 67, 54, 0.9)',
-                }
-              }}
-            >
-              Logout
-            </Button>
-          )}
-        </Box>
+        />
 
-        {/* Profile info card overlay */}
-        <Paper
-          elevation={3}
-          sx={{
-            borderRadius: 4,
-            p: 3,
-            mx: 4,
-            mt: -10,
-            background: 'rgba(18, 18, 18, 0.95)',
-            backdropFilter: 'blur(20px)',
-            color: 'white',
-            position: 'relative',
-            zIndex: 10,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
-          }}
-        >
-          <Grid container spacing={3}>
-            {/* Left column - avatar and profile info */}
-            <Grid item xs={12} md={8}>
-              <Box sx={{ display: 'flex', gap: 3 }}>
-                <Badge
-                  overlap="circular"
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                  badgeContent={
-                    !isEditing ? (
-                      <IconButton 
-                        color="primary" 
-                        onClick={handleEditToggle}
-                        size="small"
-                        sx={{ 
-                          backgroundColor: '#3f51b5',
-                          '&:hover': { backgroundColor: '#303f9f' } 
-                        }}
-                      >
-                        <Edit fontSize="small" />
-                      </IconButton>
-                    ) : null
-                  }
+        <Grid container spacing={3} sx={{ position: 'relative', zIndex: 1 }}>
+          {/* Left column - avatar and profile info */}
+          <Grid item xs={12} md={8}>
+            <Box sx={{ display: 'flex', gap: 3 }}>
+              <Badge
+                overlap="circular"
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                badgeContent={
+                  !isEditing ? (
+                    <IconButton 
+                      color="primary" 
+                      onClick={handleEditToggle}
+                      size="small"
+                      sx={{ 
+                        backgroundColor: '#3f51b5',
+                        '&:hover': { backgroundColor: '#303f9f' } 
+                      }}
+                    >
+                      <Edit fontSize="small" />
+                    </IconButton>
+                  ) : null
+                }
+              >
+                <Box 
+                  sx={{
+                    position: 'relative',
+                    width: 130,
+                    height: 130,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
                 >
+                  {/* Glow effect */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      width: 130,
+                      height: 130,
+                      borderRadius: '50%',
+                      background: 'rgba(10, 10, 10, 0.8)',
+                      boxShadow: 
+                        '0 0 15px rgba(80, 105, 255, 0.5), ' +
+                        '0 0 30px rgba(80, 105, 255, 0.3)',
+                      animation: 'borderPulse 3s ease infinite',
+                      '@keyframes borderPulse': {
+                        '0%': { boxShadow: '0 0 15px rgba(80, 105, 255, 0.5), 0 0 30px rgba(80, 105, 255, 0.3)' },
+                        '50%': { boxShadow: '0 0 20px rgba(110, 140, 255, 0.7), 0 0 40px rgba(110, 140, 255, 0.5)' },
+                        '100%': { boxShadow: '0 0 15px rgba(80, 105, 255, 0.5), 0 0 30px rgba(80, 105, 255, 0.3)' }
+                      }
+                    }}
+                  />
+                  
+                  {/* Neon border */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      width: 124,
+                      height: 124,
+                      borderRadius: '50%',
+                      border: '2px solid rgba(80, 105, 255, 0.8)'
+                    }}
+                  />
+                  
                   <Avatar 
-                    src={currentUser?.profile_picture || ""} 
+                    src={isEditing ? imagePreview : (currentUser?.profile_picture || "")} 
                     alt={currentUser?.username}
                     sx={{ 
                       width: 120, 
                       height: 120, 
-                      border: '4px solid #1e1e1e',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                      border: '3px solid #0a0a0a',
+                      zIndex: 1
                     }}
                   />
-                </Badge>
-                
-                <Box sx={{ flexGrow: 1 }}>
-                  {isEditing ? (
-                    <Box>
-                      <TextField
-                        label="Username"
-                        name="username"
-                        value={updatedProfile.username}
-                        onChange={handleInputChange}
-                        fullWidth
-                        margin="normal"
-                        InputLabelProps={{ style: { color: 'gray' } }}
-                        InputProps={{ style: { color: 'white' } }}
-                        sx={{ mb: 2 }}
-                        variant="outlined"
+                  
+                  {/* Image upload controls when editing */}
+                  {isEditing && (
+                    <Box sx={{ 
+                      position: 'absolute', 
+                      top: -10, 
+                      right: -10, 
+                      zIndex: 2,
+                      display: 'flex',
+                      gap: 1
+                    }}>
+                      <input
+                        accept="image/*"
+                        type="file"
+                        id="profile-image-upload"
+                        onChange={handleImageChange}
+                        style={{ display: 'none' }}
+                        ref={fileInputRef}
                       />
-                      <TextField
-                        label="Email"
-                        name="email"
-                        value={updatedProfile.email}
-                        onChange={handleInputChange}
-                        fullWidth
-                        margin="normal"
-                        InputLabelProps={{ style: { color: 'gray' } }}
-                        InputProps={{ style: { color: 'white' } }}
-                        sx={{ mb: 2 }}
-                        variant="outlined"
-                      />
-                      <TextField
-                        label="Bio"
-                        name="bio"
-                        value={updatedProfile.bio}
-                        onChange={handleInputChange}
-                        multiline
-                        rows={3}
-                        fullWidth
-                        margin="normal"
-                        InputLabelProps={{ style: { color: 'gray' } }}
-                        InputProps={{ style: { color: 'white' } }}
-                        variant="outlined"
-                      />
+                      <label htmlFor="profile-image-upload">
+                        <IconButton 
+                          color="primary" 
+                          component="span"
+                          size="small"
+                          sx={{ 
+                            backgroundColor: alpha('#3f51b5', 0.8),
+                            '&:hover': { backgroundColor: '#3f51b5' } 
+                          }}
+                        >
+                          <PhotoCamera fontSize="small" />
+                        </IconButton>
+                      </label>
+                      
+                      {selectedImage && (
+                        <IconButton 
+                          color="error" 
+                          size="small"
+                          onClick={handleRemoveImage}
+                          sx={{ 
+                            backgroundColor: alpha('#f44336', 0.8),
+                            '&:hover': { backgroundColor: '#f44336' } 
+                          }}
+                        >
+                          <Close fontSize="small" />
+                        </IconButton>
+                      )}
                     </Box>
-                  ) : (
-                    <>
-                      <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                        {currentUser?.username}
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-                        {currentUser?.email}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {updatedProfile.bio || "No bio available"}
-                      </Typography>
-
-                      <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        <Chip
-                          icon={<DateRange fontSize="small" />}
-                          label={`Joined ${joinDate}`}
-                          size="small"
-                          sx={{ 
-                            backgroundColor: alpha('#ffffff', 0.1),
-                            color: 'white' 
-                          }}
-                        />
-                        
-                        <Chip
-                          icon={<VideoLibrary fontSize="small" />}
-                          label={`${userVideos.length} Videos`}
-                          size="small"
-                          sx={{ 
-                            backgroundColor: alpha('#3f51b5', 0.2),
-                            color: 'white' 
-                          }}
-                        />
-                        
-                        <Chip
-                          icon={<Bookmark fontSize="small" />}
-                          label={`${savedVideos.length} Saved`}
-                          size="small"
-                          sx={{ 
-                            backgroundColor: alpha('#f50057', 0.2),
-                            color: 'white' 
-                          }}
-                        />
-                      </Box>
-                    </>
                   )}
                 </Box>
-              </Box>
-            </Grid>
-            
-            {/* Right column - stats */}
-            <Grid item xs={12} md={4}>
-              <Paper 
-                elevation={0} 
-                sx={{ 
-                  p: 2, 
-                  background: alpha('#ffffff', 0.05),
-                  borderRadius: 3,
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center'
-                }}
-              >
-                <Typography variant="h6" sx={{ mb: 2, textAlign: 'center' }}>
-                  Channel Stats
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Box sx={{ textAlign: 'center', p: 1 }}>
-                      <Typography variant="h4" color="primary">
-                        {totalViews}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Total Views
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <Box sx={{ textAlign: 'center', p: 1 }}>
-                      <Typography variant="h4" color="primary">
-                        {totalLikes}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Total Likes
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <Box 
-                      sx={{ 
-                        textAlign: 'center', 
-                        p: 1,
-                        cursor: 'pointer',
-                        '&:hover': {
-                          backgroundColor: alpha('#ffffff', 0.05),
-                          borderRadius: 1
-                        }
-                      }}
-                      onClick={() => navigate(`/users/${currentUser.user_id}/followers`)}
-                    >
-                      <Typography variant="h4" color="primary">
-                        {followerCount}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Followers
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <Box 
-                      sx={{ 
-                        textAlign: 'center', 
-                        p: 1,
-                        cursor: 'pointer',
-                        '&:hover': {
-                          backgroundColor: alpha('#ffffff', 0.05),
-                          borderRadius: 1
-                        }
-                      }}
-                      onClick={() => navigate(`/users/${currentUser.user_id}/following`)}
-                    >
-                      <Typography variant="h4" color="primary">
-                        {followingCount}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Following
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-                
+              </Badge>
+              
+              <Box sx={{ flexGrow: 1 }}>
                 {isEditing ? (
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center', gap: 1 }}>
-                    <Button 
-                      variant="contained" 
-                      color="primary" 
-                      startIcon={<Save />}
-                      onClick={handleSaveProfile}
-                    >
-                      Save Profile
-                    </Button>
-                    <Button 
-                      variant="outlined" 
-                      color="error" 
-                      startIcon={<Cancel />}
-                      onClick={handleEditToggle}
-                    >
-                      Cancel
-                    </Button>
-                  </Box>
-                ) : (
-                  <Box sx={{ mt: 2 }}>
-                    <Button 
-                      variant="contained" 
-                      color="primary"
-                      fullWidth
-                      startIcon={<VideoCall />}
-                      onClick={() => navigate('/upload')}
-                    >
-                      Upload Video
-                    </Button>
-                  </Box>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
-          
-          {/* Social Media (Only visible when editing or if social links exist) */}
-          {isEditing && (
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Social Media
-              </Typography>
-              <Grid container spacing={2}>
-                {Object.keys(updatedProfile.social).map(platform => (
-                  <Grid item xs={12} sm={6} key={platform}>
+                  <Box>
                     <TextField
-                      label={platform.charAt(0).toUpperCase() + platform.slice(1)}
-                      name={`social.${platform}`}
-                      value={updatedProfile.social[platform]}
+                      label="Username"
+                      name="username"
+                      value={updatedProfile.username}
                       onChange={handleInputChange}
                       fullWidth
-                      InputProps={{
-                        startAdornment: (
-                          <Box sx={{ mr: 1, color: 'text.secondary' }}>
-                            {socialIcons[platform]}
-                          </Box>
-                        ),
-                        style: { color: 'white' }
-                      }}
+                      margin="normal"
                       InputLabelProps={{ style: { color: 'gray' } }}
+                      InputProps={{ style: { color: 'white' } }}
+                      sx={{ mb: 2 }}
                       variant="outlined"
-                      placeholder={`Your ${platform} profile URL`}
                     />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          )}
-        </Paper>
-      </Paper>
+                    <TextField
+                      label="Email"
+                      name="email"
+                      value={updatedProfile.email}
+                      onChange={handleInputChange}
+                      fullWidth
+                      margin="normal"
+                      InputLabelProps={{ style: { color: 'gray' } }}
+                      InputProps={{ style: { color: 'white' } }}
+                      sx={{ mb: 2 }}
+                      variant="outlined"
+                    />
+                    <TextField
+                      label="Bio"
+                      name="bio"
+                      value={updatedProfile.bio}
+                      onChange={handleInputChange}
+                      multiline
+                      rows={3}
+                      fullWidth
+                      margin="normal"
+                      InputLabelProps={{ style: { color: 'gray' } }}
+                      InputProps={{ style: { color: 'white' } }}
+                      variant="outlined"
+                    />
+                  </Box>
+                ) : (
+                  <>
+                    <Typography variant="h4" sx={{ 
+                      fontWeight: 'bold', 
+                      mb: 0.5, 
+                      background: 'linear-gradient(90deg, #ffffff 0%, #e0e0e0 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {currentUser?.username}
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" sx={{ mb: 1, letterSpacing: '0.3px' }}>
+                      {currentUser?.email}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ 
+                      mb: 2, 
+                      lineHeight: 1.6,
+                      color: 'rgba(255, 255, 255, 0.7)'
+                    }}>
+                      {updatedProfile.bio || "No bio available"}
+                    </Typography>
 
-      {/* Tabs for My Videos and Saved Videos */}
-      <Box sx={{ mb: 4 }}>
+                    <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      <Chip
+                        icon={<DateRange fontSize="small" />}
+                        label={`Joined ${joinDate}`}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: 'rgba(30, 30, 30, 0.8)',
+                          color: 'white',
+                          border: '1px solid rgba(80, 80, 80, 0.3)',
+                          borderRadius: '16px',
+                        }}
+                      />
+                      
+                      <Chip
+                        icon={<VideoLibrary fontSize="small" />}
+                        label={`${userVideos.length} Videos`}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: 'rgba(30, 30, 30, 0.8)',
+                          color: 'white',
+                          border: '1px solid rgba(80, 80, 80, 0.3)',
+                          borderRadius: '16px',
+                        }}
+                      />
+                  
+                      <Chip
+                        icon={<ThumbUp fontSize="small" />}
+                        label={`${totalLikes} Likes`}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: 'rgba(30, 30, 30, 0.8)',
+                          color: 'white',
+                          border: '1px solid rgba(80, 80, 80, 0.3)',
+                          borderRadius: '16px',
+                        }}
+                      />
+                      
+                      <Chip
+                        icon={<Visibility fontSize="small" />}
+                        label={`${totalViews} Views`}
+                        size="small"
+                        sx={{ 
+                          backgroundColor: 'rgba(30, 30, 30, 0.8)',
+                          color: 'white',
+                          border: '1px solid rgba(80, 80, 80, 0.3)',
+                          borderRadius: '16px',
+                        }}
+                      />
+                    </Box>
+                  </>
+                )}
+              </Box>
+            </Box>
+          </Grid>
+          
+          {/* Right column - stats and social links */}
+          <Grid item xs={12} md={4}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: 4, 
+              mb: 2,
+              mt: { xs: 2, md: 0 } 
+            }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ 
+                  fontWeight: 'bold',
+                  background: 'linear-gradient(90deg, #5D85FF 0%, #3F61DF 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}>
+                  {followerCount}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Followers
+                </Typography>
+              </Box>
+              
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="h4" sx={{ 
+                  fontWeight: 'bold',
+                  background: 'linear-gradient(90deg, #5D85FF 0%, #3F61DF 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}>
+                  {followingCount}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Following
+                </Typography>
+              </Box>
+            </Box>
+
+            {isEditing ? (
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSaveProfile}
+                  startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <Save />}
+                  disabled={isUploading}
+                  sx={{ 
+                    borderRadius: '28px',
+                    px: 3,
+                    textTransform: 'none',
+                    fontWeight: 600
+                  }}
+                >
+                  {isUploading ? 'Saving...' : 'Save'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleEditToggle}
+                  startIcon={<Cancel />}
+                  disabled={isUploading}
+                  sx={{ 
+                    borderRadius: '28px',
+                    px: 3,
+                    textTransform: 'none',
+                    fontWeight: 600
+                  }}
+                >
+                  Cancel
+                </Button>
+              </Box>
+            ) : (
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                mt: 2,
+                gap: 2
+              }}>
+                {Object.entries(socialIcons).map(([platform, icon]) => (
+                  <IconButton 
+                    key={platform} 
+                    color="primary"
+                    aria-label={platform}
+                    sx={{ 
+                      backgroundColor: 'rgba(30, 30, 30, 0.8)',
+                      '&:hover': { 
+                        backgroundColor: alpha('#3f51b5', 0.2),
+                        transform: 'translateY(-3px)',
+                        transition: 'all 0.2s'
+                      },
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {icon}
+                  </IconButton>
+                ))}
+              </Box>
+            )}
+          </Grid>
+        </Grid>
+      </Paper>
+      
+      {/* Navigation Tabs */}
+      <Box sx={{ 
+        mb: 4, 
+        borderBottom: '1px solid rgba(80, 80, 80, 0.3)',
+        position: 'sticky',
+        top: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 100,
+        borderRadius: '0 0 8px 8px',
+        px: 2
+      }}>
         <Tabs 
           value={activeTab} 
-          onChange={handleTabChange} 
+          onChange={handleTabChange}
           aria-label="profile tabs"
-          textColor="primary"
-          indicatorColor="primary"
-          variant="fullWidth"
-          sx={{
+          variant="scrollable"
+          scrollButtons="auto"
+          TabIndicatorProps={{
+            style: {
+              background: 'linear-gradient(90deg, #5D85FF 0%, #3F61DF 100%)',
+              height: 3,
+              borderRadius: '3px'
+            }
+          }}
+          sx={{ 
             '& .MuiTab-root': {
-              fontWeight: 'bold',
-              fontSize: '1rem',
+              color: 'rgba(255, 255, 255, 0.6)',
+              fontWeight: 500,
+              fontSize: '16px',
               textTransform: 'none',
-              py: 2
+              py: 2,
+              '&.Mui-selected': {
+                color: 'white',
+                fontWeight: 600
+              }
             }
           }}
         >
           <Tab 
             label="My Videos" 
-            icon={<VideoLibrary />} 
+            icon={<VideoLibrary />}
             iconPosition="start"
           />
           <Tab 
             label="Saved Videos" 
-            icon={<Bookmark />} 
+            icon={<Bookmark />}
+            iconPosition="start"
+          />
+          <Tab 
+            label="About" 
+            icon={<Person />}
             iconPosition="start"
           />
         </Tabs>
@@ -1015,6 +1176,141 @@ const ProfilePage = () => {
               </Button>
             </Paper>
           )}
+        </>
+      )}
+      
+      {/* About Tab Content */}
+      {activeTab === 2 && (
+        <>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'white' }}>
+              About
+            </Typography>
+          </Box>
+          
+          <Paper 
+            elevation={2}
+            sx={{ 
+              p: 4, 
+              borderRadius: 4,
+              background: 'linear-gradient(135deg, rgba(26,26,26,0.8) 0%, rgba(40,40,40,0.8) 100%)',
+              backdropFilter: 'blur(10px)',
+              color: 'white'
+            }}
+          >
+            <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+              Bio
+            </Typography>
+            <Typography variant="body1" sx={{ mb: 4, color: 'rgba(255, 255, 255, 0.7)', lineHeight: 1.8 }}>
+              {updatedProfile.bio || "No bio available. Edit your profile to add a bio."}
+            </Typography>
+            
+            <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+              Account Information
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Username
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'white' }}>
+                  {currentUser?.username}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Email
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'white' }}>
+                  {currentUser?.email}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Member Since
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'white' }}>
+                  {joinDate}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Videos Uploaded
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'white' }}>
+                  {userVideos.length}
+                </Typography>
+              </Grid>
+            </Grid>
+            
+            <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+              Stats
+            </Typography>
+            
+            <Grid container spacing={2}>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: 'rgba(20, 20, 20, 0.6)',
+                  borderRadius: 3
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#5D85FF' }}>
+                    {followerCount}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Followers
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: 'rgba(20, 20, 20, 0.6)',
+                  borderRadius: 3
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#5D85FF' }}>
+                    {followingCount}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Following
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: 'rgba(20, 20, 20, 0.6)',
+                  borderRadius: 3
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#5D85FF' }}>
+                    {totalLikes}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Total Likes
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <Paper sx={{ 
+                  p: 2, 
+                  textAlign: 'center',
+                  background: 'rgba(20, 20, 20, 0.6)',
+                  borderRadius: 3
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#5D85FF' }}>
+                    {totalViews}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Total Views
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Paper>
         </>
       )}
 
