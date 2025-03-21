@@ -1,67 +1,34 @@
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { ThemeProvider } from '@mui/material/styles';
+import { CssBaseline, Box } from '@mui/material';
+import { AuthProvider } from "./contexts/AuthContext";
+import Header from "./components/Header";
 import HomePage from "./pages/HomePage";
-import VideoPage from "./pages/VideoPage";
-import UploadVideo from "./components/UploadVideo";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import ProtectedRoute from "./components/ProtectedRoute";
-import Header from "./components/Header";
-import { AuthProvider } from "./contexts/AuthContext";
-import { createTheme, ThemeProvider } from '@mui/material/styles';
 import ProfilePage from "./pages/ProfilePage";
+import VideoPage from "./pages/VideoPage";
+import UploadVideo from "./components/UploadVideo";
 import FollowersPage from "./pages/FollowersPage";
 import SearchPage from "./pages/SearchPage";
-import { Box } from "@mui/material";
-
-const theme = createTheme({
-  palette: {
-    mode: 'dark', // Enable dark mode
-    background: {
-      default: '#000', // Set default background to black
-      paper: '#121212', // Paper elements background
-    },
-    primary: {
-      main: '#3f51b5',
-    },
-    secondary: {
-      main: '#f50057',
-    },
-  },
-  typography: {
-    fontFamily: [
-      'Roboto',
-      'Arial',
-      'sans-serif'
-    ].join(','),
-  },
-  components: {
-    MuiAppBar: {
-      defaultProps: {
-        elevation: 0,
-      },
-      styleOverrides: {
-        root: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
-        },
-      },
-    },
-  },
-});
+import ProtectedRoute from "./components/ProtectedRoute";
+import theme from './theme';
+import './App.css';
 
 // Layout component to conditionally render the Header
 const AppLayout = ({ children }) => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
   const isVideoPage = location.pathname.startsWith('/video/');
-  
+
   return (
     <>
       {!isAuthPage && !isVideoPage && <Header />}
-      <Box sx={{ 
+      <Box sx={{
         pt: 0, // Remove padding top
         minHeight: '100vh',
-        bgcolor: '#000' // Ensure background is black
+        bgcolor: theme.palette.background.default
       }}>
         {children}
       </Box>
@@ -77,7 +44,7 @@ function App() {
     document.body.style.overflow = 'auto';
     document.body.style.height = '100%';
     document.body.style.margin = '0';
-    
+
     return () => {
       // Clean up styles when component unmounts
       document.documentElement.style.overflow = '';
@@ -90,60 +57,42 @@ function App() {
 
   return (
     <ThemeProvider theme={theme}>
+      <CssBaseline />
       <AuthProvider>
         <Router>
           <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/video/:id" element={<VideoPage />} />
             <Route path="/" element={
               <AppLayout>
                 <HomePage />
               </AppLayout>
             } />
-            <Route path="/video/:id" element={
-              <AppLayout>
-                <VideoPage />
-              </AppLayout>
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ProfilePage />
+                </AppLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/upload" element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <UploadVideo />
+                </AppLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/followers" element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <FollowersPage />
+                </AppLayout>
+              </ProtectedRoute>
             } />
             <Route path="/search" element={
               <AppLayout>
                 <SearchPage />
-              </AppLayout>
-            } />
-            <Route path="/login" element={
-              <AppLayout>
-                <LoginPage />
-              </AppLayout>
-            } />
-            <Route path="/register" element={
-              <AppLayout>
-                <RegisterPage />
-              </AppLayout>
-            } />
-            <Route path="/upload" element={
-              <AppLayout>
-                <ProtectedRoute>
-                  <UploadVideo />
-                </ProtectedRoute>
-              </AppLayout>
-            } />
-            <Route path="/profile" element={
-              <AppLayout>
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              </AppLayout>
-            } />
-            <Route path="/users/:userId/followers" element={
-              <AppLayout>
-                <ProtectedRoute>
-                  <FollowersPage />
-                </ProtectedRoute>
-              </AppLayout>
-            } />
-            <Route path="/users/:userId/following" element={
-              <AppLayout>
-                <ProtectedRoute>
-                  <FollowersPage />
-                </ProtectedRoute>
               </AppLayout>
             } />
           </Routes>

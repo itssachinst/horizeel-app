@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { IconButton, Typography, Box, Avatar, Tooltip, Snackbar, Alert, Dialog, DialogContent, DialogTitle, Button, DialogActions, CircularProgress } from "@mui/material";
+import { IconButton, Typography, Box, Avatar, Tooltip, Snackbar, Alert, Dialog, DialogContent, DialogTitle, Button, DialogActions, CircularProgress, Slide, useTheme } from "@mui/material";
 import { 
   ThumbUp, 
   ThumbDown, 
@@ -21,10 +21,13 @@ import {
   Check,
   Pause,
   PlayArrow,
-  Fullscreen
+  Fullscreen,
+  Home
 } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
 import { incrementVideoLike, incrementVideoDislike, saveVideo, checkVideoSaved, deleteVideo, followUser, unfollowUser, checkIsFollowing } from "../api";
+import useSwipeNavigate from "../hooks/useSwipeNavigate";
+import { formatViewCount, formatDuration, formatRelativeTime, truncateText } from "../utils/videoUtils";
 
 // Define all browser-specific fullscreen functions at component level
 const fullscreenAPI = {
@@ -81,7 +84,7 @@ const fullscreenAPI = {
   }
 };
 
-const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
+const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet }) => {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const navigate = useNavigate();
@@ -114,6 +117,26 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [lastClickPosition, setLastClickPosition] = useState(null);
+
+  // Add swipe navigation handlers
+  const handlePrevVideo = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
+  };
+
+  const handleNextVideo = () => {
+    if (currentIndex < videos.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    }
+  };
+
+  const { handleTouchStart, handleTouchMove, handleTouchEnd } = useSwipeNavigate(
+    handlePrevVideo, // on swipe up (now for previous video since we're changing to vertical)
+    handleNextVideo, // on swipe down (now for next video since we're changing to vertical)
+    70, // min swipe distance
+    true // set to true for vertical swipe instead of horizontal
+  );
 
   const checkSavedStatus = async (videoId) => {
     try {
@@ -230,6 +253,24 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       event.preventDefault();
     } else if (event.key === "m") {
       toggleMute();
+      event.preventDefault();
+    } else if (event.key === "ArrowRight") {
+      // Fast forward 10 seconds
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = Math.min(video.currentTime + 10, video.duration);
+        setSnackbarMessage("Fast forward 10s");
+        setShowSnackbar(true);
+      }
+      event.preventDefault();
+    } else if (event.key === "ArrowLeft") {
+      // Rewind 10 seconds
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = Math.max(video.currentTime - 10, 0);
+        setSnackbarMessage("Rewind 10s");
+        setShowSnackbar(true);
+      }
       event.preventDefault();
     }
   };
@@ -713,13 +754,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     }
   };
 
-  const handleVolumeChange = (event) => {
+  const handleVolumeChange = () => {
     const video = videoRef.current;
     if (video) {
-      const newVolume = parseFloat(event.target.value);
-      video.volume = newVolume;
-      setVolume(newVolume);
-      setIsMuted(newVolume === 0);
+      setVolume(video.volume);
+      setIsMuted(video.muted);
     }
   };
 
@@ -732,21 +771,26 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     }
   };
 
-  const formatTime = (time) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const formatTime = (timeInSeconds) => {
+    if (!timeInSeconds) return "0:00";
+    
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
   const handleMouseMove = () => {
-    setShowControls(true);
     if (controlsTimeout) {
       clearTimeout(controlsTimeout);
     }
-    const timeout = setTimeout(() => {
+    
+    setShowControls(true);
+    
+    const newTimeout = setTimeout(() => {
       setShowControls(false);
     }, 3000);
-    setControlsTimeout(timeout);
+    
+    setControlsTimeout(newTimeout);
   };
 
   const handleDoubleTap = (event) => {
@@ -828,201 +872,80 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     setLastClick(currentTime);
   };
 
-  const handleTouchStart = (event) => {
-    if (event.touches && event.touches.length) {
-      setTouchStart({
-        y: event.touches[0].clientY,
-        x: event.touches[0].clientX,
-        time: new Date().getTime()
-      });
-      // Prevent default to avoid scrolling the page
-      event.preventDefault();
+  const handleSeekChange = (e) => {
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const seekPos = (e.clientX - rect.left) / rect.width;
+    
+    if (videoRef.current) {
+      const newTime = seekPos * videoRef.current.duration;
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
     }
   };
 
-  const handleTouchMove = (event) => {
-    if (event.touches && event.touches.length && touchStart) {
-      setTouchEnd({
-        y: event.touches[0].clientY,
-        x: event.touches[0].clientX,
-        time: new Date().getTime()
-      });
-      // Prevent default to avoid scrolling the page
-      event.preventDefault();
+  const togglePlayPause = () => {
+    if (!videoRef.current) return;
+    
+    if (videoRef.current.paused) {
+      videoRef.current.play();
+      setIsPlaying(true);
+    } else {
+      videoRef.current.pause();
+      setIsPlaying(false);
     }
   };
 
-  const handleTouchEnd = (event) => {
-    if (!touchStart || !touchEnd) return;
-
-    // Calculate distance and time
-    const verticalDistance = touchStart.y - touchEnd.y;
-    const horizontalDistance = touchStart.x - touchEnd.x;
-    const timeDiff = touchEnd.time - touchStart.time;
-    
-    // Log for debugging
-    console.log("Touch gesture detected:", {
-      verticalDistance,
-      horizontalDistance,
-      timeDiff,
-      start: touchStart,
-      end: touchEnd
-    });
-    
-    // Lower threshold for more sensitivity on mobile devices
-    const minSwipeDistance = 15;
-    
-    // Check if swipe is more vertical than horizontal
-    const isVerticalSwipe = Math.abs(verticalDistance) > Math.abs(horizontalDistance);
-    
-    if (isVerticalSwipe && Math.abs(verticalDistance) > minSwipeDistance) {
-      console.log("Vertical swipe detected:", verticalDistance > 0 ? "UP" : "DOWN");
-      
-      if (verticalDistance > 0) {
-        // Swipe UP = finger moved UP (start y is greater than end y)
-        console.log("Navigating to next video (current index:", currentIndex, ")");
-        if (currentIndex < videos.length - 1) {
-          setCurrentIndex(currentIndex + 1);
-          setSnackbarMessage("Next video");
-          setShowSnackbar(true);
-        }
-      } else {
-        // Swipe DOWN = finger moved DOWN (start y is less than end y)
-        console.log("Navigating to previous video (current index:", currentIndex, ")");
-        if (currentIndex > 0) {
-          setCurrentIndex(currentIndex - 1);
-          setSnackbarMessage("Previous video");
-          setShowSnackbar(true);
-        }
-      }
-    } else if (!isVerticalSwipe && Math.abs(horizontalDistance) > minSwipeDistance) {
-      // Horizontal swipe - scrub video timeline
-      const video = videoRef.current;
-      if (video) {
-        const seekAmount = Math.floor(Math.abs(horizontalDistance) / 10); // 10px = 1 second
-        if (horizontalDistance > 0) {
-          // Swipe left - rewind
-          video.currentTime = Math.max(video.currentTime - seekAmount, 0);
-          setSnackbarMessage(`Rewind ${seekAmount}s`);
-          setShowSnackbar(true);
-        } else {
-          // Swipe right - fast forward
-          video.currentTime = Math.min(video.currentTime + seekAmount, video.duration);
-          setSnackbarMessage(`Forward ${seekAmount}s`);
-          setShowSnackbar(true);
-        }
-      }
-    }
-
-    // Reset touch states
-    setTouchStart(null);
-    setTouchEnd(null);
-    
-    // Prevent default to avoid unwanted behaviors
-    if (event && event.preventDefault) {
-      event.preventDefault();
+  // Handle video container click
+  const handleVideoContainerClick = (e) => {
+    // Prevent clicks on controls from triggering this
+    if (e.target === videoContainerRef.current || e.target === videoRef.current) {
+      togglePlayPause();
     }
   };
 
-  useEffect(() => {
-    // Add this new effect to directly attach touchscreen event handlers to the container
-    const container = videoContainerRef.current;
-    if (container) {
-      // Keep track of taps for double-tap detection
-      let lastTapTime = 0;
-      let tapPosition = null;
-      
-      const touchStartHandler = (e) => {
-        // Prevent default only for video container touches to avoid interfering with page scrolling
-        if (e.target === videoRef.current) {
-          e.preventDefault();
-        }
-        
-        handleTouchStart(e);
-        // Store position of touch for double-tap detection
-        if (e.touches && e.touches.length) {
-          tapPosition = {
-            x: e.touches[0].clientX,
-            y: e.touches[0].clientY
-          };
-        }
+  // Toggle fullscreen mode
+  const toggleFullScreen = () => {
+    if (isFullScreen) {
+      exitFullScreen();
+    } else {
+      enterFullScreen();
+    }
+  };
+
+  // Add responsive layout calculations
+  const theme = useTheme();
+  const calculateVideoSize = () => {
+    if (isMobile) {
+      return {
+        width: '100%',
+        height: 'auto',
+        aspectRatio: '16/9',
+        maxHeight: '100vh'
       };
-      
-      const touchMoveHandler = (e) => {
-        // Only prevent default if we've started a gesture on the video
-        if (touchStart && e.target === videoRef.current) {
-          e.preventDefault();
-        }
-        handleTouchMove(e);
+    } else if (isTablet) {
+      return {
+        width: '100%',
+        maxWidth: '100%',
+        height: 'auto',
+        aspectRatio: '16/9'
       };
-      
-      const touchEndHandler = (e) => {
-        handleTouchEnd(e);
-        
-        // Double-tap detection
-        const currentTime = new Date().getTime();
-        const tapLength = currentTime - lastTapTime;
-        
-        // Only consider it a double-tap if it's within 300ms of the last tap
-        if (tapLength < 300 && tapLength > 0 && tapPosition) {
-          // Log for debugging
-          console.log("Double tap detected, time between taps:", tapLength);
-          
-          const video = videoRef.current;
-          if (video) {
-            const rect = container.getBoundingClientRect();
-            
-            // Calculate position
-            const x = tapPosition.x - rect.left;
-            const width = rect.width;
-            
-            console.log("Tap position:", x, "Container width:", width);
-            
-            if (x > width * 0.7) {
-              // Right side - Fast forward
-              video.currentTime = Math.min(video.currentTime + 10, video.duration);
-              setSnackbarMessage("Fast forward 10s");
-              setShowSnackbar(true);
-              console.log("Fast forward activated");
-            } else if (x < width * 0.3) {
-              // Left side - Fast backward
-              video.currentTime = Math.max(video.currentTime - 10, 0);
-              setSnackbarMessage("Rewind 10s");
-              setShowSnackbar(true);
-              console.log("Rewind activated");
-            } else {
-              // Middle area - Toggle play/pause
-              if (video.paused) {
-                video.play();
-              } else {
-                video.pause();
-              }
-              console.log("Play/pause toggled");
-            }
-          }
-          
-          // Reset tap position after using it
-          tapPosition = null;
-        }
-        
-        // Update last tap time
-        lastTapTime = currentTime;
-      };
-      
-      // Add touch event listeners directly to the container 
-      // Make passive true for touchstart to improve performance
-      container.addEventListener('touchstart', touchStartHandler, { passive: true });
-      container.addEventListener('touchmove', touchMoveHandler, { passive: false });
-      container.addEventListener('touchend', touchEndHandler, { passive: false });
-      
-      return () => {
-        // Remove event listeners on cleanup
-        container.removeEventListener('touchstart', touchStartHandler);
-        container.removeEventListener('touchmove', touchMoveHandler);
-        container.removeEventListener('touchend', touchEndHandler);
+    } else {
+      return {
+        width: '100%',
+        maxWidth: '100%',
+        height: 'auto',
+        aspectRatio: '16/9'
       };
     }
-  }, []);
+  };
+
+  const videoStyles = calculateVideoSize();
+
+  // Navigate to home page
+  const goToHomePage = () => {
+    navigate("/");
+  };
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
@@ -1031,9 +954,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         width: "100vw",
         height: "100vh",
           bgcolor: "black", 
-          display: "flex", 
-          justifyContent: "center", 
-          alignItems: "center", 
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
           color: "white" 
         }}
       >
@@ -1048,443 +971,362 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
     <Box
       ref={videoContainerRef}
       sx={{
-        position: "relative",
-        width: "100%",
-        height: "100vh",
-        backgroundColor: "#000",
-        overflow: "hidden",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center"
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        bgcolor: '#000',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center'
       }}
+      onClick={handleVideoContainerClick}
+      onMouseMove={handleMouseMove}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
     >
-      {/* Video */}
-      <Box
-        sx={{
-          position: "relative",
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          overflow: "hidden"
-        }}
-      >
-        <video
-          ref={videoRef}
-          src={videos[currentIndex]?.video_url}
-          autoPlay
-          muted={isMuted}
-          playsInline
-          loop={false}
-          onClick={handleVideoClick}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleVideoEnd}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            maxHeight: "100vh"
-          }}
-        />
-      </Box>
-
-      {/* Exit Button */}
+      {/* Close button to go to home page */}
       <IconButton
-        onClick={exitFullScreen}
+        onClick={goToHomePage}
         sx={{
-          position: "absolute",
-          top: "10px",
-          right: "10px",
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
-          color: "white",
-          "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-          zIndex: 10,
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          bgcolor: 'rgba(0, 0, 0, 0.6)',
+          color: 'white',
+          zIndex: 1500,
+          '&:hover': {
+            bgcolor: 'rgba(0, 0, 0, 0.8)',
+          },
         }}
       >
         <Close />
       </IconButton>
 
-      {/* Right Side Action Buttons */}
-      <Box
-        sx={{
-          position: "absolute",
-          right: { xs: "10px", sm: "20px" },
-          top: "50%",
-          transform: "translateY(-50%)",
-          display: "flex",
-          flexDirection: "column",
-          gap: { xs: "15px", sm: "20px", md: "30px" },
-          alignItems: "center",
-          zIndex: 10,
+      {/* Video Element */}
+      <video
+        ref={videoRef}
+        src={videos[currentIndex]?.video_url}
+        autoPlay
+        playsInline
+        onEnded={handleVideoEnd}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onVolumeChange={handleVolumeChange}
+        style={{
+          ...videoStyles,
+          objectFit: 'contain',
+          zIndex: 1
         }}
-      >
-        {currentIndex > 0 && (
-          <IconButton
-            onClick={goToPrevious}
-            sx={{
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              color: "white",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              width: { xs: 36, sm: 40 },
-              height: { xs: 36, sm: 40 },
-              padding: { xs: "6px", sm: "8px" },
-            }}
-          >
-            <ArrowUpward fontSize="small" />
-          </IconButton>
-        )}
+        muted={isMuted}
+      />
 
-        <Tooltip title="Views" placement="left">
-          <Box sx={{ textAlign: "center" }}>
-            <IconButton 
-              sx={{ 
-                color: "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-                width: { xs: 36, sm: 40 },
-                height: { xs: 36, sm: 40 },
-                padding: { xs: "6px", sm: "8px" },
+      {/* Up/Down Navigation for vertical scrolling - moved to right side */}
+      {videos.length > 1 && (
+        <Box
+          sx={{
+            position: 'absolute',
+            right: 20,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            zIndex: 15,
+          }}
+        >
+          {currentIndex > 0 && (
+            <IconButton
+              onClick={() => setCurrentIndex(currentIndex - 1)}
+              sx={{
+                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.8)',
+                },
               }}
             >
-              <Visibility fontSize="small" />
+              <ArrowUpward />
             </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
-              {views}
-            </Typography>
-          </Box>
-        </Tooltip>
-
-        <Tooltip title={isLiked ? "Liked" : "Like"} placement="left">
-          <Box sx={{ textAlign: "center" }}>
-            <IconButton 
-              onClick={handleLike} 
-              sx={{ 
-                color: isLiked ? "primary.main" : "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-                width: { xs: 36, sm: 40 },
-                height: { xs: 36, sm: 40 },
-                padding: { xs: "6px", sm: "8px" },
+          )}
+          {currentIndex < videos.length - 1 && (
+            <IconButton
+              onClick={() => setCurrentIndex(currentIndex + 1)}
+              sx={{
+                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.8)',
+                },
               }}
             >
-              {isLiked ? <Favorite fontSize="small" /> : <ThumbUp fontSize="small" />}
+              <ArrowDownward />
             </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
-              {likes}
-            </Typography>
-          </Box>
-        </Tooltip>
-        
-        <Tooltip title={isDisliked ? "Disliked" : "Dislike"} placement="left">
-          <Box sx={{ textAlign: "center" }}>
-            <IconButton 
-              onClick={handleDislike} 
-              sx={{ 
-                color: isDisliked ? "error.main" : "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-                width: { xs: 36, sm: 40 },
-                height: { xs: 36, sm: 40 },
-                padding: { xs: "6px", sm: "8px" },
-              }}
-            >
-              <ThumbDown fontSize="small" />
-            </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
-              {dislikes}
-            </Typography>
-          </Box>
-        </Tooltip>
-
-        <Tooltip title={isSaved ? "Remove from saved" : "Save video"} placement="left">
-          <IconButton 
-            onClick={handleSaveVideo} 
-            sx={{ 
-              color: isSaved ? "primary.main" : "white",
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              width: { xs: 36, sm: 40 },
-              height: { xs: 36, sm: 40 },
-              padding: { xs: "6px", sm: "8px" },
-            }}
-          >
-            {isSaved ? <Bookmark fontSize="small" /> : <BookmarkBorder fontSize="small" />}
-          </IconButton>
-        </Tooltip>
-        
-        {currentUser && videos[currentIndex] && currentUser?.user_id === videos[currentIndex]?.user_id && (
-          <Tooltip title="Delete video" placement="left">
-            <IconButton 
-              onClick={handleDeleteVideo} 
-              sx={{ 
-                color: "white",
-                backgroundColor: "rgba(0, 0, 0, 0.6)",
-                "&:hover": { backgroundColor: "rgba(255, 0, 0, 0.2)" },
-                width: { xs: 36, sm: 40 },
-                height: { xs: 36, sm: 40 },
-                padding: { xs: "6px", sm: "8px" },
-              }}
-            >
-              <Delete fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-        
-        <Tooltip title="Share" placement="left">
-          <IconButton 
-            onClick={handleShare} 
-            sx={{ 
-              color: "white",
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              width: { xs: 36, sm: 40 },
-              height: { xs: 36, sm: 40 },
-              padding: { xs: "6px", sm: "8px" },
-            }}
-          >
-            <Share fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        
-        {currentIndex < videos.length - 1 && (
-          <IconButton 
-            onClick={goToNext}
-            sx={{ 
-              backgroundColor: "rgba(0, 0, 0, 0.6)",
-              color: "white",
-              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
-              width: { xs: 36, sm: 40 },
-              height: { xs: 36, sm: 40 },
-              padding: { xs: "6px", sm: "8px" },
-            }}
-          >
-            <ArrowDownward fontSize="small" />
-          </IconButton>
-        )}
-      </Box>
-
-      {/* Bottom User Info & Caption */}
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: "30px",
-          left: { xs: "10px", sm: "20px" },
-          maxWidth: { xs: "85%", sm: "70%", md: "60%" },
-          padding: { xs: "10px", sm: "15px" },
-          borderRadius: "8px",
-          zIndex: 10,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "flex-start", mb: 1 }}>
-          <Avatar 
-            src={currentVideo?.profile_picture || ""}
-            sx={{ 
-              width: { xs: 30, sm: 40 }, 
-              height: { xs: 30, sm: 40 }, 
-              border: "2px solid white",
-              mr: { xs: 1, sm: 2 }
-            }}
-          />
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: "bold", color: "white", mr: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                @{currentVideo?.username || "Anonymous"}
-              </Typography>
-              
-              {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
-                <Tooltip title={isFollowing ? "Unfollow" : "Follow"} placement="top">
-                  <IconButton
-                    onClick={handleFollowToggle}
-                    disabled={followLoading}
-                    size="small"
-                    sx={{ 
-                      color: isFollowing ? "primary.main" : "white",
-                      bgcolor: isFollowing ? "rgba(25, 118, 210, 0.12)" : "rgba(255, 255, 255, 0.12)",
-                      '&:hover': {
-                        bgcolor: isFollowing ? "rgba(25, 118, 210, 0.2)" : "rgba(255, 255, 255, 0.2)",
-                      },
-                      p: { xs: 0.3, sm: 0.5 },
-                      borderRadius: 1
-                    }}
-                  >
-                    {followLoading ? (
-                      <CircularProgress size={16} color="inherit" />
-                    ) : isFollowing ? (
-                      <Check fontSize="small" />
-                    ) : (
-                      <PersonAdd fontSize="small" />
-                    )}
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: "bold", color: "white", mb: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-              {currentVideo?.title || "Untitled Video"}
-            </Typography>
-            {currentVideo?.description && (
-              <>
-                <Typography 
-                  variant="body2" 
-                  color="lightgray"
-                  sx={{ 
-                    maxWidth: { xs: "300px", sm: "400px", md: "500px" },
-                    lineHeight: 1.3,
-                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
-                  }}
-                >
-                  {showDescription 
-                    ? currentVideo?.description 
-                    : truncateDescription(currentVideo?.description, 100)}
-                </Typography>
-                {currentVideo?.description?.length > 100 && (
-                  <Button 
-                    onClick={() => setShowDescription(!showDescription)}
-                    startIcon={showDescription ? <ExpandLess /> : <ExpandMore />}
-                    sx={{ 
-                      color: "white", 
-                      padding: "4px", 
-                      minWidth: "auto",
-                      textTransform: "none",
-                      "&:hover": { backgroundColor: "transparent", opacity: 0.8 },
-                    }}
-                  >
-                    {showDescription ? "Show less" : "Show more"}
-                  </Button>
-                )}
-              </>
-            )}
-          </Box>
+          )}
         </Box>
-      </Box>
+      )}
 
-      {/* Bottom controls for playback */}
+      {/* Mobile-optimized video controls overlay */}
+      <Slide direction="up" in={showControls || !isPlaying} timeout={300}>
       <Box
         sx={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.7)",
-          padding: { xs: "5px", sm: "10px" },
-          display: showControls ? "block" : "none",
-          transition: "opacity 0.3s",
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 } }}>
-          <IconButton 
-            onClick={handlePlayPause} 
-            sx={{ 
-              color: "white",
-              padding: { xs: "4px", sm: "8px" }
-            }}
-          >
-            {isPlaying ? 
-              <Pause fontSize="small" /> : 
-              <PlayArrow fontSize="small" />
-            }
-          </IconButton>
-
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+            padding: isMobile ? '8px 12px' : '16px',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'opacity 0.3s ease',
+            opacity: showControls ? 1 : 0,
+          }}
+        >
+          {/* Progress bar */}
           <Box
             sx={{
-              flex: 1,
-              height: "4px",
-              backgroundColor: "rgba(255, 255, 255, 0.3)",
-              cursor: "pointer",
-              position: "relative",
+              width: '100%',
+              height: isMobile ? '3px' : '4px',
+              bgcolor: 'rgba(255,255,255,0.3)',
+              borderRadius: '2px',
+              mb: isMobile ? 1 : 2,
+              position: 'relative',
+              cursor: 'pointer'
             }}
-            onClick={handleProgressClick}
+            onClick={handleSeekChange}
           >
             <Box
               sx={{
-                position: "absolute",
+                position: 'absolute',
                 left: 0,
                 top: 0,
-                height: "100%",
-                backgroundColor: "white",
+                height: '100%',
                 width: `${(currentTime / duration) * 100}%`,
+                bgcolor: 'primary.main',
+                borderRadius: '2px'
               }}
             />
-          </Box>
-          
-          <Typography sx={{ 
-            color: "white", 
-            minWidth: { xs: "70px", sm: "100px" },
-            fontSize: { xs: "0.7rem", sm: "0.875rem" },
-            ml: { xs: 0.5, sm: 1 }
-          }}>
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </Typography>
-          
-          <Box sx={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: { xs: 0.5, sm: 1 },
-            '& .MuiInputBase-root': {
-              fontSize: { xs: '0.7rem', sm: '0.875rem' }
-            }
-          }}>
-            <IconButton 
-              onClick={toggleMute} 
-              sx={{ 
-                color: "white",
-                padding: { xs: "4px", sm: "8px" }
-              }}
-            >
-              {isMuted ? 
-                <VolumeOff fontSize="small" /> : 
-                <VolumeUp fontSize="small" />
-              }
-            </IconButton>
-            
-            <Box sx={{ 
-              display: { xs: 'none', sm: 'block' },
-              width: { sm: "70px", md: "100px" }
-            }}>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={volume}
-                onChange={handleVolumeChange}
-                style={{ width: "100%" }}
-              />
-            </Box>
-            
-            <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-              <select
-                value={playbackSpeed}
-                onChange={handlePlaybackSpeedChange}
-                style={{
-                  backgroundColor: "transparent",
-                  color: "white",
-                  border: "none",
-                  padding: "5px",
-                  fontSize: "0.875rem"
-                }}
-              >
-                <option value="0.5">0.5x</option>
-                <option value="1">1x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2x</option>
-              </select>
-            </Box>
-            
-            <IconButton 
-              onClick={enterFullScreen} 
-              sx={{ 
-                color: "white",
-                padding: { xs: "4px", sm: "8px" }
-              }}
-            >
-              <Fullscreen fontSize="small" />
-            </IconButton>
-          </Box>
-        </Box>
       </Box>
 
+          {/* Control buttons */}
+      <Box
+        sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <IconButton
+                onClick={togglePlayPause}
+                sx={{ 
+                  color: 'white',
+                  p: isMobile ? 0.5 : 1 
+                }}
+              >
+                {isPlaying ? <Pause /> : <PlayArrow />}
+        </IconButton>
+
+              <IconButton
+                onClick={toggleMute}
+                sx={{ 
+                  color: 'white',
+                  p: isMobile ? 0.5 : 1,
+                  display: { xs: 'none', sm: 'inline-flex' }
+                }}
+              >
+                {isMuted ? <VolumeOff /> : <VolumeUp />}
+        </IconButton>
+      </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              {!isMobile && (
+                <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </Typography>
+              )}
+
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <IconButton
+                  onClick={handleLike}
+                  disabled={!currentUser}
+                  sx={{ 
+                    color: isLiked ? 'primary.main' : 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+
+                <IconButton
+                  onClick={handleDislike}
+                  disabled={!currentUser}
+                  sx={{ 
+                    color: isDisliked ? 'error.main' : 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+
+                <IconButton
+                  onClick={handleSaveVideo}
+                  disabled={!currentUser}
+                  sx={{ 
+                    color: isSaved ? 'primary.main' : 'white',
+                    p: isMobile ? 0.5 : 1,
+                    display: { xs: 'none', sm: 'inline-flex' }
+                  }}
+                >
+                  {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
+                </IconButton>
+
+                <IconButton
+                  onClick={toggleFullScreen}
+                  sx={{ 
+                    color: 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </Slide>
+
+      {/* Video Info Overlay */}
+      <Slide direction="down" in={showControls || !isPlaying} timeout={300}>
+      <Box
+        sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+            padding: isMobile ? '12px' : '16px',
+            zIndex: 10,
+            transition: 'opacity 0.3s ease',
+            opacity: showControls ? 1 : 0,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Avatar 
+                src={videos[currentIndex]?.creator_profile_picture} 
+                alt={videos[currentIndex]?.creator_username}
+                sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }} 
+              />
+              <Box>
+                <Typography 
+                  variant={isMobile ? "body1" : "h6"} 
+                  sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
+                >
+          {videos[currentIndex]?.title}
+        </Typography>
+                <Typography 
+                  variant={isMobile ? "caption" : "body2"} 
+                  sx={{ color: 'white', opacity: 0.8 }}
+                >
+                  {videos[currentIndex]?.creator_username}
+                </Typography>
+              </Box>
+            </Box>
+
+            {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
+              <Button
+                variant={isFollowing ? "outlined" : "contained"}
+                size={isMobile ? "small" : "medium"}
+                color="primary"
+                startIcon={isFollowing ? <Check /> : <PersonAdd />}
+                onClick={handleFollowToggle}
+                disabled={followLoading}
+                sx={{ 
+                  minWidth: 'auto', 
+                  px: isMobile ? 1 : 2,
+                  display: { xs: 'none', sm: 'flex' }
+                }}
+              >
+                {followLoading ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  isFollowing ? "Following" : "Follow"
+                )}
+              </Button>
+            )}
+          </Box>
+
+          {!isMobile && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, opacity: 0.8 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                <Visibility sx={{ fontSize: 16, color: 'white', mr: 0.5 }} />
+                <Typography variant="body2" sx={{ color: 'white' }}>
+                  {views} views
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+                <ThumbUp sx={{ fontSize: 16, color: 'white', mr: 0.5 }} />
+                <Typography variant="body2" sx={{ color: 'white' }}>
+                  {likes}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <ThumbDown sx={{ fontSize: 16, color: 'white', mr: 0.5 }} />
+                <Typography variant="body2" sx={{ color: 'white' }}>
+                  {dislikes}
+        </Typography>
+      </Box>
+            </Box>
+          )}
+        </Box>
+      </Slide>
+
+      {/* Mobile swiping indicators for navigation (only shown on mobile) */}
+      {isMobile && videos.length > 1 && (
+        <Box sx={{ 
+          position: 'absolute', 
+          bottom: 70, 
+          left: 0, 
+          right: 0, 
+          display: 'flex', 
+          justifyContent: 'center', 
+          zIndex: 15 
+        }}>
+          {videos.map((_, idx) => (
+            <Box 
+              key={idx} 
+              sx={{ 
+                width: 8, 
+                height: 8, 
+                borderRadius: '50%', 
+                bgcolor: idx === currentIndex ? 'primary.main' : 'rgba(255,255,255,0.5)', 
+                mx: 0.5 
+              }} 
+            />
+          ))}
+        </Box>
+      )}
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={showSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setShowSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+
+      {/* Delete confirmation dialog */}
       <Dialog
         open={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
@@ -1513,17 +1355,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Snackbar
-        open={showSnackbar}
-        autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={handleCloseSnackbar} severity="info" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };
