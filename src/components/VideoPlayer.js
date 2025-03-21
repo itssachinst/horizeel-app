@@ -869,8 +869,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       end: touchEnd
     });
     
-    // Decrease threshold for more sensitivity on laptop touchscreens
-    const minSwipeDistance = 30;
+    // Lower threshold for more sensitivity on mobile devices
+    const minSwipeDistance = 15;
     
     // Check if swipe is more vertical than horizontal
     const isVerticalSwipe = Math.abs(verticalDistance) > Math.abs(horizontalDistance);
@@ -933,6 +933,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       let tapPosition = null;
       
       const touchStartHandler = (e) => {
+        // Prevent default only for video container touches to avoid interfering with page scrolling
+        if (e.target === videoRef.current) {
+          e.preventDefault();
+        }
+        
         handleTouchStart(e);
         // Store position of touch for double-tap detection
         if (e.touches && e.touches.length) {
@@ -943,7 +948,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         }
       };
       
-      const touchMoveHandler = (e) => handleTouchMove(e);
+      const touchMoveHandler = (e) => {
+        // Only prevent default if we've started a gesture on the video
+        if (touchStart && e.target === videoRef.current) {
+          e.preventDefault();
+        }
+        handleTouchMove(e);
+      };
       
       const touchEndHandler = (e) => {
         handleTouchEnd(e);
@@ -998,8 +1009,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         lastTapTime = currentTime;
       };
       
-      // Add touch event listeners directly to the container with passive: false
-      container.addEventListener('touchstart', touchStartHandler, { passive: false });
+      // Add touch event listeners directly to the container 
+      // Make passive true for touchstart to improve performance
+      container.addEventListener('touchstart', touchStartHandler, { passive: true });
       container.addEventListener('touchmove', touchMoveHandler, { passive: false });
       container.addEventListener('touchend', touchEndHandler, { passive: false });
       
@@ -1040,7 +1052,10 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         width: "100%",
         height: "100vh",
         backgroundColor: "#000",
-        overflow: "hidden"
+        overflow: "hidden",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center"
       }}
     >
       {/* Video */}
@@ -1049,27 +1064,27 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
           position: "relative",
           width: "100%",
           height: "100%",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
           overflow: "hidden"
-      }}
-    >
-      <video
-        ref={videoRef}
-        src={videos[currentIndex]?.video_url}
-        autoPlay
+        }}
+      >
+        <video
+          ref={videoRef}
+          src={videos[currentIndex]?.video_url}
+          autoPlay
           muted={isMuted}
           playsInline
           loop={false}
           onClick={handleVideoClick}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
-        onEnded={handleVideoEnd}
+          onEnded={handleVideoEnd}
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "contain",
+            objectFit: "cover",
             maxHeight: "100vh"
           }}
         />
@@ -1095,12 +1110,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
       <Box
         sx={{
           position: "absolute",
-          right: "20px",
+          right: { xs: "10px", sm: "20px" },
           top: "50%",
           transform: "translateY(-50%)",
           display: "flex",
           flexDirection: "column",
-          gap: "30px",
+          gap: { xs: "15px", sm: "20px", md: "30px" },
           alignItems: "center",
           zIndex: 10,
         }}
@@ -1112,9 +1127,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
               backgroundColor: "rgba(0, 0, 0, 0.6)",
               color: "white",
               "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              width: { xs: 36, sm: 40 },
+              height: { xs: 36, sm: 40 },
+              padding: { xs: "6px", sm: "8px" },
             }}
           >
-            <ArrowUpward />
+            <ArrowUpward fontSize="small" />
           </IconButton>
         )}
 
@@ -1125,13 +1143,16 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
                 color: "white",
                 backgroundColor: "rgba(0, 0, 0, 0.6)",
                 "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                padding: { xs: "6px", sm: "8px" },
               }}
             >
-              <Visibility />
+              <Visibility fontSize="small" />
             </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
+            <Typography variant="body2" sx={{ color: "white", mt: 0.5, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
               {views}
-        </Typography>
+            </Typography>
           </Box>
         </Tooltip>
 
@@ -1143,13 +1164,16 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
                 color: isLiked ? "primary.main" : "white",
                 backgroundColor: "rgba(0, 0, 0, 0.6)",
                 "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                padding: { xs: "6px", sm: "8px" },
               }}
             >
-              {isLiked ? <Favorite /> : <ThumbUp />}
-        </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
-          {likes}
-        </Typography>
+              {isLiked ? <Favorite fontSize="small" /> : <ThumbUp fontSize="small" />}
+            </IconButton>
+            <Typography variant="body2" sx={{ color: "white", mt: 0.5, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
+              {likes}
+            </Typography>
           </Box>
         </Tooltip>
         
@@ -1161,13 +1185,16 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
                 color: isDisliked ? "error.main" : "white",
                 backgroundColor: "rgba(0, 0, 0, 0.6)",
                 "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                padding: { xs: "6px", sm: "8px" },
               }}
             >
-              <ThumbDown />
-        </IconButton>
-            <Typography variant="body2" sx={{ color: "white", mt: 0.5 }}>
-          {dislikes}
-        </Typography>
+              <ThumbDown fontSize="small" />
+            </IconButton>
+            <Typography variant="body2" sx={{ color: "white", mt: 0.5, fontSize: { xs: '0.7rem', sm: '0.875rem' } }}>
+              {dislikes}
+            </Typography>
           </Box>
         </Tooltip>
 
@@ -1178,9 +1205,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
               color: isSaved ? "primary.main" : "white",
               backgroundColor: "rgba(0, 0, 0, 0.6)",
               "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              width: { xs: 36, sm: 40 },
+              height: { xs: 36, sm: 40 },
+              padding: { xs: "6px", sm: "8px" },
             }}
           >
-            {isSaved ? <Bookmark /> : <BookmarkBorder />}
+            {isSaved ? <Bookmark fontSize="small" /> : <BookmarkBorder fontSize="small" />}
           </IconButton>
         </Tooltip>
         
@@ -1192,9 +1222,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
                 color: "white",
                 backgroundColor: "rgba(0, 0, 0, 0.6)",
                 "&:hover": { backgroundColor: "rgba(255, 0, 0, 0.2)" },
+                width: { xs: 36, sm: 40 },
+                height: { xs: 36, sm: 40 },
+                padding: { xs: "6px", sm: "8px" },
               }}
             >
-              <Delete />
+              <Delete fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
@@ -1206,9 +1239,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
               color: "white",
               backgroundColor: "rgba(0, 0, 0, 0.6)",
               "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              width: { xs: 36, sm: 40 },
+              height: { xs: 36, sm: 40 },
+              padding: { xs: "6px", sm: "8px" },
             }}
           >
-            <Share />
+            <Share fontSize="small" />
           </IconButton>
         </Tooltip>
         
@@ -1219,10 +1255,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
               backgroundColor: "rgba(0, 0, 0, 0.6)",
               color: "white",
               "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
+              width: { xs: 36, sm: 40 },
+              height: { xs: 36, sm: 40 },
+              padding: { xs: "6px", sm: "8px" },
             }}
           >
-            <ArrowDownward />
-        </IconButton>
+            <ArrowDownward fontSize="small" />
+          </IconButton>
         )}
       </Box>
 
@@ -1231,9 +1270,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
         sx={{
           position: "absolute",
           bottom: "30px",
-          left: "20px",
-          maxWidth: "60%",
-          padding: "15px",
+          left: { xs: "10px", sm: "20px" },
+          maxWidth: { xs: "85%", sm: "70%", md: "60%" },
+          padding: { xs: "10px", sm: "15px" },
           borderRadius: "8px",
           zIndex: 10,
         }}
@@ -1242,15 +1281,15 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
           <Avatar 
             src={currentVideo?.profile_picture || ""}
             sx={{ 
-              width: 40, 
-              height: 40, 
+              width: { xs: 30, sm: 40 }, 
+              height: { xs: 30, sm: 40 }, 
               border: "2px solid white",
-              mr: 2
+              mr: { xs: 1, sm: 2 }
             }}
           />
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: "bold", color: "white", mr: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: "bold", color: "white", mr: 1, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 @{currentVideo?.username || "Anonymous"}
               </Typography>
               
@@ -1266,12 +1305,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
                       '&:hover': {
                         bgcolor: isFollowing ? "rgba(25, 118, 210, 0.2)" : "rgba(255, 255, 255, 0.2)",
                       },
-                      p: 0.5,
+                      p: { xs: 0.3, sm: 0.5 },
                       borderRadius: 1
                     }}
                   >
                     {followLoading ? (
-                      <CircularProgress size={20} color="inherit" />
+                      <CircularProgress size={16} color="inherit" />
                     ) : isFollowing ? (
                       <Check fontSize="small" />
                     ) : (
@@ -1281,23 +1320,24 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
                 </Tooltip>
               )}
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: "bold", color: "white", mb: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: "bold", color: "white", mb: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
               {currentVideo?.title || "Untitled Video"}
-        </Typography>
+            </Typography>
             {currentVideo?.description && (
               <>
                 <Typography 
                   variant="body2" 
                   color="lightgray"
                   sx={{ 
-                    maxWidth: "500px",
-                    lineHeight: 1.3
+                    maxWidth: { xs: "300px", sm: "400px", md: "500px" },
+                    lineHeight: 1.3,
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
                   }}
                 >
                   {showDescription 
                     ? currentVideo?.description 
                     : truncateDescription(currentVideo?.description, 100)}
-        </Typography>
+                </Typography>
                 {currentVideo?.description?.length > 100 && (
                   <Button 
                     onClick={() => setShowDescription(!showDescription)}
@@ -1327,14 +1367,23 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
           left: 0,
           right: 0,
           backgroundColor: "rgba(0, 0, 0, 0.7)",
-          padding: "10px",
+          padding: { xs: "5px", sm: "10px" },
           display: showControls ? "block" : "none",
           transition: "opacity 0.3s",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <IconButton onClick={handlePlayPause} sx={{ color: "white" }}>
-            {isPlaying ? <Pause /> : <PlayArrow />}
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, sm: 1 } }}>
+          <IconButton 
+            onClick={handlePlayPause} 
+            sx={{ 
+              color: "white",
+              padding: { xs: "4px", sm: "8px" }
+            }}
+          >
+            {isPlaying ? 
+              <Pause fontSize="small" /> : 
+              <PlayArrow fontSize="small" />
+            }
           </IconButton>
 
           <Box
@@ -1359,44 +1408,79 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
             />
           </Box>
           
-          <Typography sx={{ color: "white", minWidth: "100px" }}>
+          <Typography sx={{ 
+            color: "white", 
+            minWidth: { xs: "70px", sm: "100px" },
+            fontSize: { xs: "0.7rem", sm: "0.875rem" },
+            ml: { xs: 0.5, sm: 1 }
+          }}>
             {formatTime(currentTime)} / {formatTime(duration)}
           </Typography>
           
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <IconButton onClick={toggleMute} sx={{ color: "white" }}>
-              {isMuted ? <VolumeOff /> : <VolumeUp />}
-            </IconButton>
-            
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={volume}
-              onChange={handleVolumeChange}
-              style={{ width: "100px" }}
-            />
-            
-            <select
-              value={playbackSpeed}
-              onChange={handlePlaybackSpeedChange}
-              style={{
-                backgroundColor: "transparent",
+          <Box sx={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: { xs: 0.5, sm: 1 },
+            '& .MuiInputBase-root': {
+              fontSize: { xs: '0.7rem', sm: '0.875rem' }
+            }
+          }}>
+            <IconButton 
+              onClick={toggleMute} 
+              sx={{ 
                 color: "white",
-                border: "none",
-                padding: "5px",
+                padding: { xs: "4px", sm: "8px" }
               }}
             >
-              <option value="0.5">0.5x</option>
-              <option value="1">1x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2x</option>
-            </select>
+              {isMuted ? 
+                <VolumeOff fontSize="small" /> : 
+                <VolumeUp fontSize="small" />
+              }
+            </IconButton>
             
-            <IconButton onClick={enterFullScreen} sx={{ color: "white" }}>
-              <Fullscreen />
-      </IconButton>
+            <Box sx={{ 
+              display: { xs: 'none', sm: 'block' },
+              width: { sm: "70px", md: "100px" }
+            }}>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={volume}
+                onChange={handleVolumeChange}
+                style={{ width: "100%" }}
+              />
+            </Box>
+            
+            <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+              <select
+                value={playbackSpeed}
+                onChange={handlePlaybackSpeedChange}
+                style={{
+                  backgroundColor: "transparent",
+                  color: "white",
+                  border: "none",
+                  padding: "5px",
+                  fontSize: "0.875rem"
+                }}
+              >
+                <option value="0.5">0.5x</option>
+                <option value="1">1x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+            </Box>
+            
+            <IconButton 
+              onClick={enterFullScreen} 
+              sx={{ 
+                color: "white",
+                padding: { xs: "4px", sm: "8px" }
+              }}
+            >
+              <Fullscreen fontSize="small" />
+            </IconButton>
           </Box>
         </Box>
       </Box>
@@ -1440,36 +1524,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex }) => {
           {snackbarMessage}
         </Alert>
       </Snackbar>
-
-      {/* Add visual feedback for double tap/click areas */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "30%",
-          height: "100%",
-          display: showControls ? "block" : "none",
-          transition: "opacity 0.3s",
-          opacity: 0.3,
-          backgroundColor: "rgba(255, 255, 255, 0.1)",
-          pointerEvents: "none",
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: "30%",
-          height: "100%",
-          display: showControls ? "block" : "none",
-          transition: "opacity 0.3s",
-          opacity: 0.3,
-          backgroundColor: "rgba(255, 255, 255, 0.1)",
-          pointerEvents: "none",
-        }}
-      />
     </Box>
   );
 };
