@@ -22,7 +22,6 @@ import {
 import { 
   Search as SearchIcon, 
   VideoCall as VideoCallIcon, 
-  Notifications as NotificationsIcon, 
   Logout as LogoutIcon, 
   Settings as SettingsIcon,
   AccountCircle as AccountCircleIcon,
@@ -252,17 +251,6 @@ const Header = () => {
         </IconButton>
         <p>Upload</p>
       </MenuItem>
-      <MenuItem>
-        <IconButton
-          size="large"
-          color="inherit"
-        >
-          <Badge badgeContent={4} color="error">
-            <NotificationsIcon />
-          </Badge>
-        </IconButton>
-        <p>Notifications</p>
-      </MenuItem>
       <MenuItem onClick={handleGoToProfile}>
         <IconButton
           size="large"
@@ -376,19 +364,10 @@ const Header = () => {
           <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
             <ActionIconButton
               size="large"
+              color="inherit"
               onClick={handleGoToUpload}
-              aria-label="upload video"
             >
               <VideoCallIcon />
-            </ActionIconButton>
-            
-            <ActionIconButton
-              size="large"
-              aria-label="show notifications"
-            >
-              <Badge badgeContent={4} color="error">
-                <NotificationsIcon />
-              </Badge>
             </ActionIconButton>
             
             <ActionIconButton

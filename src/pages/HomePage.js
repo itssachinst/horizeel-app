@@ -11,11 +11,12 @@ import {
   useTheme,
   useMediaQuery,
   Avatar,
-  Stack
+  Stack,
+  Button
 } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { fetchVideos, searchVideos } from "../api";
-import { Visibility, Person } from "@mui/icons-material";
+import { Visibility, Person, PhoneIphone, Android } from "@mui/icons-material";
 import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -27,6 +28,7 @@ const HomePage = () => {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showMobilePromo, setShowMobilePromo] = useState(false);
   const observer = useRef();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,6 +36,13 @@ const HomePage = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const ITEMS_PER_PAGE = 20;
+
+  // Effect to check if user is on mobile browser
+  useEffect(() => {
+    // Check if user is on mobile device
+    const isMobileBrowser = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    setShowMobilePromo(isMobileBrowser && isMobile);
+  }, [isMobile]);
 
   // Effect to handle URL search parameters
   useEffect(() => {
@@ -117,6 +126,175 @@ const HomePage = () => {
     return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
   };
 
+  // Toggle mobile promo for testing
+  const toggleMobilePromo = () => {
+    setShowMobilePromo(!showMobilePromo);
+  };
+
+  // Mobile app promo component
+  const MobileAppPromo = () => (
+    <Box 
+      sx={{
+        minHeight: '100vh',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #121212 0%, #1e1e1e 100%)',
+        px: 3,
+        textAlign: 'center',
+        position: 'relative'
+      }}
+    >
+      {/* Logo placeholder */}
+      <Box 
+        sx={{ 
+          width: 80, 
+          height: 80, 
+          borderRadius: '50%',
+          background: theme.palette.primary.main,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          mb: 3,
+          boxShadow: '0 0 20px rgba(0,150,255,0.5)'
+        }}
+      >
+        <Typography variant="h4" color="white" fontWeight="bold">H</Typography>
+      </Box>
+      
+      <Typography 
+        variant="h4" 
+        color="white" 
+        fontWeight="bold" 
+        sx={{ 
+          mb: 1,
+          background: 'linear-gradient(90deg, #2196F3, #00E5FF)',
+          backgroundClip: 'text',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          textTransform: 'uppercase'
+        }}
+      >
+        Get Ready
+      </Typography>
+      
+      <Typography variant="h5" color="white" gutterBottom>
+        Our Mobile App is Coming Soon!
+      </Typography>
+      
+      <Typography 
+        variant="body1" 
+        color="text.secondary" 
+        sx={{ 
+          mt: 2, 
+          mb: 4, 
+          maxWidth: '90%',
+          mx: 'auto' 
+        }}
+      >
+        We're building an amazing mobile experience for you.
+        Watch, share, and discover incredible videos on the go!
+      </Typography>
+      
+      {/* App store badges */}
+      <Stack 
+        direction="row" 
+        spacing={2} 
+        justifyContent="center"
+        sx={{ mt: 3 }}
+      >
+        <Box
+          sx={{
+            p: 1.5,
+            px: 2,
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: 'rgba(0,0,0,0.2)'
+          }}
+        >
+          <PhoneIphone sx={{ mr: 1, color: 'white' }} />
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">Available soon on</Typography>
+            <Typography variant="body2" color="white">App Store</Typography>
+          </Box>
+        </Box>
+        <Box
+          sx={{
+            p: 1.5,
+            px: 2,
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: 'rgba(0,0,0,0.2)'
+          }}
+        >
+          <Android sx={{ mr: 1, color: 'white' }} />
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">Available soon on</Typography>
+            <Typography variant="body2" color="white">Google Play</Typography>
+          </Box>
+        </Box>
+      </Stack>
+      
+      <Box
+        sx={{
+          mt: 6,
+          p: 2,
+          borderRadius: 2,
+          backgroundColor: 'rgba(255,255,255,0.05)',
+          maxWidth: '90%'
+        }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          For the full experience, please visit us on your desktop or laptop browser.
+        </Typography>
+        <Button 
+          variant="outlined" 
+          color="primary" 
+          size="small" 
+          sx={{ mt: 2 }}
+          onClick={toggleMobilePromo}
+        >
+          Continue to Website Anyway
+        </Button>
+      </Box>
+      
+      {/* Decorative elements */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          width: 40,
+          height: 40,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)'
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 50,
+          left: 30,
+          width: 60,
+          height: 60,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.03)'
+        }}
+      />
+    </Box>
+  );
+
+  // Show mobile app promo if on mobile browser
+  if (showMobilePromo) {
+    return <MobileAppPromo />;
+  }
+
   return (
     <Container 
       maxWidth="xl" 
@@ -166,7 +344,7 @@ const HomePage = () => {
           display="flex" 
           justifyContent="center" 
           alignItems="center" 
-          minHeight={{ xs: '40vh', sm: '50vh' }} 
+          minHeight={{ xs: '40vh', sm: '50vh' }}
           flexDirection="column"
           px={2}
         >
@@ -194,9 +372,9 @@ const HomePage = () => {
             <Grid 
               item 
               xs={6} // 2 columns on mobile
-              sm={6} // 2 columns on small tablets
-              md={4} // 3 columns on tablets/small desktops
-              lg={3} // 4 columns on desktops
+              sm={4} // 3 columns on small screens and above
+              md={4} // 3 columns on medium screens
+              lg={4} // 3 columns on large screens
               key={video.video_id}
               ref={index === videos.length - 1 ? lastVideoElementRef : null}
             >
@@ -218,7 +396,7 @@ const HomePage = () => {
               >
                 <CardMedia
                   component="img"
-                  height={isMobile ? "140" : "180"}
+                  height={isMobile ? "180" : "220"}
                   image={video.thumbnail_url || "https://via.placeholder.com/640x360"}
                   alt={video.title}
                   sx={{ 
@@ -287,7 +465,7 @@ const HomePage = () => {
                           mr: 0.5
                         }}
                       />
-                  <Typography
+                      <Typography
                         variant="caption"
                         color="white"
                         fontSize={{ xs: '0.65rem', sm: '0.7rem' }}
@@ -330,7 +508,7 @@ const HomePage = () => {
                       }}
                     >
                       {video.username || "Anonymous"}
-                  </Typography>
+                    </Typography>
                   </Box>
                 </Box>
               </Card>
@@ -343,8 +521,8 @@ const HomePage = () => {
                 <CircularProgress size={isMobile ? 24 : 30} />
               </Box>
             </Grid>
-        )}
-      </Grid>
+          )}
+        </Grid>
       )}
     </Container>
   );

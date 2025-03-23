@@ -22,7 +22,8 @@ import {
   Pause,
   PlayArrow,
   Fullscreen,
-  Home
+  Home,
+  ArrowBack
 } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
 import { incrementVideoLike, incrementVideoDislike, saveVideo, checkVideoSaved, deleteVideo, followUser, unfollowUser, checkIsFollowing } from "../api";
@@ -132,8 +133,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   };
 
   const { handleTouchStart, handleTouchMove, handleTouchEnd } = useSwipeNavigate(
-    handlePrevVideo, // on swipe up (now for previous video since we're changing to vertical)
-    handleNextVideo, // on swipe down (now for next video since we're changing to vertical)
+    handleNextVideo, // on swipe up (reversed from previous config)
+    handlePrevVideo, // on swipe down (reversed from previous config)
     70, // min swipe distance
     true // set to true for vertical swipe instead of horizontal
   );
@@ -312,12 +313,32 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     if (video) {
       console.log("Video source:", videos[currentIndex]?.video_url);
       
-      try {
-        video.play().catch(err => {
-          console.warn("Autoplay failed:", err);
-        });
-      } catch (err) {
-        console.warn("Error attempting to play video:", err);
+      // Keep track of play operation promises to avoid race conditions
+      let playPromise;
+
+      // Safer play method with promise handling
+      const safePlay = () => {
+        if (!video) return Promise.reject(new Error("Video element not available"));
+        
+        try {
+          // Store the promise for later reference
+          playPromise = video.play();
+          return playPromise.catch(err => {
+            console.warn("Autoplay failed:", err);
+            // Reset the playPromise on error
+            playPromise = null;
+          });
+        } catch (err) {
+          console.warn("Error attempting to play video:", err);
+          return Promise.reject(err);
+        }
+      };
+      
+      // Try to play the video with proper promise handling
+      if (videos[currentIndex]?.video_url) {
+        setTimeout(() => {
+          safePlay();
+        }, 300); // Small delay to let things settle
       }
       
       if (videos[currentIndex]) {
@@ -397,6 +418,22 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       
       // Cleanup on unmount
     return () => {
+        // Make sure to handle any pending play promises before cleanup
+        if (playPromise) {
+          playPromise.then(() => {
+            // Only attempt to pause if the video is still connected to the DOM
+            if (video && document.body.contains(video)) {
+              try {
+                video.pause();
+              } catch (e) {
+                console.warn("Error pausing video during cleanup:", e);
+              }
+            }
+          }).catch(() => {
+            // Promise already rejected, no need to do anything
+          });
+        }
+        
         // Clear any active timeouts
         if (controlsTimeout) {
           clearTimeout(controlsTimeout);
@@ -550,7 +587,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   };
 
   const showLoginPrompt = (message) => {
-    setSnackbarMessage(message);
+    setSnackbarMessage(message || "Please log in to use this feature");
     setShowSnackbar(true);
   };
   
@@ -590,8 +627,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       // Only proceed if it wasn't part of a double click
       if (new Date().getTime() - lastClick > 300) {
         const video = videoRef.current;
-        if (video) {
+        if (video && document.body.contains(video)) {
           if (video.paused) {
+            // Use promise to handle play operation
             video.play().catch(e => console.warn("Play error:", e));
           } else {
             video.pause();
@@ -788,7 +826,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     
     const newTimeout = setTimeout(() => {
       setShowControls(false);
-    }, 3000);
+    }, 5000); // Changed from 3000 to 5000 ms (5 seconds)
     
     setControlsTimeout(newTimeout);
   };
@@ -885,13 +923,19 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   };
 
   const togglePlayPause = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !document.body.contains(videoRef.current)) return;
     
-    if (videoRef.current.paused) {
-      videoRef.current.play();
-      setIsPlaying(true);
+    const video = videoRef.current;
+    
+    if (video.paused) {
+      video.play().then(() => {
+        setIsPlaying(true);
+      }).catch(error => {
+        console.warn("Error playing video:", error);
+        setIsPlaying(false);
+      });
     } else {
-      videoRef.current.pause();
+      video.pause();
       setIsPlaying(false);
     }
   };
@@ -987,23 +1031,25 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
     >
-      {/* Close button to go to home page */}
-      <IconButton
-        onClick={goToHomePage}
-        sx={{
-          position: 'absolute',
-          top: 20,
-          right: 20,
-          bgcolor: 'rgba(0, 0, 0, 0.6)',
-          color: 'white',
-          zIndex: 1500,
-          '&:hover': {
-            bgcolor: 'rgba(0, 0, 0, 0.8)',
-          },
-        }}
-      >
-        <Close />
-      </IconButton>
+      {/* Back button that appears/disappears with controls */}
+      <Slide direction="down" in={showControls || !isPlaying} timeout={300}>
+        <IconButton
+          onClick={goToHomePage}
+          sx={{
+            position: 'absolute',
+            top: 20,
+            left: 20,
+            bgcolor: 'rgba(0, 0, 0, 0.6)',
+            color: 'white',
+            zIndex: 1600, // Higher z-index to stay above other controls
+            '&:hover': {
+              bgcolor: 'rgba(0, 0, 0, 0.8)',
+            },
+          }}
+        >
+          <ArrowBack />
+        </IconButton>
+      </Slide>
 
       {/* Video Element */}
       <video
@@ -1025,49 +1071,51 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         muted={isMuted}
       />
 
-      {/* Up/Down Navigation for vertical scrolling - moved to right side */}
+      {/* Up/Down Navigation for vertical scrolling - moved to right side and made to disappear with controls */}
       {videos.length > 1 && (
-        <Box
-          sx={{
-            position: 'absolute',
-            right: 20,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-            zIndex: 15,
-          }}
-        >
-          {currentIndex > 0 && (
-            <IconButton
-              onClick={() => setCurrentIndex(currentIndex - 1)}
-              sx={{
-                bgcolor: 'rgba(0, 0, 0, 0.6)',
-                color: 'white',
-                '&:hover': {
-                  bgcolor: 'rgba(0, 0, 0, 0.8)',
-                },
-              }}
-            >
-              <ArrowUpward />
-            </IconButton>
-          )}
-          {currentIndex < videos.length - 1 && (
-            <IconButton
-              onClick={() => setCurrentIndex(currentIndex + 1)}
-              sx={{
-                bgcolor: 'rgba(0, 0, 0, 0.6)',
-                color: 'white',
-                '&:hover': {
-                  bgcolor: 'rgba(0, 0, 0, 0.8)',
-                },
-              }}
-            >
-              <ArrowDownward />
-            </IconButton>
-          )}
-        </Box>
+        <Slide direction="right" in={showControls || !isPlaying} timeout={300}>
+          <Box
+            sx={{
+              position: 'absolute',
+              right: 20,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              zIndex: 15,
+            }}
+          >
+            {currentIndex > 0 && (
+              <IconButton
+                onClick={() => setCurrentIndex(currentIndex - 1)}
+                sx={{
+                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.8)',
+                  },
+                }}
+              >
+                <ArrowUpward />
+              </IconButton>
+            )}
+            {currentIndex < videos.length - 1 && (
+              <IconButton
+                onClick={() => setCurrentIndex(currentIndex + 1)}
+                sx={{
+                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.8)',
+                  },
+                }}
+              >
+                <ArrowDownward />
+              </IconButton>
+            )}
+          </Box>
+        </Slide>
       )}
 
       {/* Mobile-optimized video controls overlay */}
@@ -1155,7 +1203,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <IconButton
                   onClick={handleLike}
-                  disabled={!currentUser}
                   sx={{ 
                     color: isLiked ? 'primary.main' : 'white',
                     p: isMobile ? 0.5 : 1
@@ -1166,7 +1213,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
                 <IconButton
                   onClick={handleDislike}
-                  disabled={!currentUser}
                   sx={{ 
                     color: isDisliked ? 'error.main' : 'white',
                     p: isMobile ? 0.5 : 1
@@ -1177,7 +1223,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
                 <IconButton
                   onClick={handleSaveVideo}
-                  disabled={!currentUser}
                   sx={{ 
                     color: isSaved ? 'primary.main' : 'white',
                     p: isMobile ? 0.5 : 1,
@@ -1212,6 +1257,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             right: 0,
             background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
             padding: isMobile ? '12px' : '16px',
+            paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
             zIndex: 10,
             transition: 'opacity 0.3s ease',
             opacity: showControls ? 1 : 0,

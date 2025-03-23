@@ -12,6 +12,7 @@ import VideoPage from "./pages/VideoPage";
 import UploadVideo from "./components/UploadVideo";
 import FollowersPage from "./pages/FollowersPage";
 import SearchPage from "./pages/SearchPage";
+import SettingsPage from "./pages/SettingsPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import theme from './theme';
 import './App.css';
@@ -93,6 +94,11 @@ function App() {
             <Route path="/search" element={
               <AppLayout>
                 <SearchPage />
+              </AppLayout>
+            } />
+            <Route path="/settings" element={
+              <AppLayout>
+                <SettingsPage />
               </AppLayout>
             } />
           </Routes>
