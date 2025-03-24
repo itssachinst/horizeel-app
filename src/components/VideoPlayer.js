@@ -451,7 +451,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     if (currentIndex < videos.length - 1) {
       setCurrentIndex((prevIndex) => prevIndex + 1);
     } else {
-      exitFullScreen();
+      // Loop back to the first video instead of exiting fullscreen
+      setCurrentIndex(0);
     }
   };
 
@@ -825,11 +826,31 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     setShowControls(true);
     
     const newTimeout = setTimeout(() => {
-      setShowControls(false);
-    }, 5000); // Changed from 3000 to 5000 ms (5 seconds)
+      // Only hide controls if we're not at the start or end of the video
+      const video = videoRef.current;
+      if (video && video.currentTime > 0 && video.currentTime < video.duration) {
+        setShowControls(false);
+      }
+    }, 5000);
     
     setControlsTimeout(newTimeout);
   };
+
+  // Add effect to show controls at video start and end
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      const handleTimeUpdate = () => {
+        // Show controls if video is at start or end
+        if (video.currentTime < 1 || video.currentTime > video.duration - 1) {
+          setShowControls(true);
+        }
+      };
+
+      video.addEventListener('timeupdate', handleTimeUpdate);
+      return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+    }
+  }, []);
 
   const handleDoubleTap = (event) => {
     const currentTime = new Date().getTime();
@@ -991,6 +1012,25 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     navigate("/");
   };
 
+  // Add error handling for video loading
+  const handleVideoError = (error) => {
+    console.error("Video loading error:", error);
+    setSnackbarMessage("Error loading video. Please try again.");
+    setShowSnackbar(true);
+  };
+
+  // Add source validation
+  const getVideoSource = (videoUrl) => {
+    if (!videoUrl) return null;
+    try {
+      const url = new URL(videoUrl);
+      return url.toString();
+    } catch (error) {
+      console.error("Invalid video URL:", error);
+      return null;
+    }
+  };
+
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
     <Box
@@ -1054,7 +1094,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       {/* Video Element */}
       <video
         ref={videoRef}
-        src={videos[currentIndex]?.video_url}
+        src={getVideoSource(videos[currentIndex]?.video_url)}
         autoPlay
         playsInline
         onEnded={handleVideoEnd}
@@ -1063,59 +1103,99 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onVolumeChange={handleVolumeChange}
+        onError={handleVideoError}
         style={{
           ...videoStyles,
           objectFit: 'contain',
-          zIndex: 1
+          zIndex: 1,
+          display: getVideoSource(videos[currentIndex]?.video_url) ? 'block' : 'none'
         }}
         muted={isMuted}
       />
 
-      {/* Up/Down Navigation for vertical scrolling - moved to right side and made to disappear with controls */}
+      {/* Show error message when video source is invalid */}
+      {!getVideoSource(videos[currentIndex]?.video_url) && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center',
+            color: 'white',
+            zIndex: 2
+          }}
+        >
+          <Typography variant="h6">
+            Video not available
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+            Please try another video
+          </Typography>
+        </Box>
+      )}
+
+      {/* Up/Down Navigation repositioned - Up arrow below follow button, Down arrow above player bar */}
       {videos.length > 1 && (
-        <Slide direction="right" in={showControls || !isPlaying} timeout={300}>
-          <Box
-            sx={{
-              position: 'absolute',
-              right: 20,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
-              zIndex: 15,
-            }}
-          >
-            {currentIndex > 0 && (
+        <>
+          {/* Up Arrow - positioned below follow button */}
+          {currentIndex > 0 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                right: 20,
+                top: { xs: 'auto', sm: '45%' }, // Below follow button on desktop, different on mobile
+                display: showControls || !isPlaying ? 'flex' : 'none', // Show/hide without slide animation
+                zIndex: 15,
+                opacity: showControls || !isPlaying ? 1 : 0,
+                transition: 'opacity 300ms ease-in-out', // Fade in/out instead of slide
+              }}
+            >
               <IconButton
                 onClick={() => setCurrentIndex(currentIndex - 1)}
                 sx={{
                   bgcolor: 'rgba(0, 0, 0, 0.6)',
-                  color: 'white',
+                  color: '#2CFF05', // Using the neon green from theme
                   '&:hover': {
                     bgcolor: 'rgba(0, 0, 0, 0.8)',
+                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
                   },
                 }}
               >
                 <ArrowUpward />
               </IconButton>
-            )}
-            {currentIndex < videos.length - 1 && (
+            </Box>
+          )}
+
+          {/* Down Arrow - positioned above player bar */}
+          {currentIndex < videos.length - 1 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                right: 20,
+                bottom: 300, // Just above the player controls
+                display: showControls || !isPlaying ? 'flex' : 'none', // Show/hide without slide animation
+                zIndex: 15,
+                opacity: showControls || !isPlaying ? 1 : 0,
+                transition: 'opacity 300ms ease-in-out', // Fade in/out instead of slide
+              }}
+            >
               <IconButton
                 onClick={() => setCurrentIndex(currentIndex + 1)}
                 sx={{
                   bgcolor: 'rgba(0, 0, 0, 0.6)',
-                  color: 'white',
+                  color: '#2CFF05', // Using the neon green from theme
                   '&:hover': {
                     bgcolor: 'rgba(0, 0, 0, 0.8)',
+                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
                   },
                 }}
               >
                 <ArrowDownward />
               </IconButton>
-            )}
-          </Box>
-        </Slide>
+            </Box>
+          )}
+        </>
       )}
 
       {/* Mobile-optimized video controls overlay */}
@@ -1179,7 +1259,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                 }}
               >
                 {isPlaying ? <Pause /> : <PlayArrow />}
-        </IconButton>
+              </IconButton>
 
               <IconButton
                 onClick={toggleMute}
@@ -1190,8 +1270,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                 }}
               >
                 {isMuted ? <VolumeOff /> : <VolumeUp />}
-        </IconButton>
-      </Box>
+              </IconButton>
+            </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               {!isMobile && (
@@ -1219,6 +1299,16 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                   }}
                 >
                   <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+
+                <IconButton
+                  onClick={handleShare}
+                  sx={{ 
+                    color: 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <Share fontSize={isMobile ? 'small' : 'medium'} />
                 </IconButton>
 
                 <IconButton

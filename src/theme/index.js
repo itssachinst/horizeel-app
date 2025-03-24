@@ -13,22 +13,27 @@ let theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#FF5733', // Customizable primary color
-      contrastText: '#ffffff',
+      main: '#2CFF05', // Neon green from the logo
+      contrastText: '#000000', // Black text for contrast with neon green
     },
     secondary: {
-      main: '#00D9C0', // Customizable secondary color
-      contrastText: '#000000',
+      main: '#FFFFFF', // White as secondary color
+      contrastText: '#000000', // Black text on white background
     },
     background: {
-      default: '#0F0F0F',
-      paper: '#1A1A1A',
-      card: '#252525',
+      default: '#000000', // Black background
+      paper: '#121212', // Very dark gray for paper elements
+      card: '#181818', // Slightly lighter dark for cards
     },
     text: {
-      primary: '#ffffff',
-      secondary: 'rgba(255, 255, 255, 0.7)',
-      disabled: 'rgba(255, 255, 255, 0.5)',
+      primary: '#FFFFFF', // White text
+      secondary: 'rgba(255, 255, 255, 0.7)', // Semi-transparent white
+      disabled: 'rgba(255, 255, 255, 0.5)', // More transparent white
+      highlight: '#2CFF05', // Neon green for highlighted text
+    },
+    action: {
+      active: '#2CFF05', // Neon green for active elements
+      hover: 'rgba(44, 255, 5, 0.08)', // Semi-transparent neon green for hover
     },
   },
   typography: {
@@ -114,14 +119,31 @@ let theme = createTheme({
           paddingTop: 8,
           paddingBottom: 8,
         },
+        containedPrimary: {
+          '&:hover': {
+            backgroundColor: '#24CC04', // Slightly darker neon green on hover
+            boxShadow: '0 0 10px rgba(44, 255, 5, 0.5)', // Neon glow effect
+          },
+        },
+        outlinedPrimary: {
+          borderColor: '#2CFF05',
+          '&:hover': {
+            borderColor: '#2CFF05',
+            boxShadow: '0 0 10px rgba(44, 255, 5, 0.5)', // Neon glow effect
+          },
+        },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          backgroundColor: '#252525',
+          backgroundColor: '#181818', // Dark gray
           borderRadius: 12,
           overflow: 'hidden',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            boxShadow: '0 0 15px rgba(44, 255, 5, 0.3)', // Subtle neon glow on hover
+          },
         },
       },
     },
@@ -130,8 +152,8 @@ let theme = createTheme({
         root: {
           color: 'rgba(255, 255, 255, 0.7)',
           '&:hover': {
-            color: '#ffffff',
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            color: '#2CFF05', // Neon green on hover
+            backgroundColor: 'rgba(44, 255, 5, 0.08)', // Very subtle neon green background
           },
         },
       },
@@ -139,15 +161,15 @@ let theme = createTheme({
     MuiAvatar: {
       styleOverrides: {
         root: {
-          border: '2px solid rgba(255, 255, 255, 0.2)',
+          border: '2px solid rgba(44, 255, 5, 0.3)', // Subtle neon green border
         },
       },
     },
     MuiBottomNavigation: {
       styleOverrides: {
         root: {
-          backgroundColor: '#1A1A1A',
-          borderTop: '1px solid rgba(255, 255, 255, 0.12)',
+          backgroundColor: '#121212', // Very dark gray
+          borderTop: '1px solid rgba(44, 255, 5, 0.12)', // Subtle neon green border
         },
       },
     },
@@ -156,8 +178,24 @@ let theme = createTheme({
         root: {
           color: 'rgba(255, 255, 255, 0.7)',
           '&.Mui-selected': {
-            color: '#FF5733',
+            color: '#2CFF05', // Neon green for selected items
           },
+        },
+      },
+    },
+    MuiSwitch: {
+      styleOverrides: {
+        switchBase: {
+          color: '#FFFFFF',
+          '&.Mui-checked': {
+            color: '#2CFF05', // Neon green when checked
+            '& + .MuiSwitch-track': {
+              backgroundColor: 'rgba(44, 255, 5, 0.5)', // Semi-transparent neon green track
+            },
+          },
+        },
+        track: {
+          backgroundColor: 'rgba(255, 255, 255, 0.3)',
         },
       },
     },

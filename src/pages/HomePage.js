@@ -11,12 +11,11 @@ import {
   useTheme,
   useMediaQuery,
   Avatar,
-  Stack,
   Button
 } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { fetchVideos, searchVideos } from "../api";
-import { Visibility, Person, PhoneIphone, Android } from "@mui/icons-material";
+import { Visibility, Person } from "@mui/icons-material";
 import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -133,7 +132,7 @@ const HomePage = () => {
 
   // Mobile app promo component
   const MobileAppPromo = () => (
-    <Box 
+    <Box
       sx={{
         minHeight: '100vh',
         width: '100%',
@@ -144,147 +143,277 @@ const HomePage = () => {
         background: 'linear-gradient(135deg, #121212 0%, #1e1e1e 100%)',
         px: 3,
         textAlign: 'center',
-        position: 'relative'
+        position: 'relative',
+        overflow: 'hidden' // Prevent overflow of decorative elements
       }}
     >
-      {/* Logo placeholder */}
-      <Box 
-        sx={{ 
-          width: 80, 
-          height: 80, 
+      {/* Logo placeholder with enhanced design */}
+      <Box
+        sx={{
+          width: 100,
+          height: 100,
           borderRadius: '50%',
-          background: theme.palette.primary.main,
+          background: 'linear-gradient(135deg, #2196F3 0%, #00E5FF 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          mb: 3,
-          boxShadow: '0 0 20px rgba(0,150,255,0.5)'
+          mb: 4,
+          boxShadow: '0 0 30px rgba(0,150,255,0.7)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            width: '120%',
+            height: '120%',
+            borderRadius: '50%',
+            background: 'rgba(33, 150, 243, 0.2)',
+            animation: 'pulse 2s infinite'
+          }
         }}
       >
-        <Typography variant="h4" color="white" fontWeight="bold">H</Typography>
+        <Typography variant="h3" color="white" fontWeight="bold">H</Typography>
       </Box>
-      
-      <Typography 
-        variant="h4" 
-        color="white" 
-        fontWeight="bold" 
-        sx={{ 
-          mb: 1,
-          background: 'linear-gradient(90deg, #2196F3, #00E5FF)',
+
+      {/* Heading with emoji */}
+      <Typography
+        variant="h4"
+        color="white"
+        fontWeight="bold"
+        sx={{
+          mb: 2,
+          background: 'linear-gradient(90deg, #FF4081, #FF9100)',
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           textTransform: 'uppercase'
         }}
       >
-        Get Ready
+        🎉 Get Ready for an Unmatched Video Experience!
       </Typography>
-      
-      <Typography variant="h5" color="white" gutterBottom>
-        Our Mobile App is Coming Soon!
+
+      {/* Subheading with emoji */}
+      <Typography variant="h5" color="white" gutterBottom fontWeight="600">
+        📱 Our Mobile App is Launching Soon!
       </Typography>
-      
-      <Typography 
-        variant="body1" 
-        color="text.secondary" 
-        sx={{ 
-          mt: 2, 
-          mb: 4, 
-          maxWidth: '90%',
-          mx: 'auto' 
-        }}
-      >
-        We're building an amazing mobile experience for you.
-        Watch, share, and discover incredible videos on the go!
-      </Typography>
-      
-      {/* App store badges */}
-      <Stack 
-        direction="row" 
-        spacing={2} 
-        justifyContent="center"
-        sx={{ mt: 3 }}
-      >
-        <Box
-          sx={{
-            p: 1.5,
-            px: 2,
-            border: '1px solid rgba(255,255,255,0.2)',
-            borderRadius: 2,
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: 'rgba(0,0,0,0.2)'
-          }}
-        >
-          <PhoneIphone sx={{ mr: 1, color: 'white' }} />
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block">Available soon on</Typography>
-            <Typography variant="body2" color="white">App Store</Typography>
-          </Box>
-        </Box>
-        <Box
-          sx={{
-            p: 1.5,
-            px: 2,
-            border: '1px solid rgba(255,255,255,0.2)',
-            borderRadius: 2,
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: 'rgba(0,0,0,0.2)'
-          }}
-        >
-          <Android sx={{ mr: 1, color: 'white' }} />
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block">Available soon on</Typography>
-            <Typography variant="body2" color="white">Google Play</Typography>
-          </Box>
-        </Box>
-      </Stack>
-      
-      <Box
+
+      {/* Description with enhanced text */}
+      <Typography
+        variant="body1"
+        color="text.secondary"
         sx={{
-          mt: 6,
-          p: 2,
-          borderRadius: 2,
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          maxWidth: '90%'
+          mt: 2,
+          mb: 4,
+          maxWidth: '90%',
+          mx: 'auto',
+          fontSize: '1.1rem',
+          lineHeight: 1.5
         }}
       >
-        <Typography variant="body2" color="text.secondary">
-          For the full experience, please visit us on your desktop or laptop browser.
+        Your favorite horizontal video platform is coming to iOS and Android! Get ready to watch, share, and explore stunning videos on the go.
+      </Typography>
+
+      {/* Tagline with emoji */}
+      <Typography
+        variant="h6"
+        color="white"
+        sx={{
+          mb: 4,
+          background: 'linear-gradient(90deg, #00E5FF, #2196F3)',
+          backgroundClip: 'text',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          fontWeight: 'bold'
+        }}
+      >
+        🔥 Seamless, Immersive, and Built for You!
+      </Typography>
+
+      {/* App store indicators */}
+      <Box sx={{ mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <Typography variant="subtitle1" color="white" gutterBottom fontWeight="600">
+          Coming Soon To:
         </Typography>
-        <Button 
-          variant="outlined" 
-          color="primary" 
-          size="small" 
-          sx={{ mt: 2 }}
-          onClick={toggleMobilePromo}
-        >
-          Continue to Website Anyway
-        </Button>
+        <Box sx={{ display: 'flex', gap: 3, mt: 1 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            color: 'white',
+            '&::before': {
+              content: '"✅"',
+              marginRight: '8px'
+            }
+          }}>
+            App Store
+          </Box>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            color: 'white',
+            '&::before': {
+              content: '"✅"',
+              marginRight: '8px'
+            }
+          }}>
+            Google Play
+          </Box>
+        </Box>
       </Box>
-      
+
+      {/* Info message */}
+      <Box 
+        sx={{ 
+          mb: 4,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1
+        }}
+      >
+        <Typography variant="body2" sx={{ 
+          color: '#90CAF9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          '&::before': {
+            content: '"🔹"',
+            marginRight: '8px'
+          }
+        }}>
+          For the best experience, visit us on your desktop or laptop.
+        </Typography>
+        <Typography variant="body2" sx={{ 
+          color: '#FFB74D',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          '&::before': {
+            content: '"🔸"',
+            marginRight: '8px'
+          }
+        }}>
+          Or, continue browsing on mobile now!
+        </Typography>
+      </Box>
+
+      {/* Enhanced CTA button with gradient and hover effect */}
+      <Button
+        variant="contained"
+        size="large"
+        onClick={toggleMobilePromo}
+        sx={{
+          mt: 2,
+          py: 1.5,
+          px: 4,
+          borderRadius: '30px',
+          background: 'linear-gradient(90deg, #FF4081, #FF9100)',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '1.1rem',
+          boxShadow: '0 4px 20px rgba(255, 64, 129, 0.5)',
+          position: 'relative',
+          overflow: 'hidden',
+          '&:hover': {
+            background: 'linear-gradient(90deg, #FF9100, #FF4081)',
+            transform: 'translateY(-3px)',
+            boxShadow: '0 6px 25px rgba(255, 64, 129, 0.7)',
+          },
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: '-100%',
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+            transition: 'all 0.5s',
+          },
+          '&:hover::before': {
+            left: '100%',
+          }
+        }}
+      >
+        🔴 Continue to Website
+      </Button>
+
       {/* Decorative elements */}
       <Box
         sx={{
           position: 'absolute',
           top: 20,
           right: 20,
-          width: 40,
-          height: 40,
+          width: 120,
+          height: 120,
           borderRadius: '50%',
-          background: 'rgba(255,255,255,0.05)'
+          background: 'radial-gradient(circle, rgba(33,150,243,0.3) 0%, rgba(33,150,243,0) 70%)',
         }}
       />
       <Box
         sx={{
           position: 'absolute',
-          bottom: 50,
-          left: 30,
-          width: 60,
-          height: 60,
+          bottom: 20,
+          left: 20,
+          width: 150,
+          height: 150,
           borderRadius: '50%',
-          background: 'rgba(255,255,255,0.03)'
+          background: 'radial-gradient(circle, rgba(255,64,129,0.2) 0%, rgba(255,64,129,0) 70%)',
+        }}
+      />
+
+      {/* Additional decorative elements */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '30%',
+          left: '5%',
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          background: 'rgba(255,145,0,0.5)',
+          filter: 'blur(5px)',
+          animation: 'float 5s infinite ease-in-out',
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: '25%',
+          right: '10%',
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          background: 'rgba(0,229,255,0.5)',
+          filter: 'blur(4px)',
+          animation: 'float 7s infinite ease-in-out',
+        }}
+      />
+
+      {/* Add keyframe animations to the component */}
+      <Box
+        sx={{
+          '@keyframes pulse': {
+            '0%': {
+              transform: 'scale(1)',
+              opacity: 0.8
+            },
+            '50%': {
+              transform: 'scale(1.1)',
+              opacity: 0.4
+            },
+            '100%': {
+              transform: 'scale(1)',
+              opacity: 0.8
+            }
+          },
+          '@keyframes float': {
+            '0%': {
+              transform: 'translateY(0px)'
+            },
+            '50%': {
+              transform: 'translateY(-20px)'
+            },
+            '100%': {
+              transform: 'translateY(0px)'
+            }
+          }
         }}
       />
     </Box>
