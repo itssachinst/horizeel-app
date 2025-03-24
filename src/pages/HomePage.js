@@ -161,7 +161,7 @@ const HomePage = () => {
           textTransform: 'uppercase'
         }}
       >
-        🎉 Get Ready for an Unmatched Video Experience!
+        🎉 Get Ready for an Unmatched Reels Experience!
       </Typography>
 
       {/* Subheading with emoji */}
@@ -182,7 +182,7 @@ const HomePage = () => {
           lineHeight: 1.5
         }}
       >
-        Your favorite horizontal video platform is coming to iOS and Android! Get ready to watch, share, and explore stunning videos on the go.
+        Your favorite horizontal reels platform is coming to iOS and Android! Get ready to watch, share, and explore stunning videos on the go.
       </Typography>
 
       {/* Tagline with emoji */}
