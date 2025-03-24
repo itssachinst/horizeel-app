@@ -16,16 +16,19 @@ import SettingsPage from "./pages/SettingsPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import theme from './theme';
 import './App.css';
+import { useMediaQuery } from '@mui/material';
 
 // Layout component to conditionally render the Header
 const AppLayout = ({ children }) => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
   const isVideoPage = location.pathname.startsWith('/video/');
+  const isHomePage = location.pathname === '/';
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
     <>
-      {!isAuthPage && !isVideoPage && <Header />}
+      {!isAuthPage && !isVideoPage && (!isHomePage || !isMobile) && <Header />}
       <Box sx={{
         pt: 0, // Remove padding top
         minHeight: '100vh',

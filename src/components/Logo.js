@@ -9,38 +9,6 @@ const LogoWrapper = styled(Box)(({ theme }) => ({
   cursor: 'pointer',
 }));
 
-const LogoCircle = styled(Box)(({ theme }) => ({
-  width: 36,
-  height: 36,
-  borderRadius: '50%',
-  backgroundColor: '#00c853',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  position: 'relative',
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    width: 4,
-    height: 14,
-    backgroundColor: '#000',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    zIndex: 1,
-  },
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    width: 14,
-    height: 4,
-    backgroundColor: '#000',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    zIndex: 1,
-  }
-}));
 
 const LogoText = styled(Typography)(({ theme }) => ({
   fontWeight: 700,
@@ -56,7 +24,6 @@ const LogoText = styled(Typography)(({ theme }) => ({
 const Logo = ({ onClick }) => {
   return (
     <LogoWrapper onClick={onClick}>
-      <LogoCircle />
       <LogoText variant="h6">
         Horizontal Reels
       </LogoText>

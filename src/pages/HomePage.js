@@ -147,33 +147,6 @@ const HomePage = () => {
         overflow: 'hidden' // Prevent overflow of decorative elements
       }}
     >
-      {/* Logo placeholder with enhanced design */}
-      <Box
-        sx={{
-          width: 100,
-          height: 100,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #2196F3 0%, #00E5FF 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          mb: 4,
-          boxShadow: '0 0 30px rgba(0,150,255,0.7)',
-          position: 'relative',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            width: '120%',
-            height: '120%',
-            borderRadius: '50%',
-            background: 'rgba(33, 150, 243, 0.2)',
-            animation: 'pulse 2s infinite'
-          }
-        }}
-      >
-        <Typography variant="h3" color="white" fontWeight="bold">H</Typography>
-      </Box>
-
       {/* Heading with emoji */}
       <Typography
         variant="h4"
@@ -594,7 +567,7 @@ const HomePage = () => {
                           mr: 0.5
                         }}
                       />
-                      <Typography
+                  <Typography
                         variant="caption"
                         color="white"
                         fontSize={{ xs: '0.65rem', sm: '0.7rem' }}
@@ -637,7 +610,7 @@ const HomePage = () => {
                       }}
                     >
                       {video.username || "Anonymous"}
-                    </Typography>
+                  </Typography>
                   </Box>
                 </Box>
               </Card>
@@ -650,8 +623,8 @@ const HomePage = () => {
                 <CircularProgress size={isMobile ? 24 : 30} />
               </Box>
             </Grid>
-          )}
-        </Grid>
+        )}
+      </Grid>
       )}
     </Container>
   );
