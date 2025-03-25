@@ -238,43 +238,53 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   };
 
   // Define handleKeyDown before using it in useEffect
-    const handleKeyDown = (event) => {
-      if (event.key === "ArrowUp" && currentIndex > 0) {
-        setCurrentIndex((prevIndex) => prevIndex - 1);
-      } else if (event.key === "ArrowDown" && currentIndex < videos.length - 1) {
-        setCurrentIndex((prevIndex) => prevIndex + 1);
-      } else if (event.key === "Escape") {
+  const handleKeyDown = (event) => {
+    // Prevent default behavior for arrow keys
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
+      event.preventDefault();
+    }
+
+    switch (event.key) {
+      case "ArrowUp":
+        if (currentIndex > 0) {
+          handlePrevVideo();
+        }
+        break;
+      case "ArrowDown":
+        if (currentIndex < videos.length - 1) {
+          handleNextVideo();
+        }
+        break;
+      case "ArrowLeft":
+        // Fast backward 10 seconds
+        const video = videoRef.current;
+        if (video) {
+          video.currentTime = Math.max(video.currentTime - 10, 0);
+          setSnackbarMessage("Rewind 10s");
+          setShowSnackbar(true);
+        }
+        break;
+      case "ArrowRight":
+        // Fast forward 10 seconds
+        if (videoRef.current) {
+          videoRef.current.currentTime = Math.min(videoRef.current.currentTime + 10, videoRef.current.duration);
+          setSnackbarMessage("Fast forward 10s");
+          setShowSnackbar(true);
+        }
+        break;
+      case " ":
+      case "k":
+        togglePlayPause();
+        break;
+      case "m":
+        toggleMute();
+        break;
+      case "Escape":
         exitFullScreen();
-      } else if (event.key === "F11") {
-      event.preventDefault();
-    } else if (event.key === " " || event.key === "k") {
-      if (videoRef.current.paused) {
-        videoRef.current.play();
-      } else {
-        videoRef.current.pause();
-      }
-      event.preventDefault();
-    } else if (event.key === "m") {
-      toggleMute();
-      event.preventDefault();
-    } else if (event.key === "ArrowRight") {
-      // Fast forward 10 seconds
-      const video = videoRef.current;
-      if (video) {
-        video.currentTime = Math.min(video.currentTime + 10, video.duration);
-        setSnackbarMessage("Fast forward 10s");
-        setShowSnackbar(true);
-      }
-      event.preventDefault();
-    } else if (event.key === "ArrowLeft") {
-      // Rewind 10 seconds
-      const video = videoRef.current;
-      if (video) {
-        video.currentTime = Math.max(video.currentTime - 10, 0);
-        setSnackbarMessage("Rewind 10s");
-        setShowSnackbar(true);
-      }
-      event.preventDefault();
+        break;
+      case "f":
+        toggleFullScreen();
+        break;
     }
   };
 
@@ -411,22 +421,26 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     try {
+      // Try Web Share API first
       if (navigator.share) {
-        navigator.share({
-          title: videos[currentIndex]?.title,
-          text: videos[currentIndex]?.description,
-          url: window.location.href,
-        })
-        .then(() => console.log('Successful share'))
-        .catch((error) => {
-          console.log('Error sharing:', error);
-          copyToClipboard();
-        });
-      } else {
-        copyToClipboard();
+        try {
+          await navigator.share({
+            title: videos[currentIndex]?.title,
+            text: videos[currentIndex]?.description,
+            url: window.location.href,
+          });
+          console.log('Successfully shared');
+          return;
+        } catch (error) {
+          console.log('Web Share API error:', error);
+          // Fall through to clipboard method
+        }
       }
+
+      // Fallback to clipboard API with multiple methods
+      await copyToClipboard();
     } catch (error) {
       console.error("Share error:", error);
       setSnackbarMessage("Could not share video");
@@ -434,21 +448,54 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   };
 
-  const copyToClipboard = () => {
+  const copyToClipboard = async () => {
+    const urlToCopy = window.location.href;
+    
     try {
-      navigator.clipboard.writeText(window.location.href)
-        .then(() => {
+      // Try the modern Clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(urlToCopy);
+        setSnackbarMessage("Link copied to clipboard!");
+        setShowSnackbar(true);
+        return;
+      }
+
+      // Fallback to older execCommand method
+      const textArea = document.createElement("textarea");
+      textArea.value = urlToCopy;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        const successful = document.execCommand('copy');
+        textArea.remove();
+        
+        if (successful) {
           setSnackbarMessage("Link copied to clipboard!");
           setShowSnackbar(true);
-        })
-        .catch(() => {
-          setSnackbarMessage("Failed to copy link");
-          setShowSnackbar(true);
-        });
+          return;
+        }
+      } catch (err) {
+        console.error('execCommand Error:', err);
+        textArea.remove();
+        throw new Error('Copy failed');
+      }
+
+      // If all methods fail, show manual copy message
+      setSnackbarMessage(`Please copy this link manually: ${urlToCopy}`);
+      setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 5000); // Show message longer for manual copy
+
     } catch (error) {
       console.error("Clipboard error:", error);
-      setSnackbarMessage("Could not copy link");
+      // Show the URL in a snackbar as a last resort
+      setSnackbarMessage(`Please copy this link manually: ${urlToCopy}`);
       setShowSnackbar(true);
+      setTimeout(() => setShowSnackbar(false), 5000);
     }
   };
 
@@ -896,6 +943,78 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   };
 
+  // Add mouse wheel handler
+  const handleWheel = (event) => {
+    // Prevent default scrolling behavior
+    event.preventDefault();
+    
+    // Check if the video is in fullscreen
+    if (!fullscreenAPI.isFullscreen()) return;
+    
+    // Get the scroll direction
+    const delta = event.deltaY;
+    
+    // Add a small delay to prevent rapid scrolling
+    if (Math.abs(delta) > 50) {
+      if (delta > 0 && currentIndex < videos.length - 1) {
+        // Scrolling down - Next video
+        handleNextVideo();
+      } else if (delta < 0 && currentIndex > 0) {
+        // Scrolling up - Previous video
+        handlePrevVideo();
+      }
+    }
+  };
+
+  // Add event listeners in useEffect
+  useEffect(() => {
+    const video = videoRef.current;
+    const videoContainer = videoContainerRef.current;
+    
+    // Track all the event listeners we add so we can properly clean them up
+    const eventListeners = [];
+    
+    const addEventListenerWithCleanup = (element, event, handler, options) => {
+      element.addEventListener(event, handler, options);
+      eventListeners.push({ element, event, handler, options });
+    };
+
+    if (video) {
+      // Add all event listeners
+      addEventListenerWithCleanup(video, 'timeupdate', handleTimeUpdate);
+      addEventListenerWithCleanup(video, 'loadedmetadata', handleLoadedMetadata);
+      addEventListenerWithCleanup(video, 'ended', handleVideoEnd);
+      addEventListenerWithCleanup(video, 'play', () => setIsPlaying(true));
+      addEventListenerWithCleanup(video, 'pause', () => setIsPlaying(false));
+      addEventListenerWithCleanup(video, 'volumechange', () => setIsMuted(video.muted));
+      
+      // Mouse and touch events
+      addEventListenerWithCleanup(video, 'mouseover', handleMouseMove);
+      addEventListenerWithCleanup(video, 'mousemove', handleMouseMove);
+      addEventListenerWithCleanup(video, 'touchstart', handleTouchStart);
+      addEventListenerWithCleanup(video, 'touchmove', handleTouchMove);
+      addEventListenerWithCleanup(video, 'touchend', handleTouchEnd);
+      addEventListenerWithCleanup(video, 'touchend', handleDoubleTap);
+      addEventListenerWithCleanup(video, 'dblclick', handleDoubleClick);
+      addEventListenerWithCleanup(video, 'wheel', handleWheel, { passive: false });
+      
+      // Window and document level events
+      addEventListenerWithCleanup(window, 'keydown', handleKeyDown);
+      
+      // Use our custom fullscreen change event
+      const fullscreenChangeEvent = fullscreenAPI.fullscreenChangeEventName();
+      addEventListenerWithCleanup(document, fullscreenChangeEvent, handleFullscreenChange);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      // Remove all tracked event listeners
+      eventListeners.forEach(({ element, event, handler, options }) => {
+        element.removeEventListener(event, handler, options);
+      });
+    };
+  }, [currentIndex, videos.length]);
+
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
     <Box
@@ -940,7 +1059,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       <Slide direction="down" in={showControls || !isPlaying} timeout={300}>
         <IconButton
           onClick={goToHomePage}
-          sx={{
+          sx={{ 
             position: 'absolute',
             top: 20,
             left: 20,
@@ -1263,29 +1382,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
               </Button>
             )}
           </Box>
-
-          {!isMobile && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, opacity: 0.8 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                <Visibility sx={{ fontSize: 16, color: 'white', mr: 0.5 }} />
-                <Typography variant="body2" sx={{ color: 'white' }}>
-                  {views} views
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-                <ThumbUp sx={{ fontSize: 16, color: 'white', mr: 0.5 }} />
-                <Typography variant="body2" sx={{ color: 'white' }}>
-                  {likes}
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <ThumbDown sx={{ fontSize: 16, color: 'white', mr: 0.5 }} />
-                <Typography variant="body2" sx={{ color: 'white' }}>
-                  {dislikes}
-        </Typography>
-      </Box>
-            </Box>
-          )}
         </Box>
       </Slide>
 

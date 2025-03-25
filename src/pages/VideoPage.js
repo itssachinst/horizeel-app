@@ -413,9 +413,29 @@ const VideoPage = () => {
           fontSize: '10px',
         }}
       >
-        <Typography variant="caption" sx={{ color: 'white', fontSize: '10px' }}>
-          Video {currentIndex + 1}/{videos.length} {loadingMore ? '(Loading more...)' : ''}
-        </Typography>
+        {/* Remove video counter */}
+        {/* <Box
+          sx={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            bgcolor: 'rgba(0,0,0,0.7)',
+            px: 2,
+            py: 1,
+            borderRadius: 2,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.1)'
+          }}
+        >
+          <Typography variant="body2" sx={{ color: 'white' }}>
+            Video {currentIndex + 1}/{videos.length} {loadingMore ? '(Loading more...)' : ''}
+          </Typography>
+        </Box> */}
         {hasMoreVideos && (
           <Button 
             variant="outlined" 
