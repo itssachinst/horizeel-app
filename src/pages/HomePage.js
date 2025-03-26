@@ -147,248 +147,126 @@ const HomePage = () => {
         overflow: 'hidden' // Prevent overflow of decorative elements
       }}
     >
-      {/* Heading with emoji */}
+      {/* Logo and branding */}
+      <Box 
+        sx={{ 
+          mb: 4,
+          width: '80%',
+          maxWidth: '300px'
+        }}
+      >
+        <img 
+          src="/logo.png" 
+          alt="Horizontal Reels" 
+          style={{ width: '100%', height: 'auto' }}
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
+        />
+      </Box>
+
+      {/* Main Heading */}
       <Typography
         variant="h4"
         color="white"
         fontWeight="bold"
         sx={{
-          mb: 2,
+          mb: 4,
           background: 'linear-gradient(90deg, #FF4081, #FF9100)',
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
-          textTransform: 'uppercase'
         }}
       >
-        🎉 Get Ready for an Unmatched Reels Experience!
+        Welcome to the World's First Horizontal Reels Platform!
       </Typography>
 
-      {/* Subheading with emoji */}
-      <Typography variant="h5" color="white" gutterBottom fontWeight="600">
-        📱 Our Mobile App is Launching Soon!
-      </Typography>
-
-      {/* Description with enhanced text */}
+      {/* Description */}
       <Typography
         variant="body1"
-        color="text.secondary"
+        color="white"
         sx={{
           mt: 2,
           mb: 4,
           maxWidth: '90%',
           mx: 'auto',
           fontSize: '1.1rem',
-          lineHeight: 1.5
+          lineHeight: 1.6
         }}
       >
-        Your favorite horizontal reels platform is coming to iOS and Android! Get ready to watch, share, and explore stunning videos on the go.
+        Thank you for your interest in exploring Horizontal Reels! To experience the true immersive quality of reels, please visit{' '}
+        <Box 
+          component="span" 
+          sx={{ 
+            fontWeight: 'bold',
+            color: '#2CFF05',
+            textDecoration: 'none'
+          }}
+          onClick={() => window.open('https://horizontalreels.com', '_blank')}
+        >
+          horizontalreels.com
+        </Box>{' '}
+        on a laptop or desktop.
       </Typography>
 
-      {/* Tagline with emoji */}
+      {/* Coming soon message */}
       <Typography
-        variant="h6"
+        variant="body1"
         color="white"
         sx={{
-          mb: 4,
-          background: 'linear-gradient(90deg, #00E5FF, #2196F3)',
-          backgroundClip: 'text',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          fontWeight: 'bold'
+          mb: 6,
+          maxWidth: '90%',
+          mx: 'auto',
+          fontSize: '1.1rem',
+          lineHeight: 1.6
         }}
       >
-        🔥 Seamless, Immersive, and Built for You!
+        We are working on bringing this revolutionary experience to mobile soon! Stay tuned for our app launch on the App Store & Play Store.
       </Typography>
 
       {/* App store indicators */}
-      <Box sx={{ mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Typography variant="subtitle1" color="white" gutterBottom fontWeight="600">
-          Coming Soon To:
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 3, mt: 1 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            color: 'white',
-            '&::before': {
-              content: '"✅"',
-              marginRight: '8px'
-            }
-          }}>
-            App Store
-          </Box>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            color: 'white',
-            '&::before': {
-              content: '"✅"',
-              marginRight: '8px'
-            }
-          }}>
-            Google Play
-          </Box>
+      <Box sx={{ display: 'flex', gap: 3, mt: 1, mb: 4 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          color: 'white',
+          padding: '8px 16px',
+          border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: '8px',
+          background: 'rgba(255,255,255,0.05)'
+        }}>
+          App Store
+        </Box>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          color: 'white',
+          padding: '8px 16px',
+          border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: '8px',
+          background: 'rgba(255,255,255,0.05)'
+        }}>
+          Google Play
         </Box>
       </Box>
 
-      {/* Info message */}
-      <Box 
-        sx={{ 
-          mb: 4,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1
-        }}
-      >
-        <Typography variant="body2" sx={{ 
-          color: '#90CAF9',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          '&::before': {
-            content: '"🔹"',
-            marginRight: '8px'
-          }
-        }}>
-          For the best experience, visit us on your desktop or laptop.
-        </Typography>
-        <Typography variant="body2" sx={{ 
-          color: '#FFB74D',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          '&::before': {
-            content: '"🔸"',
-            marginRight: '8px'
-          }
-        }}>
-          Or, continue browsing on mobile now!
-        </Typography>
-      </Box>
-
-      {/* Enhanced CTA button with gradient and hover effect */}
-      <Button
+      {/* Continue to website button */}
+      <Button 
         variant="contained"
-        size="large"
-        onClick={toggleMobilePromo}
         sx={{
           mt: 2,
-          py: 1.5,
-          px: 4,
-          borderRadius: '30px',
-          background: 'linear-gradient(90deg, #FF4081, #FF9100)',
-          color: 'white',
+          backgroundColor: '#2CFF05',
+          color: '#000',
           fontWeight: 'bold',
-          fontSize: '1.1rem',
-          boxShadow: '0 4px 20px rgba(255, 64, 129, 0.5)',
-          position: 'relative',
-          overflow: 'hidden',
+          padding: '12px 24px',
           '&:hover': {
-            background: 'linear-gradient(90deg, #FF9100, #FF4081)',
-            transform: 'translateY(-3px)',
-            boxShadow: '0 6px 25px rgba(255, 64, 129, 0.7)',
-          },
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: '-100%',
-            width: '100%',
-            height: '100%',
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
-            transition: 'all 0.5s',
-          },
-          '&:hover::before': {
-            left: '100%',
+            backgroundColor: '#25CC04'
           }
         }}
+        onClick={toggleMobilePromo}
       >
-        🔴 Continue to Website
+        Continue to Website Anyway
       </Button>
-
-      {/* Decorative elements */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 20,
-          right: 20,
-          width: 120,
-          height: 120,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(33,150,243,0.3) 0%, rgba(33,150,243,0) 70%)',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 20,
-          left: 20,
-          width: 150,
-          height: 150,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,64,129,0.2) 0%, rgba(255,64,129,0) 70%)',
-        }}
-      />
-
-      {/* Additional decorative elements */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '30%',
-          left: '5%',
-          width: 30,
-          height: 30,
-          borderRadius: '50%',
-          background: 'rgba(255,145,0,0.5)',
-          filter: 'blur(5px)',
-          animation: 'float 5s infinite ease-in-out',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: '25%',
-          right: '10%',
-          width: 20,
-          height: 20,
-          borderRadius: '50%',
-          background: 'rgba(0,229,255,0.5)',
-          filter: 'blur(4px)',
-          animation: 'float 7s infinite ease-in-out',
-        }}
-      />
-
-      {/* Add keyframe animations to the component */}
-      <Box
-        sx={{
-          '@keyframes pulse': {
-            '0%': {
-              transform: 'scale(1)',
-              opacity: 0.8
-            },
-            '50%': {
-              transform: 'scale(1.1)',
-              opacity: 0.4
-            },
-            '100%': {
-              transform: 'scale(1)',
-              opacity: 0.8
-            }
-          },
-          '@keyframes float': {
-            '0%': {
-              transform: 'translateY(0px)'
-            },
-            '50%': {
-              transform: 'translateY(-20px)'
-            },
-            '100%': {
-              transform: 'translateY(0px)'
-            }
-          }
-        }}
-      />
     </Box>
   );
 

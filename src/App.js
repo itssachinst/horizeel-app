@@ -13,6 +13,7 @@ import UploadVideo from "./components/UploadVideo";
 import FollowersPage from "./pages/FollowersPage";
 import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
+import FeedbackPage from "./pages/FeedbackPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import theme from './theme';
 import './App.css';
@@ -102,6 +103,11 @@ function App() {
             <Route path="/settings" element={
               <AppLayout>
                 <SettingsPage />
+              </AppLayout>
+            } />
+            <Route path="/feedback" element={
+              <AppLayout>
+                <FeedbackPage />
               </AppLayout>
             } />
           </Routes>

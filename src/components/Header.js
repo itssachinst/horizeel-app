@@ -27,7 +27,8 @@ import {
   AccountCircle as AccountCircleIcon,
   BookmarkBorder as BookmarkIcon,
   Menu as MenuIcon,
-  Mic as MicIcon
+  Mic as MicIcon,
+  Feedback as FeedbackIcon
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
@@ -160,6 +161,11 @@ const Header = () => {
     handleMenuClose();
   };
 
+  const handleGoToFeedback = () => {
+    navigate('/feedback');
+    handleMenuClose();
+  };
+
   // Desktop menu
   const renderMenu = (
     <Menu
@@ -219,6 +225,12 @@ const Header = () => {
         </ListItemIcon>
         Settings
       </MenuItem>
+      <MenuItem onClick={handleGoToFeedback}>
+        <ListItemIcon>
+          <FeedbackIcon fontSize="small" />
+        </ListItemIcon>
+        Feedback
+      </MenuItem>
       <Divider />
       <MenuItem onClick={handleLogout}>
         <ListItemIcon>
@@ -250,6 +262,12 @@ const Header = () => {
           <VideoCallIcon />
         </IconButton>
         <p>Upload</p>
+      </MenuItem>
+      <MenuItem onClick={handleGoToFeedback}>
+        <IconButton size="large" color="inherit">
+          <FeedbackIcon />
+        </IconButton>
+        <p>Feedback</p>
       </MenuItem>
       <MenuItem onClick={handleGoToProfile}>
         <IconButton
@@ -368,6 +386,14 @@ const Header = () => {
               onClick={handleGoToUpload}
             >
               <VideoCallIcon />
+            </ActionIconButton>
+            
+            <ActionIconButton
+              size="large"
+              color="inherit"
+              onClick={handleGoToFeedback}
+            >
+              <FeedbackIcon />
             </ActionIconButton>
             
             <ActionIconButton
