@@ -25,8 +25,11 @@ import {
   Home,
   ArrowBack
 } from "@mui/icons-material";
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
+import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { useAuth } from "../contexts/AuthContext";
-import { incrementVideoLike, incrementVideoDislike, saveVideo, checkVideoSaved, deleteVideo, followUser, unfollowUser, checkIsFollowing } from "../api";
+import { incrementVideoLike, incrementVideoDislike, saveVideo, checkVideoSaved, deleteVideo, followUser, unfollowUser, checkIsFollowing, updateWatchHistory } from "../api";
 import useSwipeNavigate from "../hooks/useSwipeNavigate";
 import { formatViewCount, formatDuration, formatRelativeTime, truncateText } from "../utils/videoUtils";
 
@@ -118,6 +121,10 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [lastClickPosition, setLastClickPosition] = useState(null);
+  // Add watch history tracking state
+  const [watchTrackerInterval, setWatchTrackerInterval] = useState(null);
+  const [deviceType, setDeviceType] = useState(isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop');
+  const [watchShared, setWatchShared] = useState(false);
 
   // Add swipe navigation handlers
   const handlePrevVideo = () => {
@@ -238,7 +245,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   };
 
   // Define handleKeyDown before using it in useEffect
-  const handleKeyDown = (event) => {
+    const handleKeyDown = (event) => {
     // Prevent default behavior for arrow keys
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
       event.preventDefault();
@@ -285,8 +292,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       case "f":
         toggleFullScreen();
         break;
-    }
-  };
+      }
+    };
 
   // Define handleFullscreenChange before using it in useEffect
     const handleFullscreenChange = () => {
@@ -322,12 +329,39 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
   // Modify handleVideoEnd to include cleanup
   const handleVideoEnd = () => {
-    cleanupVideo();
-    if (currentIndex < videos.length - 1) {
-      setCurrentIndex((prevIndex) => prevIndex + 1);
-    } else {
-      // Loop back to the first video instead of exiting fullscreen
-      setCurrentIndex(0);
+    // Update watch history with completed flag if user is logged in
+    if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+      const video = videoRef.current;
+      const currentVideo = videos[currentIndex];
+      
+      if (video && currentVideo) {
+        const watchData = {
+          video_id: currentVideo.video_id,
+          watch_time: video.duration || 0,
+          watch_percentage: 100, // Mark as 100% watched
+          completed: true,
+          last_position: video.duration || 0,
+          like_flag: isLiked,
+          dislike_flag: isDisliked,
+          saved_flag: isSaved,
+          shared_flag: watchShared,
+          device_type: deviceType
+        };
+        
+        updateWatchHistory(watchData).catch(err => {
+          console.error("Failed to update watch history on video end:", err);
+        });
+      }
+    }
+    
+    // Set video to loop instead of exiting fullscreen
+    if (videoRef.current) {
+      if (currentIndex < videos.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        // Reset to first video if at the end of the playlist
+        setCurrentIndex(0);
+      }
     }
   };
 
@@ -432,6 +466,32 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             url: window.location.href,
           });
           console.log('Successfully shared');
+          
+          // Update share flag for watch history
+          setWatchShared(true);
+          
+          // Update watch history with shared flag if user is logged in
+          if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+            const video = videoRef.current;
+            if (video) {
+              const watchData = {
+                video_id: videos[currentIndex].video_id,
+                watch_time: video.currentTime || 0,
+                watch_percentage: video.duration ? ((video.currentTime / video.duration) * 100) : 0,
+                completed: false,
+                last_position: video.currentTime || 0,
+                like_flag: isLiked,
+                dislike_flag: isDisliked,
+                saved_flag: isSaved,
+                shared_flag: true,
+                device_type: deviceType
+              };
+              updateWatchHistory(watchData).catch(err => {
+                console.error("Failed to update watch history after share:", err);
+              });
+            }
+          }
+          
           return;
         } catch (error) {
           console.log('Web Share API error:', error);
@@ -441,6 +501,31 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
       // Fallback to clipboard API with multiple methods
       await copyToClipboard();
+      
+      // Update share flag for watch history
+      setWatchShared(true);
+      
+      // Update watch history with shared flag if user is logged in
+      if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+        const video = videoRef.current;
+        if (video) {
+          const watchData = {
+            video_id: videos[currentIndex].video_id,
+            watch_time: video.currentTime || 0,
+            watch_percentage: video.duration ? ((video.currentTime / video.duration) * 100) : 0,
+            completed: false,
+            last_position: video.currentTime || 0,
+            like_flag: isLiked,
+            dislike_flag: isDisliked,
+            saved_flag: isSaved,
+            shared_flag: true,
+            device_type: deviceType
+          };
+          updateWatchHistory(watchData).catch(err => {
+            console.error("Failed to update watch history after share:", err);
+          });
+        }
+      }
     } catch (error) {
       console.error("Share error:", error);
       setSnackbarMessage("Could not share video");
@@ -1015,6 +1100,72 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     };
   }, [currentIndex, videos.length]);
 
+  // Add a separate useEffect for watch history tracking
+  useEffect(() => {
+    if (!currentUser || !videos || videos.length === 0 || currentIndex >= videos.length) {
+      return; // Exit if user not logged in or no videos available
+    }
+
+    const currentVideo = videos[currentIndex];
+    const video = videoRef.current;
+    
+    if (!video) return;
+
+    // Function to track watch time periodically
+    const trackWatchTime = async () => {
+      if (!video) return;
+      
+      const watchTime = video.currentTime;
+      const duration = video.duration || 1; // Prevent division by zero
+      const watchPercentage = (watchTime / duration) * 100;
+      
+      // Create watch data object
+      const watchData = {
+        video_id: currentVideo.video_id,
+        watch_time: watchTime,
+        watch_percentage: watchPercentage,
+        completed: false, // Only mark completed in handleVideoEnd
+        last_position: watchTime,
+        like_flag: isLiked,
+        dislike_flag: isDisliked,
+        saved_flag: isSaved,
+        shared_flag: watchShared,
+        device_type: deviceType
+      };
+
+      try {
+        await updateWatchHistory(watchData);
+      } catch (error) {
+        console.error("Failed to update watch history:", error);
+      }
+    };
+
+    // Set interval to track every 15 seconds
+    const intervalId = setInterval(() => {
+      if (isPlaying && video.currentTime > 0) {
+        trackWatchTime();
+      }
+    }, 15000);
+    
+    // Store interval ID for cleanup
+    setWatchTrackerInterval(intervalId);
+
+    // Send initial watch data when starting a video
+    if (video.currentTime > 0) {
+      trackWatchTime();
+    }
+
+    // Cleanup on unmount or video change
+    return () => {
+      clearInterval(intervalId);
+      
+      // Send final watch data when changing videos
+      if (video.currentTime > 0) {
+        trackWatchTime();
+      }
+    };
+  }, [currentUser, videos, currentIndex, isPlaying, isLiked, isDisliked, isSaved, watchShared, deviceType]);
+
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
     <Box
@@ -1381,6 +1532,34 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                 )}
               </Button>
             )}
+          </Box>
+
+          {/* Below the video title and user profile section */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2,
+            color: 'white',
+            mt: 1
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <VisibilityIcon sx={{ fontSize: 20 }} />
+              <Typography variant="body2">
+                {videos[currentIndex]?.views || 0}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <ThumbUpIcon sx={{ fontSize: 20 }} />
+              <Typography variant="body2">
+                {videos[currentIndex]?.likes || 0}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <ThumbDownIcon sx={{ fontSize: 20 }} />
+              <Typography variant="body2">
+                {videos[currentIndex]?.dislikes || 0}
+        </Typography>
+      </Box>
           </Box>
         </Box>
       </Slide>

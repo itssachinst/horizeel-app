@@ -378,6 +378,90 @@ export const updateUserProfile = async (userData) => {
   }
 };
 
+// Watch History API functions
+export const updateWatchHistory = async (watchData) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // If no token, user is not logged in, so we don't track watch history
+      return;
+    }
+
+    const response = await axios.post(`${API_BASE_URL}/videos/watch-history`, watchData, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating watch history:', error);
+    // Don't throw error - watch history tracking should be non-blocking
+    return null;
+  }
+};
+
+export const getWatchHistory = async (limit = 50, skip = 0) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('You need to be logged in to view watch history');
+    }
+
+    const response = await axios.get(`${API_BASE_URL}/videos/watch-history?limit=${limit}&skip=${skip}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error getting watch history:', error);
+    throw error;
+  }
+};
+
+export const getVideoWatchStats = async (videoId) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // If not logged in, return null - indicates no watch history
+      return null;
+    }
+
+    const response = await axios.get(`${API_BASE_URL}/videos/${videoId}/watch-stats`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status === 404) {
+      // 404 means no watch history for this video, which is normal
+      return null;
+    }
+    console.error('Error getting video watch stats:', error);
+    return null;
+  }
+};
+
+export const deleteWatchHistory = async (videoId) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('You need to be logged in to delete watch history');
+    }
+
+    const response = await axios.delete(`${API_BASE_URL}/videos/watch-history/${videoId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting watch history:', error);
+    throw error;
+  }
+};
+
 // Create a named export object instead of an anonymous one
 const apiServices = {
   fetchVideos,
@@ -404,7 +488,11 @@ const apiServices = {
   resetPassword,
   directResetPassword,
   uploadProfileImage,
-  updateUserProfile
+  updateUserProfile,
+  updateWatchHistory,
+  getWatchHistory,
+  getVideoWatchStats,
+  deleteWatchHistory
 };
 
 export default apiServices;
