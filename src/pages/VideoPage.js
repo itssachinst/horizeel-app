@@ -44,6 +44,123 @@ const VideoPage = () => {
   const fetchingRef = useRef(false);
   const nextBatchLoadedRef = useRef(false);
 
+  // Add a ref to track if component is mounted
+  const isMounted = useRef(true);
+  // Track if we're setting the index to match the URL param
+  const isSettingIndexFromUrl = useRef(false);
+
+  // Function to find the index of a video by its ID
+  const findVideoIndexById = useCallback((videos, videoId) => {
+    return videos.findIndex(video => video.video_id === videoId);
+  }, []);
+
+  // Function to initialize the player with the correct video based on URL
+  const initializeWithCorrectVideo = useCallback(async (videosData, urlVideoId) => {
+    if (!urlVideoId || !videosData || videosData.length === 0) {
+      return 0; // Default to first video if no ID or no videos
+    }
+
+    // First check if the requested video is in the initial batch
+    const videoIndex = findVideoIndexById(videosData, urlVideoId);
+    
+    if (videoIndex !== -1) {
+      console.log(`Found requested video at index ${videoIndex}`);
+      return videoIndex;
+    }
+    
+    // If not found, try to fetch the specific video
+    try {
+      console.log(`Requested video not in initial batch, fetching video with ID: ${urlVideoId}`);
+      const specificVideo = await fetchVideoById(urlVideoId);
+      
+      if (specificVideo) {
+        // Insert the specific video at the beginning and set index to 0
+        const updatedVideos = [specificVideo, ...videosData.filter(v => v.video_id !== specificVideo.video_id)];
+        setVideos(updatedVideos);
+        return 0;
+      }
+    } catch (err) {
+      console.error("Error fetching specific video:", err);
+      // Fall back to first video if there's an error
+      return 0;
+    }
+    
+    // Default to first video if not found
+    return 0;
+  }, [findVideoIndexById]);
+
+  // Modified initialization effect
+  useEffect(() => {
+    const initializeComponent = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch initial set of videos
+        const videosData = await fetchVideos(0, ITEMS_PER_PAGE);
+        console.log("Fetched initial videos:", videosData);
+        
+        if (!isMounted.current) return;
+        
+        if (videosData && videosData.length > 0) {
+          // Initialize with correct initial index based on URL
+          const initialIndex = await initializeWithCorrectVideo(videosData, id);
+          
+          setVideos(videosData);
+          isSettingIndexFromUrl.current = true;
+          setCurrentIndex(initialIndex);
+          setHasMoreVideos(videosData.length >= ITEMS_PER_PAGE);
+          
+          // Increment view count for the initial video
+          if (videosData[initialIndex]) {
+            incrementVideoView(videosData[initialIndex].video_id).catch(console.error);
+          }
+          
+          // Pre-fetch next batch if close to the end
+          if (initialIndex > videosData.length - PREFETCH_THRESHOLD) {
+            console.log("Pre-fetching next set of videos");
+            fetchMoreVideos(true);
+          }
+        } else {
+          setError("No videos found");
+        }
+      } catch (err) {
+        console.error("Error initializing VideoPage:", err);
+        if (isMounted.current) {
+          setError("Failed to load videos");
+        }
+      } finally {
+        if (isMounted.current) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    initializeComponent();
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, [id]); // Re-run when URL param changes
+
+  // Effect to handle URL updates when current index changes
+  useEffect(() => {
+    if (isSettingIndexFromUrl.current) {
+      // Reset the flag after the index has been set from URL
+      isSettingIndexFromUrl.current = false;
+      return;
+    }
+    
+    // Don't update URL if we're already on the same video
+    if (videos.length > 0 && currentIndex >= 0 && currentIndex < videos.length) {
+      const currentVideoId = videos[currentIndex].video_id;
+      // Only update URL if not already on that video's URL
+      if (id !== currentVideoId) {
+        // Update URL without full navigation
+        window.history.replaceState({ videoId: currentVideoId }, '', `/video/${currentVideoId}`);
+      }
+    }
+  }, [currentIndex, videos, id]);
+
   // Update the ref whenever videos state changes
   useEffect(() => {
     videosRef.current = videos;
@@ -168,93 +285,6 @@ const VideoPage = () => {
       forceLoadNextBatch();
     }
   }, [hasMoreVideos, fetchMoreVideos, forceLoadNextBatch]);
-
-  // Effect to load initial videos and find the current video
-  useEffect(() => {
-    const loadVideos = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Fetch initial set of videos
-        const videosData = await fetchVideos(0, ITEMS_PER_PAGE);
-        console.log("Fetched initial videos:", videosData); 
-        
-        if (!videosData || videosData.length === 0) {
-          setError("No videos available");
-          setLoading(false);
-          return;
-        }
-        
-        setVideos(videosData);
-        videosRef.current = videosData; // Update ref immediately
-
-        // If we received fewer videos than requested, there are no more to load
-        if (videosData.length < ITEMS_PER_PAGE) {
-          setHasMoreVideos(false);
-        } else {
-          // Pre-fetch the next set immediately
-          console.log("Pre-fetching next set of videos");
-          setTimeout(() => {
-            forceLoadNextBatch();
-          }, 1000);
-        }
-
-        // Find the index of the current video
-        let index = videosData.findIndex((video) => String(video.video_id) === String(id));
-        console.log("Video ID:", id, "Found at index:", index);
-        
-        if (index !== -1) {
-          setCurrentIndex(index);
-          
-          // Increment view count
-          await incrementVideoView(id);
-          
-          // If the video is near the end of our initial batch, go ahead and load more
-          if (index > videosData.length - PREFETCH_THRESHOLD && hasMoreVideos) {
-            forceLoadNextBatch();
-          }
-        } else {
-          // If video is not found in the initial batch, try fetching it directly
-          console.log(`Video with ID ${id} not found in initial batch, fetching directly...`);
-          
-          try {
-            const directVideo = await fetchVideoById(id);
-            
-            if (directVideo) {
-              console.log(`Successfully fetched video ${id} directly:`, directVideo);
-              
-              // Add this video to the beginning of our list
-              const updatedVideos = [directVideo, ...videosData];
-              setVideos(updatedVideos);
-              videosRef.current = updatedVideos;
-              setCurrentIndex(0); // Set to the first video (our directly fetched one)
-              
-              // Increment view count
-              await incrementVideoView(id);
-              
-              // Also pre-fetch the next batch
-              setTimeout(() => forceLoadNextBatch(), 1000);
-            } else {
-              // If we couldn't find it directly either, show error
-              console.error(`Video with ID ${id} could not be found directly`);
-              setError(`Video with ID ${id} not found`);
-            }
-          } catch (fetchError) {
-            console.error("Error fetching video directly:", fetchError);
-            setError(`Video with ID ${id} not found`);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading videos:", error);
-        setError("Failed to load videos. Please try again later.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadVideos();
-  }, [id, hasMoreVideos, forceLoadNextBatch]);
 
   // Show snackbar message
   const showSnackbar = (message) => {

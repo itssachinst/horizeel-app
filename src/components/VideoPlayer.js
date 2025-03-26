@@ -125,19 +125,30 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const [watchTrackerInterval, setWatchTrackerInterval] = useState(null);
   const [deviceType, setDeviceType] = useState(isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop');
   const [watchShared, setWatchShared] = useState(false);
+  // Add login notification state
+  const [showLoginNotification, setShowLoginNotification] = useState(!currentUser);
+  const [loginNotificationTimeout, setLoginNotificationTimeout] = useState(null);
+  // Track if URL is being updated to prevent recursive updates
+  const [isUrlUpdating, setIsUrlUpdating] = useState(false);
 
   // Add swipe navigation handlers
   const handlePrevVideo = () => {
+    cleanupVideo();
     if (currentIndex > 0) {
-      cleanupVideo();
       setCurrentIndex(currentIndex - 1);
+    } else {
+      // Loop back to last video
+      setCurrentIndex(videos.length - 1);
     }
   };
 
   const handleNextVideo = () => {
+    cleanupVideo();
     if (currentIndex < videos.length - 1) {
-      cleanupVideo();
       setCurrentIndex(currentIndex + 1);
+    } else {
+      // Loop back to first video
+      setCurrentIndex(0);
     }
   };
 
@@ -354,12 +365,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       }
     }
     
-    // Set video to loop instead of exiting fullscreen
-    if (videoRef.current) {
+    // Implement infinite loop behavior
+    if (videos && videos.length > 0) {
       if (currentIndex < videos.length - 1) {
+        // Move to next video if not at the end
         setCurrentIndex(currentIndex + 1);
       } else {
-        // Reset to first video if at the end of the playlist
+        // Loop back to the first video if at the end
         setCurrentIndex(0);
       }
     }
@@ -587,6 +599,22 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const showLoginPrompt = (message) => {
     setSnackbarMessage(message || "Please log in to use this feature");
     setShowSnackbar(true);
+    
+    // Show the login notification again if it was hidden
+    if (!currentUser && !showLoginNotification) {
+      setShowLoginNotification(true);
+      
+      // Auto-hide again after 10 seconds
+      const timeout = setTimeout(() => {
+        setShowLoginNotification(false);
+      }, 10000);
+      
+      if (loginNotificationTimeout) {
+        clearTimeout(loginNotificationTimeout);
+      }
+      
+      setLoginNotificationTimeout(timeout);
+    }
   };
   
   const handleCloseSnackbar = () => {
@@ -1166,6 +1194,55 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     };
   }, [currentUser, videos, currentIndex, isPlaying, isLiked, isDisliked, isSaved, watchShared, deviceType]);
 
+  // New function to handle navigation to login page
+  const handleLoginClick = (e) => {
+    e.stopPropagation(); // Prevent video click events
+    navigate('/login');
+  };
+
+  // Auto-hide the login notification after 10 seconds
+  useEffect(() => {
+    if (!currentUser && showLoginNotification) {
+      // Set timeout to hide notification after 10 seconds
+      const timeout = setTimeout(() => {
+        setShowLoginNotification(false);
+      }, 10000);
+      
+      setLoginNotificationTimeout(timeout);
+      
+      return () => {
+        if (loginNotificationTimeout) {
+          clearTimeout(loginNotificationTimeout);
+        }
+      };
+    }
+  }, [currentUser, showLoginNotification]);
+
+  // Add a method to update the URL without triggering navigation
+  const updateUrlWithoutNavigation = (videoId) => {
+    if (!videoId || isUrlUpdating) return;
+    
+    try {
+      setIsUrlUpdating(true);
+      const newUrl = `/video/${videoId}`;
+      window.history.replaceState({ videoId }, '', newUrl);
+    } catch (error) {
+      console.error("Error updating URL:", error);
+    } finally {
+      setIsUrlUpdating(false);
+    }
+  };
+
+  // Update URL when current video changes
+  useEffect(() => {
+    if (videos && videos.length > 0 && currentIndex >= 0 && currentIndex < videos.length) {
+      const currentVideo = videos[currentIndex];
+      if (currentVideo && currentVideo.video_id) {
+        updateUrlWithoutNavigation(currentVideo.video_id);
+      }
+    }
+  }, [currentIndex, videos]);
+
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
     <Box
@@ -1206,6 +1283,65 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
     >
+      {/* Login notification */}
+      {!currentUser && showLoginNotification && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 1500,
+            width: { xs: "90%", sm: "60%", md: "40%" },
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            borderRadius: 2,
+            p: 2,
+            boxShadow: "0 0 20px rgba(44, 255, 5, 0.5)",
+            border: "1px solid #2CFF05",
+            textAlign: "center",
+            backdropFilter: "blur(8px)",
+          }}
+          onClick={(e) => e.stopPropagation()} // Prevent video click events
+        >
+          <Typography variant="h6" sx={{ color: "#2CFF05", mb: 1 }}>
+            Sign in to get the full experience!
+          </Typography>
+          <Typography variant="body1" sx={{ color: "white", mb: 2 }}>
+            Create an account to like videos, follow creators, and keep track of your watch history.
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={handleLoginClick}
+            sx={{
+              backgroundColor: "#2CFF05",
+              color: "#000",
+              "&:hover": {
+                backgroundColor: "#25CC04",
+              },
+              mb: 1,
+              width: { xs: "100%", sm: "auto" }
+            }}
+          >
+            Sign In
+          </Button>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowLoginNotification(false);
+            }}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              color: "white",
+            }}
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
+
       {/* Back button that appears/disappears with controls */}
       <Slide direction="down" in={showControls || !isPlaying} timeout={300}>
         <IconButton
@@ -1563,32 +1699,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           </Box>
         </Box>
       </Slide>
-
-      {/* Mobile swiping indicators for navigation (only shown on mobile) */}
-      {isMobile && videos.length > 1 && (
-        <Box sx={{ 
-          position: 'absolute', 
-          bottom: 70, 
-          left: 0, 
-          right: 0, 
-          display: 'flex', 
-          justifyContent: 'center', 
-          zIndex: 15 
-        }}>
-          {videos.map((_, idx) => (
-            <Box 
-              key={idx} 
-        sx={{
-                width: 8, 
-                height: 8, 
-                borderRadius: '50%', 
-                bgcolor: idx === currentIndex ? 'primary.main' : 'rgba(255,255,255,0.5)', 
-                mx: 0.5 
-              }} 
-            />
-          ))}
-        </Box>
-      )}
 
       {/* Snackbar for notifications */}
       <Snackbar

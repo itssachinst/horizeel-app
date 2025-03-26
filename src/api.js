@@ -79,23 +79,41 @@ axios.interceptors.response.use(
   }
 );
 
+// Update fetchVideos to use the horizontalreels.com API
 export const fetchVideos = async (skip = 0, limit = 20) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/videos/?skip=${skip}&limit=${limit}`);
-    return response.data;
+    const response = await axios.get('https://horizontalreels.com/api/videos', {
+      params: { skip, limit }
+    });
+    
+    if (response.status === 200 && response.data) {
+      // Process the response to ensure it matches expected format
+      const videos = Array.isArray(response.data) ? response.data : response.data.videos || [];
+      return videos;
+    }
+    
+    throw new Error(`Failed to fetch videos: ${response.status}`);
   } catch (error) {
-    console.error("Error fetching videos:", error.message || error);
-    return []; // Return an empty array on error
+    console.error("Error fetching videos:", error);
+    return [];
   }
 };
 
+// Update fetchVideoById to use the horizontalreels.com API
 export const fetchVideoById = async (id) => {
+  if (!id) return null;
+  
   try {
-  const response = await axios.get(`${API_BASE_URL}/videos/${id}`);
-  return response.data;
+    const response = await axios.get(`https://horizontalreels.com/api/videos/${id}`);
+    
+    if (response.status === 200 && response.data) {
+      return response.data;
+    }
+    
+    throw new Error(`Failed to fetch video: ${response.status}`);
   } catch (error) {
-    console.error(`Error fetching video ${id}:`, error.message || error);
-    throw error; // Re-throw to allow component-level handling
+    console.error(`Error fetching video with ID ${id}:`, error);
+    return null;
   }
 };
 
@@ -462,6 +480,31 @@ export const deleteWatchHistory = async (videoId) => {
   }
 };
 
+// User feedback API functions
+export const submitUserFeedback = async (feedback) => {
+  try {
+    const response = await authAxios.post(`${API_BASE_URL}/users/feedback`, {
+      feedback
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    throw error;
+  }
+};
+
+export const getAllUserFeedback = async (skip = 0, limit = 100) => {
+  try {
+    const response = await authAxios.get(`${API_BASE_URL}/users/feedback`, {
+      params: { skip, limit }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error getting all feedback:', error);
+    throw error;
+  }
+};
+
 // Create a named export object instead of an anonymous one
 const apiServices = {
   fetchVideos,
@@ -492,7 +535,9 @@ const apiServices = {
   updateWatchHistory,
   getWatchHistory,
   getVideoWatchStats,
-  deleteWatchHistory
+  deleteWatchHistory,
+  submitUserFeedback,
+  getAllUserFeedback,
 };
 
 export default apiServices;
