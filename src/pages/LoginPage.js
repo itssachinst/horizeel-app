@@ -121,10 +121,9 @@ const LoginPage = () => {
     setResetError('');
     
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 
-                          (window.location.hostname === '13.60.198.222' 
-                            ? 'http://13.60.198.222:8000/api' 
-                            : `${window.location.origin}/api`);
+      const API_BASE_URL = process.env.REACT_APP_API_URL ||
+        (window.location.hostname === 'localhost' ? 'http://localhost:8000/api' 
+        : 'https://horizontalreels.com/api');
                             
       // Call direct password reset endpoint
       await axios.post(`${API_BASE_URL}/auth/direct-reset-password`, {

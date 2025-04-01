@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Use environment variable or fallback to localhost
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api";
+export const API_BASE_URL = process.env.REACT_APP_API_URL || "https://horizontalreels.com/api";
 
 // Create axios instance with auth header
 const authAxios = axios.create({
@@ -82,7 +82,7 @@ axios.interceptors.response.use(
 // Update fetchVideos to use the horizontalreels.com API
 export const fetchVideos = async (skip = 0, limit = 20) => {
   try {
-    const response = await axios.get('https://horizontalreels.com/api/videos', {
+    const response = await axios.get(`${API_BASE_URL}/videos`, {
       params: { skip, limit }
     });
     
@@ -104,7 +104,7 @@ export const fetchVideoById = async (id) => {
   if (!id) return null;
   
   try {
-    const response = await axios.get(`https://horizontalreels.com/api/videos/${id}`);
+    const response = await axios.get(`${API_BASE_URL}/videos/${id}`);
     
     if (response.status === 200 && response.data) {
       return response.data;
@@ -498,7 +498,7 @@ export const getAllUserFeedback = async (skip = 0, limit = 100) => {
     const response = await authAxios.get(`${API_BASE_URL}/users/feedback`, {
       params: { skip, limit }
     });
-    return response.data;
+  return response.data;
   } catch (error) {
     console.error('Error getting all feedback:', error);
     throw error;

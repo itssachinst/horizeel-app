@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from "react-route
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import { AuthProvider } from "./contexts/AuthContext";
+import { VideoProvider } from "./contexts/VideoContext";
 import Header from "./components/Header";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -64,54 +65,56 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/video/:id" element={<VideoPage />} />
-            <Route path="/" element={
-              <AppLayout>
-                <HomePage />
-              </AppLayout>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute>
+        <VideoProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/video/:id" element={<VideoPage />} />
+              <Route path="/" element={
                 <AppLayout>
-                  <ProfilePage />
+                  <HomePage />
                 </AppLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/upload" element={
-              <ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <ProfilePage />
+                  </AppLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/upload" element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <UploadVideo />
+                  </AppLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/followers" element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <FollowersPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/search" element={
                 <AppLayout>
-                  <UploadVideo />
+                  <SearchPage />
                 </AppLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/followers" element={
-              <ProtectedRoute>
+              } />
+              <Route path="/settings" element={
                 <AppLayout>
-                  <FollowersPage />
+                  <SettingsPage />
                 </AppLayout>
-              </ProtectedRoute>
-            } />
-            <Route path="/search" element={
-              <AppLayout>
-                <SearchPage />
-              </AppLayout>
-            } />
-            <Route path="/settings" element={
-              <AppLayout>
-                <SettingsPage />
-              </AppLayout>
-            } />
-            <Route path="/feedback" element={
-              <AppLayout>
-                <FeedbackPage />
-              </AppLayout>
-            } />
-          </Routes>
-        </Router>
+              } />
+              <Route path="/feedback" element={
+                <AppLayout>
+                  <FeedbackPage />
+                </AppLayout>
+              } />
+            </Routes>
+          </Router>
+        </VideoProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -11,23 +11,35 @@ import {
   useTheme,
   useMediaQuery,
   Avatar,
-  Button
+  Button,
+  CardContent,
+  CardActionArea
 } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
-import { fetchVideos, searchVideos } from "../api";
-import { Visibility, Person } from "@mui/icons-material";
+import { searchVideos } from "../api";
+import { Visibility, Person, PlayArrow } from "@mui/icons-material";
 import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
+import { useVideoContext } from "../contexts/VideoContext";
+import { formatViewCount, formatDuration } from "../utils/videoUtils";
 
 const HomePage = () => {
-  const [videos, setVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { 
+    videos, 
+    loading, 
+    hasMore, 
+    error, 
+    fetchVideos, 
+    loadMoreVideos,
+    setCurrentIndex
+  } = useVideoContext();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [showMobilePromo, setShowMobilePromo] = useState(false);
+  
   const observer = useRef();
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,89 +57,206 @@ const HomePage = () => {
 
   // Effect to handle URL search parameters
   useEffect(() => {
-    setVideos([]);
-    setPage(0);
-    setHasMore(true);
-    
     const queryParams = new URLSearchParams(location.search);
     const query = queryParams.get('q');
 
     if (query) {
       setSearchQuery(query);
       setIsSearching(true);
-      loadVideos(query, 0);
+      handleSearch(query);
     } else {
       setSearchQuery('');
       setIsSearching(false);
-      loadVideos("", 0);
+      setSearchResults([]);
     }
   }, [location.search]);
 
-  const loadVideos = async (query = "", currentPage = page) => {
-    if (currentPage === 0) {
-      setLoading(true);
-    } else {
-      setLoadingMore(true);
-    }
-    
+  const handleSearch = async (query) => {
+    setSearchLoading(true);
     try {
-      const skip = currentPage * ITEMS_PER_PAGE;
-      let videosData;
-      
-      if (query) {
-        videosData = await searchVideos(query, skip, ITEMS_PER_PAGE);
-      } else {
-        videosData = await fetchVideos(skip, ITEMS_PER_PAGE);
-      }
-      
-      if (videosData.length < ITEMS_PER_PAGE) {
-        setHasMore(false);
-      }
-      
-      // Add debug logging to see video object structure
-      if (videosData && videosData.length > 0) {
-        console.log("Sample video data structure:", videosData[0]);
-      }
-      
-      setVideos(prevVideos => 
-        currentPage === 0 ? videosData : [...prevVideos, ...videosData]
-      );
+      const results = await searchVideos(query, 0, ITEMS_PER_PAGE);
+      setSearchResults(results || []);
     } catch (error) {
-      console.error("Error fetching videos:", error);
+      console.error("Error searching videos:", error);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      setSearchLoading(false);
     }
   };
 
   // Set up the intersection observer for infinite scrolling
   const lastVideoElementRef = useCallback(node => {
-    if (loading || loadingMore) return;
-    if (observer.current) observer.current.disconnect();
+    if (loading || searchLoading) return;
+    
+    // Always disconnect previous observer before creating new one
+    if (observer.current) {
+      observer.current.disconnect();
+    }
     
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setPage(prevPage => prevPage + 1);
-        loadVideos(searchQuery, page + 1);
+      if (entries[0].isIntersecting && hasMore && !isSearching) {
+        console.log("Last video element is visible, loading more videos");
+        loadMoreVideos();
       }
+    }, {
+      rootMargin: '200px', // Load videos before user reaches the end
+      threshold: 0.1 // Trigger when at least 10% of the element is visible
     });
     
-    if (node) observer.current.observe(node);
-  }, [loading, loadingMore, hasMore, searchQuery, page]);
+    if (node) {
+      observer.current.observe(node);
+    }
+  }, [loading, searchLoading, hasMore, isSearching, loadMoreVideos]);
 
-  const handleVideoClick = (videoId) => {
+  // Cleanup observer on component unmount
+  useEffect(() => {
+    return () => {
+      if (observer.current) {
+        observer.current.disconnect();
+      }
+    };
+  }, []);
+
+  const handleVideoClick = (videoId, index) => {
+    // Set the current index in the context
+    setCurrentIndex(index);
+    
+    // Navigate to the video page
     navigate(`/video/${videoId}`);
   };
 
   // Format time since upload
   const formatTimeAgo = (timestamp) => {
     if (!timestamp) return 'Recently';
-    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    try {
+      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    } catch (error) {
+      return 'Recently';
+    }
   };
 
   // Toggle mobile promo for testing
   const toggleMobilePromo = () => {
     setShowMobilePromo(!showMobilePromo);
+  };
+
+  // Video Thumbnail Component with placeholder
+  const VideoThumbnail = ({ video, index, isLastElement = false }) => {
+    const cardRef = isLastElement ? lastVideoElementRef : null;
+    
+    return (
+      <Card 
+        ref={cardRef}
+        sx={{ 
+          height: '100%', 
+          display: 'flex', 
+          flexDirection: 'column',
+          transition: 'transform 0.2s',
+          '&:hover': {
+            transform: 'scale(1.02)',
+            boxShadow: (theme) => theme.shadows[4]
+          }
+        }}
+      >
+        <CardActionArea 
+          onClick={() => handleVideoClick(video.video_id, index)}
+          sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
+        >
+          <Box sx={{ position: 'relative', paddingTop: '56.25%', width: '100%' }}>
+            <CardMedia
+              component="img"
+              image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/640/360`} // Fallback to placeholder
+              alt={video.title}
+              sx={{ 
+                position: 'absolute', 
+                top: 0, 
+                left: 0, 
+                width: '100%', 
+                height: '100%',
+                objectFit: 'cover',
+                backgroundColor: 'rgba(0,0,0,0.1)'
+              }}
+              onError={(e) => {
+                e.target.src = `https://picsum.photos/seed/${video.video_id}/640/360`;
+              }}
+            />
+            
+            {/* Overlay with video info */}
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                color: 'white',
+                padding: '8px',
+                transition: 'background-color 0.3s',
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                }
+              }}
+            >
+              <Typography variant="subtitle2" noWrap fontWeight="bold">
+                {video.title || "Untitled Video"}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                <Avatar 
+                  src={video.creator_profile_picture}
+                  alt={video.creator_username}
+                  sx={{ width: 20, height: 20, mr: 0.5 }}
+                />
+                <Typography variant="caption" noWrap sx={{ flexGrow: 1 }}>
+                  {video.creator_username || video.username || "Anonymous"}
+                </Typography>
+                
+                <Box display="flex" alignItems="center" ml={1}>
+                  <Visibility sx={{ fontSize: 16, mr: 0.5 }} />
+                  <Typography variant="caption">
+                    {formatViewCount(video.views || 0)}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+            
+            {/* Video duration overlay */}
+            {video.duration && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                  borderRadius: 1,
+                  padding: '2px 6px',
+                  color: 'white',
+                  fontSize: '0.75rem'
+                }}
+              >
+                {formatDuration(video.duration)}
+              </Box>
+            )}
+            
+            {/* Play button overlay */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                opacity: 0,
+                transition: 'opacity 0.2s',
+                '&:hover': {
+                  opacity: 1
+                }
+              }}
+            >
+              <PlayArrow sx={{ fontSize: 48, color: 'white' }} />
+            </Box>
+          </Box>
+        </CardActionArea>
+      </Card>
+    );
   };
 
   // Mobile app promo component
@@ -270,239 +399,65 @@ const HomePage = () => {
     </Box>
   );
 
-  // Show mobile app promo if on mobile browser
   if (showMobilePromo) {
     return <MobileAppPromo />;
   }
 
+  const displayVideos = isSearching ? searchResults : videos;
+  const isLoading = isSearching ? searchLoading : loading;
+
   return (
-    <Container 
-      maxWidth="xl" 
-      sx={{ 
-        mt: { xs: '-8px', sm: '-16px' }, // Smaller negative margin on mobile
-        pt: 0, 
-        pb: { xs: 2, sm: 3 }, 
-        bgcolor: '#000',
-        overflow: 'hidden', // Prevent horizontal scrollbar
-        px: { xs: 1, sm: 2, md: 3 } // Responsive horizontal padding
-      }}
-      disableGutters // Remove default container padding
-    >
+    <Container maxWidth="xl" sx={{ mt: 4, pb: 8 }}>
       {isSearching && (
-        <Box 
-          mb={{ xs: 1.5, sm: 3 }} 
-          mt={{ xs: 1, sm: 2 }}
-          px={{ xs: 1, sm: 0 }}
-        >
-          <Typography 
-            variant={isMobile ? "h6" : "h5"} 
-            color="white" 
-            sx={{ mb: 0.5 }}
-          >
-            {searchQuery.startsWith('#') ? (
-              <>Results for {searchQuery}</>
-            ) : (
-              <>Search results for "{searchQuery}"</>
-            )}
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="h5">
+            Search results for: "{searchQuery}"
           </Typography>
-          <Typography 
-            variant="body2" 
-            color="text.secondary"
-            fontSize={{ xs: '0.8rem', sm: '0.875rem' }}
-          >
-            Found {videos.length} video{videos.length !== 1 ? 's' : ''}
-          </Typography>
+          <Button onClick={() => navigate('/')}>
+            Clear Search
+          </Button>
         </Box>
       )}
-      
-      {loading ? (
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight={{ xs: '40vh', sm: '50vh' }}>
+
+      {isLoading && displayVideos.length === 0 ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
           <CircularProgress />
         </Box>
-      ) : videos.length === 0 ? (
-        <Box 
-          display="flex" 
-          justifyContent="center" 
-          alignItems="center" 
-          minHeight={{ xs: '40vh', sm: '50vh' }}
-          flexDirection="column"
-          px={2}
-        >
-          <Typography variant={isMobile ? "h6" : "h5"} color="white" sx={{ mb: 1 }}>
-            No videos found
-          </Typography>
-          <Typography 
-            variant="body1" 
-            color="text.secondary"
-            textAlign="center"
-            fontSize={{ xs: '0.9rem', sm: '1rem' }}
-          >
-            {isSearching ? 
-              `We couldn't find any videos matching "${searchQuery}"` : 
-              "No videos available at the moment"}
-          </Typography>
-        </Box>
       ) : (
-        <Grid 
-          container 
-          spacing={{ xs: 2, sm: 3 }} 
-          sx={{ mt: 0 }}
-        >
-          {videos.map((video, index) => (
-            <Grid 
-              item 
-              xs={6} // 2 columns on mobile
-              sm={4} // 3 columns on small screens and above
-              md={4} // 3 columns on medium screens
-              lg={4} // 3 columns on large screens
-              key={video.video_id}
-              ref={index === videos.length - 1 ? lastVideoElementRef : null}
-            >
-              <Card
-                onClick={() => handleVideoClick(video.video_id)}
-                sx={{ 
-                  cursor: 'pointer',
-                  transition: isMobile ? 'none' : 'transform 0.3s ease, box-shadow 0.3s ease',
-                  '&:hover': {
-                    transform: isMobile ? 'none' : 'translateY(-8px)',
-                    boxShadow: isMobile ? 'none' : '0 8px 16px rgba(0,0,0,0.2)'
-                  },
-                  backgroundColor: '#121212',
-                  borderRadius: { xs: 1, sm: 2 },
-                  overflow: 'hidden',
-                  position: 'relative',
-                  height: '100%'
-                }}
-              >
-                <CardMedia
-                  component="img"
-                  height={isMobile ? "180" : "220"}
-                  image={video.thumbnail_url || "https://via.placeholder.com/640x360"}
-                  alt={video.title}
-                  sx={{ 
-                    objectFit: 'cover',
-                    position: 'relative' 
-                  }}
-                />
-
-                {/* Overlay information directly on the thumbnail */}
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.8) 100%)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    p: { xs: 1, sm: 1.5 }
-                  }}
-                >
-                  {/* Top row: Title and views */}
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                    }}
-                  >
-                    {/* Title in top-left */}
-                    <Typography
-                      variant={isMobile ? "caption" : "body2"}
-                      sx={{
-                        color: 'white',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: 1.2,
-                        fontWeight: 'bold',
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                        maxWidth: '70%'
-                      }}
-                    >
-                      {video.title}
-                    </Typography>
-
-                    {/* Views in top-right */}
-                    <Box 
-                      sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center',
-                        bgcolor: 'rgba(0,0,0,0.5)',
-                        px: 0.8,
-                        py: 0.3,
-                        borderRadius: 1
-                      }}
-                    >
-                      <Visibility
-                        sx={{
-                          fontSize: { xs: 12, sm: 14 },
-                          color: 'white',
-                          mr: 0.5
-                        }}
-                      />
-                  <Typography
-                        variant="caption"
-                        color="white"
-                        fontSize={{ xs: '0.65rem', sm: '0.7rem' }}
-                        sx={{ fontWeight: 'medium' }}
-                      >
-                        {video.views || 0}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  {/* Bottom row: Creator info */}
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <Avatar
-                      src={video.profile_picture}
-                      alt={video.username}
-                      sx={{
-                        width: { xs: 24, sm: 28 },
-                        height: { xs: 24, sm: 28 },
-                        border: '1px solid rgba(255,255,255,0.5)',
-                        mr: 1
-                      }}
-                    >
-                      <Person fontSize="small" />
-                    </Avatar>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: 'white',
-                        fontSize: { xs: '0.7rem', sm: '0.75rem' },
-                        fontWeight: 500,
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {video.username || "Anonymous"}
-                  </Typography>
-                  </Box>
-                </Box>
-              </Card>
+        <>
+          {displayVideos.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+              <Typography variant="h6" color="text.secondary">
+                {isSearching ? "No results found" : "No videos available"}
+              </Typography>
+            </Box>
+          ) : (
+            <Grid container spacing={2}>
+              {displayVideos.map((video, index) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={`${video.video_id}-${index}`}>
+                  <VideoThumbnail 
+                    video={video} 
+                    index={index}
+                    isLastElement={index === displayVideos.length - 1 && !isSearching}
+                  />
+                </Grid>
+              ))}
             </Grid>
-          ))}
+          )}
           
-          {loadingMore && (
-            <Grid item xs={12}>
-              <Box display="flex" justifyContent="center" p={{ xs: 1, sm: 2 }}>
-                <CircularProgress size={isMobile ? 24 : 30} />
-              </Box>
-            </Grid>
-        )}
-      </Grid>
+          {/* Loading indicator for infinite scroll */}
+          {(loading || hasMore) && !isSearching && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+              <CircularProgress size={30} />
+            </Box>
+          )}
+          
+          {error && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+              <Typography color="error">{error}</Typography>
+            </Box>
+          )}
+        </>
       )}
     </Container>
   );

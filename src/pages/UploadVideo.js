@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { TextField, Button, Card, CardContent, Typography } from "@mui/material";
+import { API_BASE_URL } from "../api";
 
 const UploadVideo = () => {
   const [videoDetails, setVideoDetails] = useState({
@@ -80,7 +81,7 @@ const UploadVideo = () => {
     formData.append("tfile", thumbnailFile); // FIX: Matched API field name
 
     try {
-      const response = await axios.post("http://13.60.198.222:8000/api/videos/", formData, {
+      const response = await axios.post(`${API_BASE_URL}/videos/`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },

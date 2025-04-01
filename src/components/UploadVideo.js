@@ -4,6 +4,7 @@ import { TextField, Button, Card, CardContent, Typography, Box, CircularProgress
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Add as AddIcon, Tag as TagIcon } from "@mui/icons-material";
+import { API_BASE_URL } from "../api";
 
 const UploadVideo = () => {
   const [videoDetails, setVideoDetails] = useState({
@@ -147,7 +148,7 @@ const UploadVideo = () => {
         return;
       }
       
-      const response = await axios.post("http://13.60.198.222:8000/api/videos/", formData, {
+      const response = await axios.post(`${API_BASE_URL}/videos/`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           "Authorization": `Bearer ${token}`
