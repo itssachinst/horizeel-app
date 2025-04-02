@@ -1,7 +1,11 @@
 import axios from "axios";
 
 // Use environment variable or fallback to localhost
-export const API_BASE_URL = process.env.REACT_APP_API_URL || "https://horizontalreels.com/api";
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://horizontalreels.com/api');
+
+// Log API base URL on initialization 
+console.log('API is configured to use:', API_BASE_URL);
 
 // Create axios instance with auth header
 const authAxios = axios.create({
@@ -119,11 +123,74 @@ export const fetchVideoById = async (id) => {
 
 // Authentication API calls
 export const registerUser = async (userData) => {
+  console.log("Starting registration request to:", `${API_BASE_URL}/users/register`);
+  console.log("Registration payload:", JSON.stringify(userData, null, 2));
+  
   try {
     const response = await axios.post(`${API_BASE_URL}/users/register`, userData);
+    console.log("Registration successful, server response:", response.data);
     return response.data;
   } catch (error) {
-    console.error("Registration error:", error.message || error);
+    // Network debugging - check if request was actually sent
+    console.log("Registration request failed");
+    
+    if (!navigator.onLine) {
+      console.error("Browser is offline - no internet connection");
+      error.detail = "You appear to be offline. Please check your internet connection.";
+      throw error;
+    }
+    
+    // Enhanced error logging
+    console.error("Registration error details:", {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      endpoint: `${API_BASE_URL}/users/register`,
+      requestWasSent: !!error.request,
+      responseWasReceived: !!error.response
+    });
+    
+    // Check if request was sent but no response received
+    if (error.request && !error.response) {
+      console.error("Request was sent but no response received - likely CORS or network issue");
+      error.detail = "Server not responding. This could be due to connectivity issues or CORS configuration.";
+      
+      // Log the API base URL to help with debugging
+      console.log("Current API URL:", API_BASE_URL);
+      
+      // Test if the API base URL is reachable with a simple GET request
+      try {
+        console.log("Testing API base URL reachability...");
+        fetch(API_BASE_URL)
+          .then(response => console.log("API base URL is reachable:", response.status))
+          .catch(e => console.error("API base URL is NOT reachable:", e));
+      } catch (testError) {
+        console.error("Error testing API reachability:", testError);
+      }
+      
+      throw error;
+    }
+    
+    // Preserve the entire error object including response data which contains details
+    if (error.response) {
+      // Server responded with an error status
+      error.detail = error.response.data?.detail || 
+                     error.response.data?.message || 
+                     error.response.data?.error ||
+                     `Server error: ${error.response.status}`;
+                     
+      // Log more details about the response for debugging
+      console.log("Server responded with status:", error.response.status);
+      console.log("Response headers:", error.response.headers);
+    } else if (error.request) {
+      // Request made but no response received (this is likely the issue)
+      error.detail = "No response from server. Please check your connection or server availability.";
+    } else {
+      // Error setting up the request
+      error.detail = error.message || "Registration failed due to a network error.";
+    }
+    
+    // Throw the enhanced error
     throw error;
   }
 };

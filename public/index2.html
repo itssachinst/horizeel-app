@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Join the waiting list for Horizontal Reels"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>Join Waiting List - Horizontal Reels</title>
+    <style>
+      :root {
+        --primary-color: #2CFF05;
+        --dark-bg: #121212;
+        --medium-bg: #1f1f1f;
+        --light-bg: #2d2d2d;
+        --text-color: #ffffff;
+        --muted-text: #a0a0a0;
+        --error-color: #ff3d3d;
+        --success-color: #2CFF05;
+      }
+      
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+          Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        background-color: var(--dark-bg);
+        color: var(--text-color);
+        line-height: 1.6;
+      }
+      
+      .container {
+        max-width: 100%;
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+      
+      .content {
+        width: 100%;
+        max-width: 550px;
+        padding: 2rem;
+        background-color: var(--medium-bg);
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+      
+      .logo {
+        margin-bottom: 1.5rem;
+        width: 120px;
+        height: auto;
+      }
+      
+      h1 {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        font-weight: 700;
+      }
+      
+      h1 .highlight {
+        color: var(--primary-color);
+        text-shadow: 0 0 10px rgba(44, 255, 5, 0.5);
+      }
+      
+      p {
+        margin-bottom: 2rem;
+        color: var(--muted-text);
+        font-size: 1.1rem;
+      }
+      
+      form {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
+      
+      .input-group {
+        margin-bottom: 1.5rem;
+        position: relative;
+      }
+      
+      input {
+        width: 100%;
+        padding: 1rem;
+        background-color: var(--light-bg);
+        border: 2px solid transparent;
+        border-radius: 8px;
+        color: var(--text-color);
+        font-size: 1rem;
+        transition: all 0.3s ease;
+      }
+      
+      input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(44, 255, 5, 0.2);
+      }
+      
+      button {
+        padding: 1rem;
+        background-color: var(--primary-color);
+        color: var(--dark-bg);
+        border: none;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 0 15px rgba(44, 255, 5, 0.4);
+      }
+      
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0 20px rgba(44, 255, 5, 0.6);
+      }
+      
+      button:active {
+        transform: translateY(0);
+      }
+      
+      .status-message {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        border-radius: 8px;
+        font-weight: 500;
+        display: none;
+      }
+      
+      .success {
+        background-color: rgba(44, 255, 5, 0.15);
+        color: var(--success-color);
+        display: block;
+      }
+      
+      .error {
+        background-color: rgba(255, 61, 61, 0.15);
+        color: var(--error-color);
+        display: block;
+      }
+      
+      .features {
+        margin-top: 2.5rem;
+        text-align: left;
+      }
+      
+      .features h3 {
+        margin-bottom: 1rem;
+        font-size: 1.3rem;
+        color: var(--primary-color);
+      }
+      
+      .features ul {
+        list-style-type: none;
+      }
+      
+      .features li {
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+      }
+      
+      .features li::before {
+        content: "✓";
+        margin-right: 0.75rem;
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+      
+      .footer {
+        margin-top: 2rem;
+        color: var(--muted-text);
+        font-size: 0.9rem;
+      }
+      
+      .footer a {
+        color: var(--primary-color);
+        text-decoration: none;
+      }
+      
+      .footer a:hover {
+        text-decoration: underline;
+      }
+      
+      @media (max-width: 600px) {
+        .content {
+          padding: 1.5rem;
+        }
+        
+        h1 {
+          font-size: 2rem;
+        }
+        
+        p {
+          font-size: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <img src="%PUBLIC_URL%/logo192.png" alt="Horizontal Reels Logo" class="logo" />
+        <h1>Join the <span class="highlight">Waiting List</span></h1>
+        <p>Be the first to experience Horizontal Reels when we launch. Enter your email below to join our exclusive waiting list.</p>
+        
+        <form id="waitingListForm">
+          <div class="input-group">
+            <input 
+              type="email" 
+              id="email" 
+              name="email" 
+              placeholder="Enter your email address" 
+              required 
+            />
+          </div>
+          <button type="submit" id="submitBtn">Join Waiting List</button>
+        </form>
+        
+        <div id="statusMessage" class="status-message"></div>
+        
+        <div class="features">
+          <h3>Coming Soon:</h3>
+          <ul>
+            <li>Horizontal video watching - the way it's meant to be</li>
+            <li>Seamless browsing experience with intuitive controls</li>
+            <li>High-quality video playback without format issues</li>
+            <li>Beautiful UI designed for landscape viewing</li>
+            <li>Creator-focused tools to grow your audience</li>
+          </ul>
+        </div>
+        
+        <div class="footer">
+          <p>&copy; 2023 Horizontal Reels. All rights reserved. <a href="/">Back to Home</a></p>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const waitingListForm = document.getElementById('waitingListForm');
+        const statusMessage = document.getElementById('statusMessage');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        waitingListForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          const email = document.getElementById('email').value;
+          if (!email || !validateEmail(email)) {
+            showMessage('Please enter a valid email address.', 'error');
+            return;
+          }
+          
+          // Change button state
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Joining...';
+          
+          // API endpoint
+          const API_URL = '/api/waiting-list/';
+          
+          fetch(API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            showMessage('Success! You\'ve been added to our waiting list. We\'ll notify you when we launch.', 'success');
+            waitingListForm.reset();
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            
+            // Check if already registered
+            if (error.message.includes('409')) {
+              showMessage('This email is already on our waiting list.', 'error');
+            } else {
+              showMessage('Something went wrong. Please try again later.', 'error');
+            }
+          })
+          .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Join Waiting List';
+          });
+        });
+        
+        function validateEmail(email) {
+          const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+          return re.test(String(email).toLowerCase());
+        }
+        
+        function showMessage(message, type) {
+          statusMessage.textContent = message;
+          statusMessage.className = 'status-message';
+          
+          if (type === 'success') {
+            statusMessage.classList.add('success');
+          } else if (type === 'error') {
+            statusMessage.classList.add('error');
+          }
+          
+          // Auto-hide after 5 seconds for success messages
+          if (type === 'success') {
+            setTimeout(() => {
+              statusMessage.style.display = 'none';
+            }, 5000);
+          }
+        }
+      });
+    </script>
+  </body>
+</html> 

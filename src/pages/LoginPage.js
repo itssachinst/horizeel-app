@@ -237,6 +237,28 @@ const LoginPage = () => {
               ) : 'Login'}
             </Button>
             
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="large"
+                fullWidth
+                onClick={() => navigate('/')}
+              >
+                Cancel
+              </Button>
+              
+              <Button
+                variant="outlined"
+                color="primary"
+                size="large"
+                fullWidth
+                onClick={handleOpenResetDialog}
+              >
+                Reset Password
+              </Button>
+            </Box>
+            
             <Box 
               sx={{ 
                 display: 'flex', 
@@ -251,16 +273,6 @@ const LoginPage = () => {
                   Register
                 </Link>
               </Typography>
-              
-              <Link 
-                component="button"
-                variant="body2"
-                onClick={handleOpenResetDialog}
-                color="primary"
-                underline="hover"
-              >
-                Forgot Password?
-              </Link>
             </Box>
           </form>
         </CardContent>

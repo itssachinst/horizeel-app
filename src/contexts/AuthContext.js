@@ -49,7 +49,42 @@ export const AuthProvider = ({ children }) => {
       const data = await registerUser(userData);
       return data;
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      // Capture more details from the error response
+      let errorMessage = 'Registration failed';
+      
+      // Check for the specific API Error format that we're seeing
+      if (err.status === 400) {
+        if (err.message === 'Email already registered') {
+          errorMessage = 'Email already registered';
+        } else if (err.message === 'Username already taken') {
+          errorMessage = 'Username already taken';
+        } else {
+          errorMessage = err.message || 'Registration failed';
+        }
+      } else if (err.response && err.response.data) {
+        // API returned an error response
+        const responseData = err.response.data;
+        if (responseData.detail) {
+          errorMessage = responseData.detail;
+        } else if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        } else if (typeof responseData === 'string') {
+          errorMessage = responseData;
+        }
+      } else if (err.message) {
+        // Network or other client-side error
+        errorMessage = err.message;
+      }
+      
+      // Set the error in the context
+      setError(errorMessage);
+      
+      // Make sure the err object has the message property set consistently
+      err.message = errorMessage;
+      
+      // Pass the enhanced error
       throw err;
     }
   };
