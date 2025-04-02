@@ -154,14 +154,17 @@ const HomePage = () => {
           '&:hover': {
             transform: 'scale(1.02)',
             boxShadow: (theme) => theme.shadows[4]
-          }
+          },
+          backgroundColor: '#121212',
+          borderRadius: 2,
+          overflow: 'hidden'
         }}
       >
         <CardActionArea 
           onClick={() => handleVideoClick(video.video_id, index)}
           sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
         >
-          <Box sx={{ position: 'relative', paddingTop: '56.25%', width: '100%' }}>
+          <Box sx={{ position: 'relative', width: '100%', paddingTop: '56.25%' /* 16:9 aspect ratio */ }}>
             <CardMedia
               component="img"
               image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/640/360`} // Fallback to placeholder
@@ -172,59 +175,59 @@ const HomePage = () => {
                 left: 0, 
                 width: '100%', 
                 height: '100%',
-                objectFit: 'cover',
-                backgroundColor: 'rgba(0,0,0,0.1)'
+                objectFit: 'cover'
               }}
               onError={(e) => {
                 e.target.src = `https://picsum.photos/seed/${video.video_id}/640/360`;
               }}
             />
             
-            {/* Overlay with video info */}
+            {/* Overlay with title (top left) and views (top right) */}
             <Box
               sx={{
                 position: 'absolute',
-                bottom: 0,
+                top: 0,
                 left: 0,
                 right: 0,
-                backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                color: 'white',
                 padding: '8px',
-                transition: 'background-color 0.3s',
-                '&:hover': {
-                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                }
+                background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start'
               }}
             >
-              <Typography variant="subtitle2" noWrap fontWeight="bold">
+              {/* Title on top left */}
+              <Typography 
+                variant="subtitle2" 
+                sx={{ 
+                  color: 'white', 
+                  fontWeight: 'bold',
+                  maxWidth: '70%',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.7)'
+                }}
+              >
                 {video.title || "Untitled Video"}
               </Typography>
               
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                <Avatar 
-                  src={video.creator_profile_picture}
-                  alt={video.creator_username}
-                  sx={{ width: 20, height: 20, mr: 0.5 }}
-                />
-                <Typography variant="caption" noWrap sx={{ flexGrow: 1 }}>
-                  {video.creator_username || video.username || "Anonymous"}
+              {/* Views on top right */}
+              <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                <Visibility sx={{ fontSize: 16, mr: 0.5, color: 'white' }} />
+                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                  {formatViewCount(video.views || 0)}
                 </Typography>
-                
-                <Box display="flex" alignItems="center" ml={1}>
-                  <Visibility sx={{ fontSize: 16, mr: 0.5 }} />
-                  <Typography variant="caption">
-                    {formatViewCount(video.views || 0)}
-                  </Typography>
-                </Box>
               </Box>
             </Box>
             
-            {/* Video duration overlay */}
+            {/* Video duration overlay - keep this in bottom right corner */}
             {video.duration && (
               <Box
                 sx={{
                   position: 'absolute',
-                  top: 8,
+                  bottom: 8,
                   right: 8,
                   backgroundColor: 'rgba(0, 0, 0, 0.7)',
                   borderRadius: 1,
@@ -237,6 +240,29 @@ const HomePage = () => {
               </Box>
             )}
             
+            {/* User details at the bottom */}
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: '8px',
+                background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <Avatar 
+                src={video.creator_profile_picture}
+                alt={video.creator_username}
+                sx={{ width: 24, height: 24, mr: 1 }}
+              />
+              <Typography variant="caption" sx={{ color: 'white', fontWeight: 'medium', flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {video.creator_username || video.username || "Anonymous"}
+              </Typography>
+            </Box>
+            
             {/* Play button overlay */}
             <Box
               sx={{
@@ -245,10 +271,13 @@ const HomePage = () => {
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
                 opacity: 0,
-                transition: 'opacity 0.2s',
+                transition: 'opacity 0.3s',
                 '&:hover': {
                   opacity: 1
-                }
+                },
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                borderRadius: '50%',
+                padding: '8px'
               }}
             >
               <PlayArrow sx={{ fontSize: 48, color: 'white' }} />
@@ -432,9 +461,9 @@ const HomePage = () => {
               </Typography>
             </Box>
           ) : (
-            <Grid container spacing={2}>
+            <Grid container spacing={3}>
               {displayVideos.map((video, index) => (
-                <Grid item xs={12} sm={6} md={4} lg={3} key={`${video.video_id}-${index}`}>
+                <Grid item xs={12} sm={6} md={4} key={`${video.video_id}-${index}`}>
                   <VideoThumbnail 
                     video={video} 
                     index={index}

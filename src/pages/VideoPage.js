@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   Box, 
@@ -19,7 +19,7 @@ import { useVideoContext } from "../contexts/VideoContext";
 
 // Configuration constants
 const ITEMS_PER_PAGE = 20;  // Number of videos to fetch per page
-const PREFETCH_THRESHOLD = 3;  // Load more videos when this many videos from the end
+const PREFETCH_THRESHOLD = 5;  // Load more videos when this many videos from the end
 
 const VideoPage = () => {
   const { id } = useParams();
@@ -37,7 +37,8 @@ const VideoPage = () => {
     setCurrentIndex,
     fetchVideos,
     loadMoreVideos,
-    setVideos
+    setVideos,
+    findVideoById
   } = useVideoContext();
   
   // Local state
@@ -46,124 +47,135 @@ const VideoPage = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   
-  // Find video index in the videos array
-  const findVideoIndexById = useCallback((videoId) => {
-    return videos.findIndex(video => video.video_id === videoId);
-  }, [videos]);
+  // Add ref to track if we've already loaded the initial video
+  const initialLoadDoneRef = useRef(false);
+  const videoLoadedRef = useRef(false);
   
-  // Load a specific video if it's not already in the videos array
+  // Add a console log to track the VideoPage lifecycle
+  useEffect(() => {
+    console.log("VideoPage mounted with id:", id);
+    console.log("Current videos array:", videos);
+    console.log("Current index:", currentIndex);
+    
+    // This effect runs once when component mounts
+    return () => {
+      console.log("VideoPage unmounting");
+    };
+  }, []);
+  
+  // Update the loadVideo function to ensure videos play correctly
   const loadVideo = useCallback(async (videoId) => {
-    if (isLoading) return;
+    console.log("loadVideo called with id:", videoId);
+    
+    if (isLoading || videoLoadedRef.current) {
+      console.log("Already loading or loaded, skipping");
+      return;
+    }
     
     setIsLoading(true);
+    videoLoadedRef.current = true;
+    
     try {
-      // First check if the video is already in our array
-      const videoIndex = findVideoIndexById(videoId);
-      
-      if (videoIndex !== -1) {
-        // Video is already loaded, just set the index
-        setCurrentIndex(videoIndex);
-        return;
-      }
-      
-      // If we have videos but the requested one isn't found, try to load it specifically
-      if (videos.length > 0) {
-        const specificVideo = await fetchVideoById(videoId);
-        
-        if (specificVideo) {
-          // Add to videos array avoiding duplicates
-          setVideos(prev => {
-            // Check if video already exists
-            if (prev.some(v => v.video_id === specificVideo.video_id)) {
-              return prev;
-            }
-            
-            return [...prev, specificVideo];
-          });
-          
-          // Update the index after adding
-          setTimeout(() => {
-            const newIndex = findVideoIndexById(videoId);
-            if (newIndex !== -1) {
-              setCurrentIndex(newIndex);
-            }
-          }, 0);
-          
+      // Fast path: First check if the video is already in our array
+      console.log("Checking if video already exists in current list");
+      const existingVideo = findVideoById(videoId);
+      if (existingVideo) {
+        console.log("Video found in existing videos array");
+        const videoIndex = videos.findIndex(v => v.video_id === videoId);
+        if (videoIndex !== -1) {
+          console.log(`Setting current index to ${videoIndex}`);
+          setCurrentIndex(videoIndex);
+          setIsLoading(false);
           return;
         }
+      }
+      
+      console.log("Video not found in current list, fetching from API");
+      if (videos.length === 0) {
+        console.log("No videos loaded yet, fetching initial batch");
+        const result = await fetchVideos(0);
+        console.log("Initial fetch result:", result);
+        
+        // Wait a moment for the videos state to update
+        setTimeout(() => {
+          const newIndex = videos.findIndex(v => v.video_id === videoId);
+          if (newIndex !== -1) {
+            console.log(`Video found after fetch, setting index to ${newIndex}`);
+            setCurrentIndex(newIndex);
+          } else {
+            console.log("Video not found in initial batch, trying to fetch it directly");
+            fetchSpecificVideo(videoId);
+          }
+        }, 100);
       } else {
-        // No videos loaded yet, fetch initial batch
-        await fetchVideos(0);
-        
-        // Check if our target video is in the initial batch
-        const newIndex = findVideoIndexById(videoId);
-        if (newIndex !== -1) {
-          setCurrentIndex(newIndex);
-          return;
-        }
-        
-        // Still not found, try fetching it specifically
-        const specificVideo = await fetchVideoById(videoId);
-        
-        if (specificVideo) {
-          setVideos(prev => {
-            if (prev.some(v => v.video_id === specificVideo.video_id)) {
-              return prev;
-            }
-            
-            return [...prev, specificVideo];
-          });
-          
-          // Update the index after adding
-          setTimeout(() => {
-            const newIndex = findVideoIndexById(videoId);
-            if (newIndex !== -1) {
-              setCurrentIndex(newIndex);
-            }
-          }, 0);
-          
-          return;
-        }
+        fetchSpecificVideo(videoId);
       }
-      
-      throw new Error('Video not found');
     } catch (err) {
       console.error('Error loading video:', err);
       setLocalError('Unable to load the requested video. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [findVideoIndexById, videos, setCurrentIndex, fetchVideos, setVideos, isLoading]);
+  }, [findVideoById, videos, currentIndex, setCurrentIndex, fetchVideos, setVideos, isLoading]);
   
-  // Load video when id changes
+  // Helper function to fetch a specific video
+  const fetchSpecificVideo = async (videoId) => {
+    try {
+      console.log(`Fetching specific video with ID: ${videoId}`);
+      const specificVideo = await fetchVideoById(videoId);
+      
+      if (specificVideo) {
+        console.log("Successfully fetched specific video:", specificVideo);
+        
+        // Add to videos array avoiding duplicates
+        setVideos(prev => {
+          if (prev.some(v => v.video_id === specificVideo.video_id)) {
+            console.log("Video already exists in array, not adding duplicate");
+            return prev;
+          }
+          console.log("Adding new video to array");
+          return [...prev, specificVideo];
+        });
+        
+        // Wait a moment for the state to update, then set the index
+        setTimeout(() => {
+          const targetIndex = videos.length;
+          console.log(`Setting current index to: ${targetIndex}`);
+          setCurrentIndex(targetIndex);
+        }, 100);
+      } else {
+        console.error("Failed to fetch specific video, API returned null/undefined");
+      }
+    } catch (error) {
+      console.error("Error fetching specific video:", error);
+    }
+  };
+  
+  // Load video when id changes - but ensure we only do initial load once
   useEffect(() => {
-    if (id) {
+    if (id && !initialLoadDoneRef.current) {
       loadVideo(id);
+      initialLoadDoneRef.current = true;
     }
   }, [id, loadVideo]);
   
-  // Preload next videos when user approaches the end of current videos list
+  // Preload next videos aggressively when approaching the end of the list
   useEffect(() => {
-    const preloadThreshold = 3; // Preload when within 3 videos of the end
-    
     if (
       videos.length > 0 &&
-      currentIndex >= videos.length - preloadThreshold
+      currentIndex >= videos.length - PREFETCH_THRESHOLD
     ) {
       loadMoreVideos();
     }
   }, [currentIndex, videos.length, loadMoreVideos]);
   
   // Handle snackbar close
-  const handleSnackbarClose = (event, reason) => {
-    if (reason === 'clickaway') {
-      return;
-    }
+  const handleSnackbarClose = () => {
     setSnackbarOpen(false);
   };
   
-  // Show loading state
-  if ((loading && videos.length === 0) || isLoading) {
+  // Simplified loading state - only show loading indicator initially
+  if (videos.length === 0 && (loading || isLoading)) {
     return (
       <Box
         sx={{
@@ -180,8 +192,8 @@ const VideoPage = () => {
     );
   }
   
-  // Show error state
-  if (error || localError) {
+  // Show error state only if we have no videos
+  if ((error || localError) && videos.length === 0) {
     return (
       <Box
         sx={{
@@ -212,7 +224,7 @@ const VideoPage = () => {
     );
   }
   
-  // Show empty state
+  // Empty state when no videos are available
   if (!videos || videos.length === 0) {
     return (
       <Box
@@ -237,7 +249,7 @@ const VideoPage = () => {
         width: '100%',
         height: '100vh',
         bgcolor: 'black',
-        overflow: 'hidden',
+        overflow: 'hidden'
       }}
     >
       <VideoPlayer
@@ -248,9 +260,10 @@ const VideoPage = () => {
         isTablet={isTablet}
       />
       
+      {/* Only show snackbar for critical messages */}
       <Snackbar
         open={snackbarOpen}
-        autoHideDuration={4000}
+        autoHideDuration={3000}
         onClose={handleSnackbarClose}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >

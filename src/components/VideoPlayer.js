@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { IconButton, Typography, Box, Avatar, Tooltip, Snackbar, Alert, Dialog, DialogContent, DialogTitle, Button, DialogActions, CircularProgress, Slide, useTheme, useMediaQuery } from "@mui/material";
 import { 
@@ -107,6 +107,17 @@ const fullscreenAPI = {
 const VIDEO_PROXY_ENABLED = false; // Set to true if using a proxy for CORS issues
 const VIDEO_PROXY_URL = 'https://cors-anywhere.herokuapp.com/'; // Example proxy - you would need a real proxy service
 
+// Add preload function at the top level
+const preloadVideo = (url) => {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.src = url;
+    video.onloadeddata = () => resolve(video);
+    video.onerror = reject;
+  });
+};
+
 const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet }) => {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
@@ -125,8 +136,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const [followLoading, setFollowLoading] = useState(false);
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [showDescription, setShowDescription] = useState(false);
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -134,65 +143,312 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [showControls, setShowControls] = useState(true);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [controlsTimeout, setControlsTimeout] = useState(null);
-  const [lastTap, setLastTap] = useState(0);
-  const [lastClick, setLastClick] = useState(0);
-  const [touchStart, setTouchStart] = useState(null);
-  const [touchEnd, setTouchEnd] = useState(null);
-  const [lastClickPosition, setLastClickPosition] = useState(null);
-  // Add watch history tracking state
   const [watchTrackerInterval, setWatchTrackerInterval] = useState(null);
   const [deviceType, setDeviceType] = useState(isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop');
   const [watchShared, setWatchShared] = useState(false);
-  // Add login notification state
-  const [showLoginNotification, setShowLoginNotification] = useState(!currentUser);
-  const [loginNotificationTimeout, setLoginNotificationTimeout] = useState(null);
-  // Track if URL is being updated to prevent recursive updates
   const [isUrlUpdating, setIsUrlUpdating] = useState(false);
+  
+  // Remove preloading states that aren't being used
+  // const [preloadedVideos, setPreloadedVideos] = useState(new Map());
+  // const [isPreloading, setIsPreloading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  
+  // Create a ref to track which videos we've reported views for
+  const reportedViewRef = useRef(false);
 
-  // Add swipe navigation handlers
-  const handlePrevVideo = () => {
-    // Reset the reportedView flag for the new video
-    reportedViewRef.current = false;
-    
+  // Simplified handlers for next/previous video
+  const handlePrevVideo = useCallback(() => {
     if (currentIndex > 0) {
-      console.log(`Moving to previous video (index ${currentIndex - 1})`);
       setCurrentIndex(currentIndex - 1);
     } else if (videos && videos.length > 0) {
-      // Loop back to last video
-      console.log(`Looping to last video (index ${videos.length - 1})`);
       setCurrentIndex(videos.length - 1);
     }
-  };
+  }, [currentIndex, videos, setCurrentIndex]);
 
-  const handleNextVideo = () => {
-    // Reset the reportedView flag for the new video
-    reportedViewRef.current = false;
-    
+  const handleNextVideo = useCallback(() => {
     if (videos && videos.length > 0) {
       if (currentIndex < videos.length - 1) {
-        console.log(`Moving to next video (index ${currentIndex + 1})`);
         setCurrentIndex(currentIndex + 1);
       } else {
-        // Check if we need to load more videos
         if (hasMore) {
-          console.log("End of list reached, loading more videos");
           loadMoreVideos();
         }
-        // Loop back to first video
-        console.log("Looping to first video (index 0)");
         setCurrentIndex(0);
       }
     }
+  }, [currentIndex, videos, hasMore, loadMoreVideos, setCurrentIndex]);
+
+  // Simplified touch handlers
+  const { handleTouchStart, handleTouchMove, handleTouchEnd } = useSwipeNavigate(
+    handleNextVideo,
+    handlePrevVideo,
+    70,
+    true
+  );
+
+  // Simplified mouse move handler
+  const handleMouseMove = () => {
+    if (controlsTimeout) {
+      clearTimeout(controlsTimeout);
+    }
+    
+    setShowControls(true);
+    
+    const newTimeout = setTimeout(() => {
+      setShowControls(false);
+    }, 5000);
+    
+    setControlsTimeout(newTimeout);
   };
 
-  const { handleTouchStart, handleTouchMove, handleTouchEnd } = useSwipeNavigate(
-    handleNextVideo, // on swipe up (reversed from previous config)
-    handlePrevVideo, // on swipe down (reversed from previous config)
-    70, // min swipe distance
-    true // set to true for vertical swipe instead of horizontal
-  );
+  // Simplified video container click handler
+  const handleVideoContainerClick = (e) => {
+    if (e.target === videoContainerRef.current || e.target === videoRef.current) {
+      togglePlayPause();
+    }
+  };
+
+  // Simplified toggle play/pause
+  const togglePlayPause = () => {
+    if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    
+    if (video.paused) {
+      video.play()
+        .then(() => setIsPlaying(true))
+        .catch(error => {
+          console.error("Error playing video:", error);
+          setIsPlaying(false);
+        });
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  // Simplified update video handler
+  useEffect(() => {
+    if (!videos || videos.length === 0 || currentIndex >= videos.length) {
+      console.log("No videos available or invalid index");
+      return;
+    }
+    
+    const currentVideo = videos[currentIndex];
+    if (!currentVideo || !currentVideo.video_url) {
+      console.log("Current video or URL is missing");
+      return;
+    }
+    
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      console.log("Video element reference is missing");
+      return;
+    }
+    
+    console.log("Loading video:", currentVideo.video_url);
+    
+    let isMounted = true;
+    // Reset the reported view flag for the new video
+    reportedViewRef.current = false;
+    
+    const loadVideo = async () => {
+      try {
+        // Clean up current video with error handling
+        try {
+          videoElement.pause();
+          videoElement.removeAttribute('src');
+          
+          // Safely remove child elements
+          while (videoElement.firstChild) {
+            try {
+              videoElement.removeChild(videoElement.firstChild);
+            } catch (err) {
+              console.warn("Error removing video child:", err);
+              break; // Prevent infinite loop if removal fails
+            }
+          }
+          
+          videoElement.load();
+        } catch (cleanupError) {
+          console.warn("Error during video cleanup:", cleanupError);
+          // Continue despite cleanup errors
+        }
+        
+        // Get video source with error handling
+        let videoSource;
+        try {
+          videoSource = getVideoSource(currentVideo.video_url);
+          console.log("Using video source:", videoSource);
+          
+          if (!videoSource) {
+            console.error("Failed to get valid video source");
+            if (isMounted) {
+              setSnackbarMessage("Invalid video source. Please try another video.");
+              setShowSnackbar(true);
+            }
+            return;
+          }
+        } catch (sourceError) {
+          console.error("Error getting video source:", sourceError);
+          if (isMounted) {
+            setSnackbarMessage("Error processing video URL");
+            setShowSnackbar(true);
+          }
+          return;
+        }
+        
+        // Set sources with error handling
+        try {
+          // Set the source with multiple format support
+          const sourceElement = document.createElement('source');
+          sourceElement.src = videoSource;
+          
+          // Get MIME type with error handling
+          let mimeType;
+          try {
+            mimeType = getVideoMimeType(currentVideo.video_url);
+          } catch (mimeError) {
+            console.warn("Error getting MIME type:", mimeError);
+            mimeType = 'video/mp4'; // Default fallback
+          }
+          
+          sourceElement.type = mimeType;
+          console.log("Using MIME type:", mimeType);
+          
+          try {
+            videoElement.appendChild(sourceElement);
+          } catch (appendError) {
+            console.warn("Error appending source element:", appendError);
+          }
+          
+          // Add MP4 fallback source if the original isn't mp4
+          if (mimeType !== 'video/mp4' && currentVideo.video_url) {
+            try {
+              // Try to create a fallback MP4 URL if we have alternate sources
+              if (currentVideo.alternate_urls && currentVideo.alternate_urls.mp4) {
+                const mp4Source = document.createElement('source');
+                mp4Source.src = getVideoSource(currentVideo.alternate_urls.mp4);
+                mp4Source.type = 'video/mp4';
+                videoElement.appendChild(mp4Source);
+                console.log("Added MP4 fallback source");
+              }
+            } catch (err) {
+              console.warn("Failed to add fallback source:", err);
+            }
+          }
+          
+          // Set src attribute as a final fallback
+          videoElement.src = videoSource;
+          
+          try {
+            videoElement.load();
+          } catch (loadError) {
+            console.warn("Error during video load():", loadError);
+          }
+        } catch (setupError) {
+          console.error("Error setting up video sources:", setupError);
+        }
+        
+        // Update UI metadata
+        if (isMounted) {
+          setLikes(currentVideo.likes || 0);
+          setDislikes(currentVideo.dislikes || 0);
+          setViews(currentVideo.views || 0);
+          
+          // Update URL without navigation
+          try {
+            window.history.replaceState(
+              { videoId: currentVideo.video_id },
+              '',
+              `/video/${currentVideo.video_id}`
+            );
+          } catch (error) {
+            console.error("Error updating URL:", error);
+          }
+          
+          // Check saved and follow status if user is logged in
+          if (currentUser) {
+            checkSavedStatus(currentVideo.video_id);
+            checkFollowStatus(currentVideo.user_id);
+          }
+        }
+        
+        // Attempt to play with full error handling
+        console.log("Attempting to play video...");
+        try {
+          const playPromise = videoElement.play();
+          
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => {
+                if (!isMounted) return;
+                console.log("Video playback started successfully");
+                setIsPlaying(true);
+                
+                // Report view if needed
+                if (!reportedViewRef.current) {
+                  incrementVideoView(currentVideo.video_id).catch(err => 
+                    console.error("Failed to increment view count:", err)
+                  );
+                  reportedViewRef.current = true;
+                }
+              })
+              .catch(err => {
+                if (!isMounted) return;
+                console.error("Error playing video:", err);
+                
+                // Try muted playback for autoplay policy
+                if (!videoElement.muted) {
+                  videoElement.muted = true;
+                  setIsMuted(true);
+                  
+                  videoElement.play().catch(e => {
+                    if (!isMounted) return;
+                    console.error("Muted autoplay also failed:", e);
+                    setIsPlaying(false);
+                  });
+                } else {
+                  setIsPlaying(false);
+                }
+              });
+          }
+        } catch (playError) {
+          console.error("Exception during play() attempt:", playError);
+        }
+      } catch (globalError) {
+        console.error("Global error in video loading process:", globalError);
+        if (isMounted) {
+          setSnackbarMessage("Error playing video: " + (globalError.message || "Unknown error"));
+          setShowSnackbar(true);
+        }
+      }
+    };
+
+    // Load video with a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(() => {
+      if (isMounted) {
+        loadVideo();
+      }
+    }, 100);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      
+      // Safely clean up video element on unmount
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.src = '';
+          videoRef.current.load();
+        } catch (cleanupError) {
+          console.warn("Error cleaning up video on unmount:", cleanupError);
+        }
+      }
+    };
+  }, [videos, currentIndex, currentUser]);
 
   // Check if a video is saved by the current user - used when video changes
   const checkSavedStatus = async (videoId) => {
@@ -648,22 +904,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const showLoginPrompt = (message) => {
     setSnackbarMessage(message || "Please log in to use this feature");
     setShowSnackbar(true);
-    
-    // Show the login notification again if it was hidden
-    if (!currentUser && !showLoginNotification) {
-      setShowLoginNotification(true);
-      
-      // Auto-hide again after 10 seconds
-      const timeout = setTimeout(() => {
-        setShowLoginNotification(false);
-      }, 10000);
-      
-      if (loginNotificationTimeout) {
-        clearTimeout(loginNotificationTimeout);
-      }
-      
-      setLoginNotificationTimeout(timeout);
-    }
   };
   
   // Used when the user clicks the snackbar close button
@@ -806,18 +1046,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   };
 
-  const handlePlayPause = () => {
-    const video = videoRef.current;
-    if (video) {
-      if (video.paused) {
-        video.play();
-      } else {
-        video.pause();
-      }
-      setIsPlaying(!video.paused);
-    }
-  };
-
   const handleTimeUpdate = () => {
     const video = videoRef.current;
     if (video) {
@@ -856,7 +1084,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     if (video) {
       const newSpeed = parseFloat(event.target.value);
       video.playbackRate = newSpeed;
-      setPlaybackSpeed(newSpeed);
     }
   };
 
@@ -868,53 +1095,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  const handleMouseMove = () => {
-    if (controlsTimeout) {
-      clearTimeout(controlsTimeout);
-    }
-    
-    setShowControls(true);
-    
-    const newTimeout = setTimeout(() => {
-      // Only hide controls if we're not at the start or end of the video
-      const video = videoRef.current;
-      if (video && video.currentTime > 0 && video.currentTime < video.duration) {
-        setShowControls(false);
-      }
-    }, 5000);
-    
-    setControlsTimeout(newTimeout);
-  };
-
   // Handle mouse wheel events for volume control
   const handleWheel = (e) => {
-    e.preventDefault();
-    const video = videoRef.current;
-    if (!video) return;
-    
-    // Adjust volume based on wheel direction (delta)
-    const delta = e.deltaY || e.detail || e.wheelDelta;
-    
-    if (delta > 0) {
-      // Wheel down - decrease volume
-      const newVolume = Math.max(0, video.volume - 0.1);
-      video.volume = newVolume;
-      setVolume(newVolume);
-    } else {
-      // Wheel up - increase volume
-      const newVolume = Math.min(1, video.volume + 0.1);
-      video.volume = newVolume;
-      setVolume(newVolume);
-    }
-    
-    // Ensure muted state matches volume
-    if (video.volume === 0) {
-      video.muted = true;
-      setIsMuted(true);
-    } else if (video.muted) {
-      video.muted = false;
-      setIsMuted(false);
-    }
+    // This entire function will be removed
   };
 
   // Add effect to show controls at video start and end
@@ -933,83 +1116,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   }, []);
 
-  const handleDoubleTap = (event) => {
-    const currentTime = new Date().getTime();
-    const tapLength = currentTime - lastTap;
-    
-    if (tapLength < 500 && tapLength > 0) {
-      const video = videoRef.current;
-      if (video) {
-        const rect = video.getBoundingClientRect();
-        const touch = event.changedTouches[0];
-        if (!touch) return;
-        
-        const x = touch.clientX - rect.left;
-        const width = rect.width;
-        
-        if (x > width * 0.7) {
-          // Right side - Fast forward
-          video.currentTime = Math.min(video.currentTime + 10, video.duration);
-          // Show visual feedback
-          setSnackbarMessage("Fast forward 10s");
-          setShowSnackbar(true);
-          setTimeout(() => setShowSnackbar(false), 1000);
-        } else if (x < width * 0.3) {
-          // Left side - Fast backward
-          video.currentTime = Math.max(video.currentTime - 10, 0);
-          // Show visual feedback
-          setSnackbarMessage("Rewind 10s");
-          setShowSnackbar(true);
-          setTimeout(() => setShowSnackbar(false), 1000);
-        } else {
-          // Middle area - Toggle play/pause
-          if (video.paused) {
-            video.play();
-          } else {
-            video.pause();
-          }
-        }
-      }
-    }
-    setLastTap(currentTime);
+  const handleDoubleClick = (event) => {
+    // This entire function will be removed
   };
 
-  const handleDoubleClick = (event) => {
-    const currentTime = new Date().getTime();
-    const clickLength = currentTime - lastClick;
-
-    if (clickLength < 500 && clickLength > 0) {
-      const video = videoRef.current;
-      if (video) {
-        const rect = video.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const width = rect.width;
-
-        if (x > width * 0.7) {
-          // Right side - Fast forward
-          video.currentTime = Math.min(video.currentTime + 10, video.duration);
-          // Show visual feedback
-          setSnackbarMessage("Fast forward 10s");
-          setShowSnackbar(true);
-          setTimeout(() => setShowSnackbar(false), 1000);
-        } else if (x < width * 0.3) {
-          // Left side - Fast backward
-          video.currentTime = Math.max(video.currentTime - 10, 0);
-          // Show visual feedback
-          setSnackbarMessage("Rewind 10s");
-          setShowSnackbar(true);
-          setTimeout(() => setShowSnackbar(false), 1000);
-        } else {
-          // Middle area - Toggle fullscreen
-    if (isFullScreen) {
-      exitFullScreen();
-    } else {
-      enterFullScreen();
-          }
-        }
-      }
-    }
-    setLastClick(currentTime);
+  const handleDoubleTap = (event) => {
+    // This entire function will be removed
   };
 
   const handleSeekChange = (e) => {
@@ -1021,34 +1133,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       const newTime = seekPos * videoRef.current.duration;
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
-    }
-  };
-
-  const togglePlayPause = () => {
-    if (!videoRef.current || !document.body.contains(videoRef.current)) return;
-    
-    const video = videoRef.current;
-    
-    if (video.paused) {
-      video.play().then(() => {
-        console.log("Video started playing successfully");
-        setIsPlaying(true);
-      }).catch(error => {
-        console.warn("Error playing video:", error);
-        setIsPlaying(false);
-      });
-    } else {
-      console.log("Video paused");
-      video.pause();
-      setIsPlaying(false);
-    }
-  };
-
-  // Handle video container click
-  const handleVideoContainerClick = (e) => {
-    // Prevent clicks on controls from triggering this
-    if (e.target === videoContainerRef.current || e.target === videoRef.current) {
-      togglePlayPause();
     }
   };
 
@@ -1064,28 +1148,15 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   // Add responsive layout calculations
   const theme = useTheme();
   const calculateVideoSize = () => {
-    if (isMobile) {
-      return {
-        width: '100%',
-        height: 'auto',
-        aspectRatio: '16/9',
-        maxHeight: '100vh'
-      };
-    } else if (isTablet) {
-      return {
-        width: '100%',
-        maxWidth: '100%',
-        height: 'auto',
-        aspectRatio: '16/9'
-      };
-    } else {
-      return {
-        width: '100%',
-        maxWidth: '100%',
-        height: 'auto',
-        aspectRatio: '16/9'
-      };
-    }
+    // Use 16:9 aspect ratio for all screen sizes
+    return {
+      width: '100%',
+      height: 'auto',
+      aspectRatio: '16/9',
+      maxWidth: '100%',
+      objectFit: 'contain',
+      margin: '0 auto' // Center the video
+    };
   };
 
   const videoStyles = calculateVideoSize();
@@ -1095,78 +1166,129 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     navigate("/");
   };
 
-  // Update getVideoSource to include proxy option for CORS issues
+  // Update getVideoSource to handle URLs properly for local development
   const getVideoSource = (videoUrl) => {
-    console.log("Processing video URL:", videoUrl);
+    console.log("Original video URL:", videoUrl);
     if (!videoUrl) {
       console.error("Video URL is null or undefined");
       return null;
     }
     
     try {
-      // First try to fix the URL if needed
+      // First normalize the URL
       let finalUrl = videoUrl;
       
-      // Check for relative URLs and prepend base URL if needed
-      if (videoUrl.startsWith('/') && !videoUrl.startsWith('//')) {
-        // This is a relative URL, add the API base URL
-        finalUrl = `${API_BASE_URL}${videoUrl}`;
+      // Clean up URL - sometimes APIs return URLs with escaped characters or extra quotes
+      if (typeof finalUrl === 'string') {
+        // Remove any quotes that might surround the URL
+        finalUrl = finalUrl.replace(/^["'](.*)["']$/, '$1');
+        
+        // Fix any double slashes (except after protocol)
+        finalUrl = finalUrl.replace(/([^:])\/\//g, '$1/');
+        
+        // Remove trailing parameters if they're causing problems
+        if (finalUrl.includes('?') && finalUrl.includes('format=')) {
+          const urlParts = finalUrl.split('?');
+          const extension = urlParts[0].split('.').pop().toLowerCase();
+          
+          // If URL has a valid extension, we can safely remove params
+          if (['mp4', 'webm', 'mov', 'ogg', 'mkv'].includes(extension)) {
+            finalUrl = urlParts[0];
+            console.log("Removed URL parameters to fix format issues");
+          }
+        }
+      }
+      
+      // Handle relative URLs from our API
+      if (finalUrl.startsWith('/')) {
+        const baseUrl = API_BASE_URL || "http://127.0.0.1:8000/api";
+        finalUrl = `${baseUrl}${finalUrl}`;
         console.log("Converted relative URL to:", finalUrl);
+        return finalUrl;
       }
       
-      // Ensure the URL has a protocol
-      if (!finalUrl.match(/^https?:\/\//i) && !finalUrl.startsWith('//')) {
-        finalUrl = `https://${finalUrl}`;
-        console.log("Added https protocol to URL:", finalUrl);
+      // If URL is already absolute with a protocol, return it directly
+      if (finalUrl.match(/^https?:\/\//i)) {
+        console.log("Using direct URL:", finalUrl);
+        return finalUrl;
       }
       
-      // Fix double-slash URLs
-      if (finalUrl.startsWith('//')) {
-        finalUrl = `https:${finalUrl}`;
-        console.log("Fixed protocol-relative URL:", finalUrl);
+      // If URL is missing protocol but isn't relative
+      if (!finalUrl.startsWith('/')) {
+        finalUrl = `http://${finalUrl}`;
+        console.log("Added http protocol to URL:", finalUrl);
+        return finalUrl;
       }
       
-      // Clean the URL
-      try {
-        const urlObj = new URL(finalUrl);
-        finalUrl = urlObj.toString();
-      } catch (e) {
-        console.error("Unable to parse URL:", finalUrl, e);
-      }
-      
-      // Log the resolved URL
-      console.log("Using video URL:", finalUrl);
-      
-      // Apply proxy if enabled (for CORS issues)
-      if (VIDEO_PROXY_ENABLED && finalUrl) {
-        finalUrl = VIDEO_PROXY_URL + finalUrl;
-        console.log("Applied proxy to URL:", finalUrl);
-      }
-      
+      console.log("Final video URL:", finalUrl);
       return finalUrl;
     } catch (error) {
       console.error("Error processing video URL:", error);
-      return videoUrl; // Return original URL as fallback
+      // Return original URL as fallback
+      return videoUrl;
     }
   };
   
-  // Update the MIME type function to use the utility
+  // Update the MIME type function to better handle video formats
   const getVideoMimeType = (url) => {
     if (!url) return 'video/mp4'; // Default
     
-    const extension = getFileExtension(url);
-    if (!extension) return 'video/mp4'; // Default if no extension found
+    // Improved extension detection
+    let extension = "";
     
-    // Map extensions to mime types
+    try {
+      // Extract extension from URL
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      const lastDotIndex = pathname.lastIndexOf('.');
+      
+      if (lastDotIndex !== -1) {
+        extension = pathname.substring(lastDotIndex + 1).toLowerCase();
+      }
+    } catch (e) {
+      // If URL parsing fails, try simple regex
+      const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
+      if (match && match[1]) {
+        extension = match[1].toLowerCase();
+      }
+    }
+    
+    // Default to mp4 if no extension found
+    if (!extension) {
+      console.log("No file extension found in URL, defaulting to mp4");
+      return 'video/mp4';
+    }
+    
+    console.log(`Detected file extension: ${extension}`);
+    
+    // Map extensions to MIME types
     switch (extension) {
-      case 'mp4': return 'video/mp4';
-      case 'webm': return 'video/webm';
-      case 'ogg': return 'video/ogg';
-      case 'mov': return 'video/quicktime';
-      case 'avi': return 'video/x-msvideo';
-      case 'wmv': return 'video/x-ms-wmv';
-      case 'm4v': return 'video/x-m4v';
-      default: return 'video/mp4';
+      case 'mp4':
+        return 'video/mp4';
+      case 'webm':
+        return 'video/webm';
+      case 'ogg':
+      case 'ogv':
+        return 'video/ogg';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'wmv':
+        return 'video/x-ms-wmv';
+      case 'm4v':
+        return 'video/x-m4v';
+      case 'mkv':
+        return 'video/x-matroska';
+      case '3gp':
+        return 'video/3gpp';
+      case 'ts':
+        return 'video/mp2t';
+      case 'flv':
+        return 'video/x-flv';
+      default:
+        console.log(`Unknown extension: ${extension}, defaulting to mp4`);
+        return 'video/mp4';
     }
   };
 
@@ -1175,7 +1297,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     const video = videoRef.current;
     let errorMessage = "Error loading video. Please try again.";
     
-    if (video && video.error) {
+    // Add proper null checks to prevent "Cannot read properties of null (reading 'code')" errors
+    if (video && video.error && typeof video.error.code === 'number') {
       // Check for specific error codes
       switch (video.error.code) {
         case MediaError.MEDIA_ERR_ABORTED:
@@ -1185,12 +1308,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           errorMessage = "Network error occurred while loading the video.";
           break;
         case MediaError.MEDIA_ERR_DECODE:
-          errorMessage = "Video decoding error. The format may not be supported.";
+          errorMessage = "Video decoding error. Trying alternate format...";
+          // Automatically try fallback format
+          tryFallbackFormats();
           break;
         case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMessage = "Video format or MIME type is not supported by your browser.";
-          
-          // Try to load a fallback video with a different format if available
+          errorMessage = "This video format is not supported by your browser. Trying alternate format...";
+          // Automatically try fallback format
           tryFallbackFormats();
           break;
         default:
@@ -1199,12 +1323,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       
       console.error("Video error details:", {
         code: video.error.code,
-        message: video.error.message,
+        message: video.error.message || 'No detailed error message available',
         errorMessage: errorMessage,
-        videoUrl: videos[currentIndex]?.video_url
+        videoUrl: videos && currentIndex < videos.length ? videos[currentIndex]?.video_url : 'unknown'
       });
     } else {
-      console.error("Video error (no details available):", error);
+      console.error("Video error occurred, but error details are not available:", error);
+      // Still try fallback formats in case it's a MIME type issue
+      tryFallbackFormats();
     }
     
     setSnackbarMessage(errorMessage);
@@ -1213,15 +1339,54 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   
   // Add function to try loading different video formats as fallback
   const tryFallbackFormats = () => {
-    const currentVideo = videos[currentIndex];
-    if (!currentVideo || !currentVideo.video_url) return;
+    if (!videos || !videos[currentIndex] || !videoRef.current) return;
     
-    // This function would handle the scenario where multiple format URLs are available
+    const currentVideo = videos[currentIndex];
     console.log("Attempting to find alternative video formats...");
     
-    // If your API provides alternative format URLs, you would use them here
-    // For now, we'll just log a message
-    console.log("No alternative formats available from API");
+    const video = videoRef.current;
+    
+    // Create a list of potential formats to try
+    const tryFormats = ['mp4', 'webm', 'mov'];
+    
+    // Clear existing sources
+    while (video.firstChild) {
+      video.removeChild(video.firstChild);
+    }
+    
+    // Always try MP4 as first fallback
+    const baseUrl = currentVideo.video_url.split('.').slice(0, -1).join('.');
+    
+    let formatAttempted = false;
+    
+    // Try to append each format extension
+    for (const format of tryFormats) {
+      try {
+        const formatUrl = `${baseUrl}.${format}`;
+        console.log(`Trying fallback format: ${format}, URL: ${formatUrl}`);
+        
+        const source = document.createElement('source');
+        source.src = getVideoSource(formatUrl);
+        source.type = `video/${format === 'mov' ? 'quicktime' : format}`;
+        video.appendChild(source);
+        formatAttempted = true;
+      } catch (err) {
+        console.warn(`Failed to add ${format} source:`, err);
+      }
+    }
+    
+    // If no formats were successfully attempted, fall back to the original URL
+    if (!formatAttempted) {
+      video.src = getVideoSource(currentVideo.video_url);
+    }
+    
+    // Try to load and play
+    try {
+      video.load();
+      video.play().catch(err => console.error("Fallback playback failed:", err));
+    } catch (err) {
+      console.error("Failed to play fallback format:", err);
+    }
   };
 
   // Add event listeners in useEffect
@@ -1255,9 +1420,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       addEventListenerWithCleanup(video, 'touchstart', handleTouchStart);
       addEventListenerWithCleanup(video, 'touchmove', handleTouchMove);
       addEventListenerWithCleanup(video, 'touchend', handleTouchEnd);
-      addEventListenerWithCleanup(video, 'touchend', handleDoubleTap);
-      addEventListenerWithCleanup(video, 'dblclick', handleDoubleClick);
-      addEventListenerWithCleanup(video, 'wheel', handleWheel, { passive: false });
       
       // Window and document level events
       addEventListenerWithCleanup(window, 'keydown', handleKeyDown);
@@ -1284,9 +1446,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
-    handleDoubleTap,
-    handleDoubleClick,
-    handleWheel,
     handleKeyDown,
     handleFullscreenChange
   ]);
@@ -1357,159 +1516,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     };
   }, [currentUser, videos, currentIndex, isPlaying, isLiked, isDisliked, isSaved, watchShared, deviceType]);
 
-  // New function to handle navigation to login page
-  const handleLoginClick = (e) => {
-    e.stopPropagation(); // Prevent video click events
-    navigate('/login');
-  };
-
-  // Auto-hide the login notification after 10 seconds
-  useEffect(() => {
-    if (!currentUser && showLoginNotification) {
-      // Set timeout to hide notification after 10 seconds
-      const timeout = setTimeout(() => {
-        setShowLoginNotification(false);
-      }, 10000);
-      
-      setLoginNotificationTimeout(timeout);
-      
-      return () => {
-        if (loginNotificationTimeout) {
-          clearTimeout(loginNotificationTimeout);
-        }
-      };
-    }
-  }, [currentUser, showLoginNotification, loginNotificationTimeout]);
-
-  // Add a method to update the URL without triggering navigation
-  const updateUrlWithoutNavigation = (videoId) => {
-    if (!videoId || isUrlUpdating) return;
-    
-    try {
-      setIsUrlUpdating(true);
-      const newUrl = `/video/${videoId}`;
-      window.history.replaceState({ videoId }, '', newUrl);
-    } catch (error) {
-      console.error("Error updating URL:", error);
-    } finally {
-      setIsUrlUpdating(false);
-    }
-  };
-
-  // Update URL when current video changes
-  useEffect(() => {
-    if (videos && videos.length > 0 && currentIndex >= 0 && currentIndex < videos.length) {
-      const currentVideo = videos[currentIndex];
-      if (currentVideo && currentVideo.video_id) {
-        updateUrlWithoutNavigation(currentVideo.video_id);
-      }
-    }
-  }, [currentIndex, videos, updateUrlWithoutNavigation]);
-
-  // Add useEffect to ensure video plays properly when component loads or video changes
-  useEffect(() => {
-    // Skip if no videos available or invalid index
-    if (!videos || videos.length === 0 || currentIndex >= videos.length) {
-      return;
-    }
-    
-    const currentVideo = videos[currentIndex];
-    if (!currentVideo || !currentVideo.video_url) {
-      console.error("Current video is invalid:", currentVideo);
-      return;
-    }
-    
-    console.log("Loading video for playback:", currentVideo.video_url, "index:", currentIndex);
-    
-    // Get the video element
-    const videoElement = videoRef.current;
-    if (!videoElement) {
-      console.error("Video element reference is not available");
-      return;
-    }
-    
-    // Track if component is mounted to prevent state updates after unmount
-    let isMounted = true;
-    
-    // Clean up current video before setting new source
-    videoElement.pause();
-    videoElement.removeAttribute('src');
-    videoElement.load();
-    
-    // Set the source and start loading
-    const videoSource = getVideoSource(currentVideo.video_url);
-    
-    if (videoSource) {
-      videoElement.src = videoSource;
-      videoElement.load();
-      
-      // Set metadata for the new video
-      setLikes(currentVideo.likes || 0);
-      setDislikes(currentVideo.dislikes || 0);
-      setViews(currentVideo.views || 0);
-      
-      // Check saved status and follow status for new video
-      if (currentUser) {
-        checkSavedStatus(currentVideo.video_id);
-        checkFollowStatus(currentVideo.user_id);
-      }
-      
-      // Update URL without navigation
-      updateUrlWithoutNavigation(currentVideo.video_id);
-      
-      // Attempt to play the video after a short delay to ensure it's loaded
-      const playPromise = setTimeout(() => {
-        if (!isMounted) return;
-        
-        videoElement.play()
-          .then(() => {
-            if (!isMounted) return;
-            console.log("Video started playing successfully");
-            setIsPlaying(true);
-            
-            // Report view to API if this is a new view
-            if (!reportedViewRef.current) {
-              try {
-                incrementVideoView(currentVideo.video_id).catch(err => 
-                  console.error("Failed to increment view count:", err)
-                );
-                reportedViewRef.current = true;
-              } catch (err) {
-                console.error("Error incrementing view:", err);
-              }
-            }
-          })
-          .catch(err => {
-            if (!isMounted) return;
-            console.error("Error playing video:", err);
-            // Try again with muted (browsers often allow muted autoplay)
-            if (!videoElement.muted) {
-              console.log("Trying to play muted...");
-              videoElement.muted = true;
-              setIsMuted(true);
-              videoElement.play().catch(e => {
-                if (!isMounted) return;
-                console.error("Even muted autoplay failed:", e);
-                setIsPlaying(false);
-              });
-            } else {
-              setIsPlaying(false);
-            }
-          });
-      }, 300);
-      
-      return () => {
-        isMounted = false;
-        clearTimeout(playPromise);
-      };
-    } else {
-      console.error("Failed to get valid video source");
-    }
-  }, [videos, currentIndex, currentUser]);
-
-  // Create a ref to track which videos we've reported views for
-  const reportedViewRef = useRef(false);
-
   // Reset the reported view flag when video changes
   useEffect(() => {
     reportedViewRef.current = false;
@@ -1569,15 +1575,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         clearInterval(watchTrackerInterval);
       }
       
-      if (loginNotificationTimeout) {
-        clearTimeout(loginNotificationTimeout);
-      }
-      
       if (controlsTimeout) {
         clearTimeout(controlsTimeout);
       }
     };
-  }, [watchTrackerInterval, loginNotificationTimeout, controlsTimeout]);
+  }, [watchTrackerInterval, controlsTimeout]);
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
@@ -1604,14 +1606,10 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       ref={videoContainerRef}
       sx={{
         width: '100%',
-        height: '100%',
+        height: '100vh',
         position: 'relative',
         bgcolor: '#000',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center'
+        overflow: 'hidden'
       }}
       onClick={handleVideoContainerClick}
       onMouseMove={handleMouseMove}
@@ -1619,67 +1617,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
     >
-      {/* Login notification */}
-      {!currentUser && showLoginNotification && (
-        <Box
-          sx={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 1500,
-            width: { xs: "90%", sm: "60%", md: "40%" },
-            backgroundColor: "rgba(0, 0, 0, 0.8)",
-            borderRadius: 2,
-            p: 2,
-            boxShadow: "0 0 20px rgba(44, 255, 5, 0.5)",
-            border: "1px solid #2CFF05",
-            textAlign: "center",
-            backdropFilter: "blur(8px)",
-          }}
-          onClick={(e) => e.stopPropagation()} // Prevent video click events
-        >
-          <Typography variant="h6" sx={{ color: "#2CFF05", mb: 1 }}>
-            Sign in to get the full experience!
-          </Typography>
-          <Typography variant="body1" sx={{ color: "white", mb: 2 }}>
-            Create an account to like videos, follow creators, and keep track of your watch history.
-          </Typography>
-          <Button
-            variant="contained"
-            onClick={handleLoginClick}
-            sx={{
-              backgroundColor: "#2CFF05",
-              color: "#000",
-              "&:hover": {
-                backgroundColor: "#25CC04",
-              },
-              mb: 1,
-              width: { xs: "100%", sm: "auto" }
-            }}
-          >
-            Sign In
-          </Button>
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowLoginNotification(false);
-            }}
-            sx={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              color: "white",
-            }}
-          >
-            <Close fontSize="small" />
-          </IconButton>
-        </Box>
-      )}
-
       {/* Back button that appears/disappears with controls */}
-      <Slide direction="down" in={showControls || !isPlaying} timeout={300}>
+      <Slide direction="down" in={showControls} timeout={300}>
         <IconButton
           onClick={goToHomePage}
           sx={{ 
@@ -1688,7 +1627,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             left: 20,
             bgcolor: 'rgba(0, 0, 0, 0.6)',
             color: 'white',
-            zIndex: 1600, // Higher z-index to stay above other controls
+            zIndex: 1600,
             '&:hover': {
               bgcolor: 'rgba(0, 0, 0, 0.8)',
             },
@@ -1698,52 +1637,94 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         </IconButton>
       </Slide>
 
-      {/* Video Element with multiple source options */}
+      {/* Video element - directly in the container */}
       <video
         ref={videoRef}
-        playsInline
+        playsInline={true}
         muted={isMuted}
-        autoPlay={false} // We'll control playback manually for better reliability
-        loop={false} // Ensure loop is false to prevent repeating same video
-        controls={false}
+        autoPlay={true}
+        loop={false}
+        preload="auto"
+        poster={videos[currentIndex]?.thumbnail_url}
         onEnded={handleVideoEnd}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onPlay={() => {
-          console.log("Video started playing successfully");
-          setIsPlaying(true);
-        }}
-        onPause={() => {
-          console.log("Video paused");
-          setIsPlaying(false);
-        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
         onVolumeChange={handleVolumeChange}
         onCanPlay={() => {
-          console.log("Video is ready to play");
-          // Try to play when canplay event fires
-          videoRef.current?.play().catch(e => console.error("Error auto-playing:", e));
+          console.log("Video can now play");
+          const video = videoRef.current;
+          if (video) {
+            video.play()
+              .then(() => console.log("Auto play started successfully"))
+              .catch(e => {
+                console.error("Error auto-playing:", e);
+                if (!video.muted) {
+                  console.log("Trying muted autoplay...");
+                  video.muted = true;
+                  setIsMuted(true);
+                  video.play().catch(err => console.error("Muted autoplay also failed:", err));
+                }
+              });
+          }
         }}
         onError={(e) => {
-          console.error("Video error event:", e);
-          console.error("Video error code:", videoRef.current?.error?.code);
-          console.error("Video error message:", videoRef.current?.error?.message);
+          // Safe error handling with null checks
+          console.error("Video error event triggered");
+          
+          // Safely log video URL
+          const videoUrl = videos && currentIndex < videos.length && videos[currentIndex] 
+            ? videos[currentIndex].video_url 
+            : 'unknown video URL';
+          console.error("Video URL:", videoUrl);
+          
+          // Safely check for error details with null guards
+          if (videoRef.current) {
+            const videoError = videoRef.current.error;
+            if (videoError) {
+              console.error("Video error code:", videoError.code || 'No error code available');
+              console.error("Video error message:", videoError.message || 'No error message available');
+            } else {
+              console.error("Video error occurred but error object is null");
+            }
+          } else {
+            console.error("Video ref is null when error occurred");
+          }
+          
+          // Call error handler with the event
           handleVideoError(e);
         }}
+        crossOrigin="anonymous"
         style={{
-          ...videoStyles,
-          objectFit: 'contain',
-          zIndex: 1,
-          display: getVideoSource(videos[currentIndex]?.video_url) ? 'block' : 'none'
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          background: '#000'
         }}
       >
-        {/* Primary video source - don't use source elements for dynamic videos */}
-        {/* Using the src attribute directly on the video element is more reliable for React */}
+        {/* Adding fallback source types by default */}
+        <source 
+          src={getVideoSource(videos[currentIndex]?.video_url)} 
+          type={getVideoMimeType(videos[currentIndex]?.video_url)}
+        />
+        {/* MP4 Fallback */}
+        <source 
+          src={getVideoSource(videos[currentIndex]?.video_url.replace(/\.[^.]+$/, '.mp4'))} 
+          type="video/mp4"
+        />
+        {/* WebM Fallback */}
+        <source 
+          src={getVideoSource(videos[currentIndex]?.video_url.replace(/\.[^.]+$/, '.webm'))} 
+          type="video/webm"
+        />
+        Your browser does not support the video tag.
       </video>
 
       {/* Show error message when video source is invalid */}
       {!getVideoSource(videos[currentIndex]?.video_url) && (
-      <Box
-        sx={{
+        <Box
+          sx={{
             position: 'absolute',
             top: '50%',
             left: '50%',
@@ -1758,75 +1739,66 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           </Typography>
           <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
             Please try another video
-        </Typography>
-      </Box>
+          </Typography>
+        </Box>
       )}
 
       {/* Up/Down Navigation repositioned - Up arrow below follow button, Down arrow above player bar */}
       {videos.length > 1 && (
-        <>
-          {/* Up Arrow - positioned below follow button */}
+        <Box
+          sx={{
+            position: 'absolute',
+            right: 20,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '200px',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            zIndex: 15,
+            opacity: showControls ? 1 : 0,
+            transition: 'opacity 300ms ease-in-out',
+          }}
+        >
+          {/* Up Arrow */}
           {currentIndex > 0 && (
-      <Box
-        sx={{
-                position: 'absolute',
-                right: 20,
-                top: { xs: 'auto', sm: '45%' }, // Below follow button on desktop, different on mobile
-                display: showControls || !isPlaying ? 'flex' : 'none', // Show/hide without slide animation
-                zIndex: 15,
-                opacity: showControls || !isPlaying ? 1 : 0,
-                transition: 'opacity 300ms ease-in-out', // Fade in/out instead of slide
+            <IconButton
+              onClick={() => setCurrentIndex(currentIndex - 1)}
+              sx={{
+                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                color: '#2CFF05', // Using the neon green from theme
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.8)',
+                  boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                },
               }}
             >
-              <IconButton
-                onClick={() => setCurrentIndex(currentIndex - 1)}
-                sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.6)',
-                  color: '#2CFF05', // Using the neon green from theme
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.8)',
-                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                  },
-                }}
-              >
-                <ArrowUpward />
-        </IconButton>
-            </Box>
+              <ArrowUpward />
+            </IconButton>
           )}
 
-          {/* Down Arrow - positioned above player bar */}
+          {/* Down Arrow */}
           {currentIndex < videos.length - 1 && (
-            <Box
+            <IconButton
+              onClick={() => setCurrentIndex(currentIndex + 1)}
               sx={{
-                position: 'absolute',
-                right: 20,
-                bottom: 300, // Just above the player controls
-                display: showControls || !isPlaying ? 'flex' : 'none', // Show/hide without slide animation
-                zIndex: 15,
-                opacity: showControls || !isPlaying ? 1 : 0,
-                transition: 'opacity 300ms ease-in-out', // Fade in/out instead of slide
+                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                color: '#2CFF05', // Using the neon green from theme
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.8)',
+                  boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                },
               }}
             >
-              <IconButton
-                onClick={() => setCurrentIndex(currentIndex + 1)}
-                sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.6)',
-                  color: '#2CFF05', // Using the neon green from theme
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.8)',
-                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                  },
-                }}
-              >
-                <ArrowDownward />
-        </IconButton>
-            </Box>
+              <ArrowDownward />
+            </IconButton>
           )}
-        </>
+        </Box>
       )}
 
       {/* Mobile-optimized video controls overlay */}
-      <Slide direction="up" in={showControls || !isPlaying} timeout={300}>
+      <Slide direction="up" in={showControls} timeout={300}>
       <Box
         sx={{
             position: 'absolute',
@@ -1965,7 +1937,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       </Slide>
 
       {/* Video Info Overlay */}
-      <Slide direction="down" in={showControls || !isPlaying} timeout={300}>
+      <Slide direction="down" in={showControls} timeout={300}>
       <Box
         sx={{
             position: 'absolute',
