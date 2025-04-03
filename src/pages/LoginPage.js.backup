@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   TextField, 
   Button, 
@@ -18,9 +18,9 @@ import {
   IconButton,
   Divider
 } from '@mui/material';
-import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Visibility, VisibilityOff, ArrowBack } from '@mui/icons-material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import axios from 'axios';
 
 const LoginPage = () => {
@@ -30,9 +30,7 @@ const LoginPage = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isDemo, setIsDemo] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
   const { login } = useAuth();
   
   // Password reset states
@@ -49,11 +47,6 @@ const LoginPage = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  // Check if we're in demo mode
-  useEffect(() => {
-    setIsDemo(location.pathname.startsWith('/demo'));
-  }, [location.pathname]);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setCredentials({ ...credentials, [name]: value });
@@ -66,18 +59,12 @@ const LoginPage = () => {
 
     try {
       await login(credentials);
-      // Navigate back to the appropriate home page based on current path
-      navigate(isDemo ? '/demo/' : '/');
+      navigate('/');
     } catch (err) {
       setError(err.detail || 'Failed to login. Please check your credentials.');
     } finally {
       setLoading(false);
     }
-  };
-  
-  const handleBackToHome = () => {
-    // Navigate to the appropriate home page based on where we came from
-    navigate(isDemo ? '/demo/' : '/');
   };
   
   const handleOpenResetDialog = () => {
@@ -178,26 +165,6 @@ const LoginPage = () => {
       bgcolor="#000"
       color="white"
     >
-      {/* Back button */}
-      <Box 
-        sx={{ 
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          zIndex: 10
-        }}
-      >
-        <Button
-          startIcon={<ArrowBack />}
-          variant="contained"
-          color="primary"
-          onClick={handleBackToHome}
-          sx={{ mb: 2 }}
-        >
-          Back to {isDemo ? 'Demo' : 'Waiting List'}
-        </Button>
-      </Box>
-
       <Card sx={{ maxWidth: 400, width: '100%', bgcolor: '#121212', color: 'white', borderRadius: 3 }}>
         <CardContent>
           <Typography variant="h4" component="h1" align="center" gutterBottom>
@@ -253,52 +220,61 @@ const LoginPage = () => {
               }}
             />
             
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              color="primary"
+              size="large"
+              disabled={loading}
+              sx={{ mb: 2 }}
+            >
+              {loading ? (
+                <>
+                  <CircularProgress size={24} sx={{ mr: 1 }} color="inherit" />
+                  Logging in...
+                </>
+              ) : 'Login'}
+            </Button>
+            
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 2 }}>
               <Button
                 variant="outlined"
                 color="primary"
                 size="large"
                 fullWidth
-                onClick={handleBackToHome}
+                onClick={() => navigate('/')}
               >
                 Cancel
               </Button>
               
               <Button
-                type="submit"
-                fullWidth
-                variant="contained"
+                variant="outlined"
                 color="primary"
                 size="large"
-                disabled={loading}
+                fullWidth
+                onClick={handleOpenResetDialog}
               >
-                {loading ? (
-                  <>
-                    <CircularProgress size={24} sx={{ mr: 1 }} color="inherit" />
-                    Logging in...
-                  </>
-                ) : 'Login'}
+                Reset Password
               </Button>
             </Box>
-          </form>
-          
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', mt: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              <Link component="button" variant="body2" onClick={handleOpenResetDialog}>
-                Forgot password?
-              </Link>
-            </Typography>
             
-            <Typography variant="body2" color="text.secondary">
-              <Link 
-                component={RouterLink} 
-                to={isDemo ? "/demo/register" : "/register"} 
-                variant="body2"
-              >
-                Don't have an account? Sign up
-              </Link>
-            </Typography>
-          </Box>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                mb: 2 
+              }}
+            >
+              <Typography>
+                Don't have an account?{' '}
+                <Link component={RouterLink} to="/register" color="primary">
+                  Register
+                </Link>
+              </Typography>
+            </Box>
+          </form>
         </CardContent>
       </Card>
       

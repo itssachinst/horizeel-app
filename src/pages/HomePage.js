@@ -13,11 +13,12 @@ import {
   Avatar,
   Button,
   CardContent,
-  CardActionArea
+  CardActionArea,
+  Link
 } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { searchVideos } from "../api";
-import { Visibility, Person, PlayArrow } from "@mui/icons-material";
+import { Visibility, Person, PlayArrow, ArrowBack } from "@mui/icons-material";
 import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 import { useVideoContext } from "../contexts/VideoContext";
@@ -39,6 +40,7 @@ const HomePage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showMobilePromo, setShowMobilePromo] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
   
   const observer = useRef();
   const navigate = useNavigate();
@@ -47,6 +49,11 @@ const HomePage = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const ITEMS_PER_PAGE = 20;
+
+  // Check if we're in demo mode
+  useEffect(() => {
+    setIsDemo(location.pathname.startsWith('/demo'));
+  }, [location.pathname]);
 
   // Effect to check if user is on mobile browser
   useEffect(() => {
@@ -428,6 +435,30 @@ const HomePage = () => {
     </Box>
   );
 
+  // Demo mode banner component
+  const DemoBanner = () => (
+    <Box 
+      sx={{ 
+        width: '100%', 
+        py: 1, 
+        px: 2, 
+        bgcolor: 'primary.main', 
+        color: 'primary.contrastText',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        mb: 2
+      }}
+    >
+      <ArrowBack sx={{ mr: 1 }} />
+      <Typography variant="body2">
+        <Link href="/" color="inherit" underline="hover">
+          Return to waiting list
+        </Link>
+      </Typography>
+    </Box>
+  );
+
   if (showMobilePromo) {
     return <MobileAppPromo />;
   }
@@ -436,7 +467,11 @@ const HomePage = () => {
   const isLoading = isSearching ? searchLoading : loading;
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, pb: 8 }}>
+    <Container maxWidth="xl" sx={{ pt: 2, pb: 8 }}>
+      {isDemo && <DemoBanner />}
+      
+      {showMobilePromo && <MobileAppPromo />}
+      
       {isSearching && (
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h5">

@@ -17,7 +17,8 @@ import {
   Tooltip,
   Autocomplete,
   Paper,
-  Typography
+  Typography,
+  Button
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -28,10 +29,11 @@ import {
   BookmarkBorder as BookmarkIcon,
   Menu as MenuIcon,
   Mic as MicIcon,
-  Feedback as FeedbackIcon
+  Feedback as FeedbackIcon,
+  ExitToApp as ExitIcon
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 
@@ -84,6 +86,7 @@ const ActionIconButton = styled(IconButton)(({ theme }) => ({
 const Header = () => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   // const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
@@ -92,9 +95,15 @@ const Header = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [trendingHashtags, setTrendingHashtags] = useState(['#shorts', '#music', '#gaming', '#tutorial', '#funny']);
   const [showTrending, setShowTrending] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
   
   const isMenuOpen = Boolean(anchorEl);
   const isMobileMenuOpen = Boolean(mobileMenuAnchorEl);
+
+  // Check if we're in demo mode
+  useEffect(() => {
+    setIsDemo(location.pathname.startsWith('/demo'));
+  }, [location.pathname]);
 
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -166,7 +175,12 @@ const Header = () => {
     handleMenuClose();
   };
 
-  // Desktop menu
+  const handleSwitchToWaitingList = () => {
+    navigate('/');
+    handleMenuClose();
+  };
+
+  // Desktop menu with added waiting list option
   const renderMenu = (
     <Menu
       anchorEl={anchorEl}
@@ -232,6 +246,14 @@ const Header = () => {
         Feedback
       </MenuItem>
       <Divider />
+      {isDemo && (
+        <MenuItem onClick={handleSwitchToWaitingList}>
+          <ListItemIcon>
+            <ExitIcon fontSize="small" />
+          </ListItemIcon>
+          Return to Waiting List
+        </MenuItem>
+      )}
       <MenuItem onClick={handleLogout}>
         <ListItemIcon>
           <LogoutIcon fontSize="small" />
@@ -356,8 +378,8 @@ const Header = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="sticky" sx={{ background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)' }}>
-        <Toolbar>
+      <AppBar position="sticky" color="default" sx={{ backgroundColor: '#121212' }}>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <IconButton
               size="large"
@@ -370,8 +392,15 @@ const Header = () => {
               <MenuIcon />
             </IconButton>
             
-            <Box sx={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
-              <Logo height={40} />
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+              onClick={() => navigate(isDemo ? '/demo/' : '/')}
+            >
+              <Logo />
             </Box>
           </Box>
           
@@ -413,6 +442,23 @@ const Header = () => {
                 <AccountCircleIcon />
               )}
             </ActionIconButton>
+            
+            {isDemo && (
+              <Tooltip title="Return to Waiting List">
+                <Button 
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                  onClick={handleSwitchToWaitingList}
+                  sx={{ 
+                    ml: 1,
+                    display: { xs: 'none', md: 'flex' } 
+                  }}
+                >
+                  Waiting List
+                </Button>
+              </Tooltip>
+            )}
           </Box>
         </Toolbar>
       </AppBar>

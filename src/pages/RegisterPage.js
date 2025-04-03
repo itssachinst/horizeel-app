@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { TextField, Button, Typography, Box, Card, CardContent, Link } from '@mui/material';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { TextField, Button, Typography, Box, Card, CardContent, Link, IconButton } from '@mui/material';
+import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { ArrowBack } from '@mui/icons-material';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -12,8 +13,15 @@ const RegisterPage = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isDemo, setIsDemo] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { register, login } = useAuth();
+
+  // Check if we're in demo mode
+  useEffect(() => {
+    setIsDemo(location.pathname.startsWith('/demo'));
+  }, [location.pathname]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,8 +67,8 @@ const RegisterPage = () => {
       console.log('Registration successful, attempting login...');
       await login({ email, password });
       
-      // Redirect to home page
-      navigate('/');
+      // Redirect to appropriate home page based on current path
+      navigate(isDemo ? '/demo/' : '/');
     } catch (err) {
       console.error('Registration error:', err);
       
@@ -147,6 +155,11 @@ const RegisterPage = () => {
     }
   };
 
+  const handleBackToHome = () => {
+    // Navigate to the appropriate home page based on current path
+    navigate(isDemo ? '/demo/' : '/');
+  };
+
   return (
     <Box
       display="flex"
@@ -157,6 +170,26 @@ const RegisterPage = () => {
       bgcolor="#000"
       color="white"
     >
+      {/* Back button */}
+      <Box 
+        sx={{ 
+          position: 'absolute',
+          top: 16,
+          left: 16,
+          zIndex: 10
+        }}
+      >
+        <Button
+          startIcon={<ArrowBack />}
+          variant="contained"
+          color="primary"
+          onClick={handleBackToHome}
+          sx={{ mb: 2 }}
+        >
+          Back to {isDemo ? 'Demo' : 'Waiting List'}
+        </Button>
+      </Box>
+
       <Card sx={{ maxWidth: 400, width: '100%', bgcolor: '#121212', color: 'white', borderRadius: 3 }}>
         <CardContent>
           <Typography variant="h4" component="h1" align="center" gutterBottom>
@@ -282,36 +315,41 @@ const RegisterPage = () => {
               }}
             />
             
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              color="primary"
-              size="large"
-              disabled={loading}
-              sx={{ mb: 2 }}
-            >
-              {loading ? 'Creating Account...' : 'Register'}
-            </Button>
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 3 }}>
               <Button
                 variant="outlined"
                 color="primary"
                 size="large"
                 fullWidth
-                onClick={() => navigate('/')}
+                onClick={handleBackToHome}
               >
                 Cancel
               </Button>
+              
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                color="primary"
+                size="large"
+                disabled={loading}
+              >
+                {loading ? 'Creating Account...' : 'Register'}
+              </Button>
             </Box>
-            
-            <Typography align="center">
-              Already have an account?{' '}
-              <Link component={RouterLink} to="/login" color="primary">
-                Login
-              </Link>
-            </Typography>
+
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Already have an account?{' '}
+                <Link 
+                  component={RouterLink} 
+                  to={isDemo ? "/demo/login" : "/login"} 
+                  variant="body2"
+                >
+                  Login
+                </Link>
+              </Typography>
+            </Box>
           </form>
         </CardContent>
       </Card>
