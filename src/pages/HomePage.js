@@ -435,30 +435,6 @@ const HomePage = () => {
     </Box>
   );
 
-  // Demo mode banner component
-  const DemoBanner = () => (
-    <Box 
-      sx={{ 
-        width: '100%', 
-        py: 1, 
-        px: 2, 
-        bgcolor: 'primary.main', 
-        color: 'primary.contrastText',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        mb: 2
-      }}
-    >
-      <ArrowBack sx={{ mr: 1 }} />
-      <Typography variant="body2">
-        <Link href="/" color="inherit" underline="hover">
-          Return to waiting list
-        </Link>
-      </Typography>
-    </Box>
-  );
-
   if (showMobilePromo) {
     return <MobileAppPromo />;
   }
@@ -468,8 +444,6 @@ const HomePage = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pt: 2, pb: 8 }}>
-      {isDemo && <DemoBanner />}
-      
       {showMobilePromo && <MobileAppPromo />}
       
       {isSearching && (

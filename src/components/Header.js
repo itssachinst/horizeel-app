@@ -29,8 +29,7 @@ import {
   BookmarkBorder as BookmarkIcon,
   Menu as MenuIcon,
   Mic as MicIcon,
-  Feedback as FeedbackIcon,
-  ExitToApp as ExitIcon
+  Feedback as FeedbackIcon
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -175,11 +174,6 @@ const Header = () => {
     handleMenuClose();
   };
 
-  const handleSwitchToWaitingList = () => {
-    navigate('/');
-    handleMenuClose();
-  };
-
   // Desktop menu with added waiting list option
   const renderMenu = (
     <Menu
@@ -246,14 +240,6 @@ const Header = () => {
         Feedback
       </MenuItem>
       <Divider />
-      {isDemo && (
-        <MenuItem onClick={handleSwitchToWaitingList}>
-          <ListItemIcon>
-            <ExitIcon fontSize="small" />
-          </ListItemIcon>
-          Return to Waiting List
-        </MenuItem>
-      )}
       <MenuItem onClick={handleLogout}>
         <ListItemIcon>
           <LogoutIcon fontSize="small" />
@@ -442,23 +428,6 @@ const Header = () => {
                 <AccountCircleIcon />
               )}
             </ActionIconButton>
-            
-            {isDemo && (
-              <Tooltip title="Return to Waiting List">
-                <Button 
-                  color="primary"
-                  variant="outlined"
-                  size="small"
-                  onClick={handleSwitchToWaitingList}
-                  sx={{ 
-                    ml: 1,
-                    display: { xs: 'none', md: 'flex' } 
-                  }}
-                >
-                  Waiting List
-                </Button>
-              </Tooltip>
-            )}
           </Box>
         </Toolbar>
       </AppBar>
