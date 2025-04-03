@@ -301,18 +301,19 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       return;
     }
     
-    console.log("Loading video:", currentVideo.video_url);
+    console.log(`Loading video ${currentIndex}:`, currentVideo.video_url);
     
-    let isMounted = true;
     // Reset the reported view flag for the new video
     reportedViewRef.current = false;
+    
+    // Track if component is mounted
+    let isMounted = true;
     
     const loadVideo = async () => {
       try {
         // Clean up current video with error handling
         try {
           videoElement.pause();
-          videoElement.removeAttribute('src');
           
           // Safely remove child elements
           while (videoElement.firstChild) {
@@ -324,13 +325,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             }
           }
           
+          videoElement.removeAttribute('src');
           videoElement.load();
         } catch (cleanupError) {
           console.warn("Error during video cleanup:", cleanupError);
-          // Continue despite cleanup errors
         }
         
-        // Get video source with error handling
+        // Get video source with error handling - directly use S3 URLs
         let videoSource;
         try {
           videoSource = getVideoSource(currentVideo.video_url);
@@ -353,50 +354,32 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           return;
         }
         
+        // Get MIME type with error handling - focus on MP4 for S3
+        let mimeType;
+        try {
+          mimeType = getVideoMimeType(currentVideo.video_url);
+          console.log("Using MIME type:", mimeType);
+        } catch (mimeError) {
+          console.warn("Error getting MIME type:", mimeError);
+          mimeType = 'video/mp4'; // Default to mp4
+        }
+        
         // Set sources with error handling
         try {
-          // Set the source with multiple format support
+          // Set the source as MP4 - we know S3 files are MP4
           const sourceElement = document.createElement('source');
           sourceElement.src = videoSource;
-          
-          // Get MIME type with error handling
-          let mimeType;
-          try {
-            mimeType = getVideoMimeType(currentVideo.video_url);
-          } catch (mimeError) {
-            console.warn("Error getting MIME type:", mimeError);
-            mimeType = 'video/mp4'; // Default fallback
-          }
-          
           sourceElement.type = mimeType;
-          console.log("Using MIME type:", mimeType);
+          sourceElement.crossOrigin = "anonymous";
           
           try {
             videoElement.appendChild(sourceElement);
+            console.log("Added primary source:", videoSource);
           } catch (appendError) {
             console.warn("Error appending source element:", appendError);
           }
           
-          // Add MP4 fallback source if the original isn't mp4
-          if (mimeType !== 'video/mp4' && currentVideo.video_url) {
-            try {
-              // Create MP4 source as fallback
-              const mp4Source = document.createElement('source');
-              mp4Source.src = videoSource.replace(/\.[^.]+$/, '.mp4');
-              mp4Source.type = 'video/mp4';
-              videoElement.appendChild(mp4Source);
-              console.log("Added MP4 fallback source");
-              
-              // Try WebM format too
-              const webmSource = document.createElement('source');
-              webmSource.src = videoSource.replace(/\.[^.]+$/, '.webm');
-              webmSource.type = 'video/webm';
-              videoElement.appendChild(webmSource);
-              console.log("Added WebM fallback source");
-            } catch (err) {
-              console.warn("Failed to add fallback source:", err);
-            }
-          }
+          // No webm fallback since we only use mp4 on S3
           
           // Set src attribute as a final fallback
           videoElement.src = videoSource;
@@ -689,809 +672,203 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   };
 
-  // Modify handleVideoEnd to properly handle video progression
-  const handleVideoEnd = () => {
-    console.log("Video ended, handling progression");
+  // Add event listeners in useEffect - optimized to prevent duplicates
+  useEffect(() => {
+    if (!videoRef.current) return;
     
-    // Update watch history with completed flag if user is logged in
-    if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-      const video = videoRef.current;
-      const currentVideo = videos[currentIndex];
+    const video = videoRef.current;
+    console.log("Setting up video event listeners");
+    
+    // Define all handler functions inside the effect to access latest state
+    const timeUpdateHandler = () => {
+      if (!video) return;
       
-      if (video && currentVideo) {
-        const watchData = {
-          video_id: currentVideo.video_id,
-          watch_time: video.duration || 0,
-          watch_percentage: 100,
-          completed: true,
-          last_position: video.duration || 0,
-          like_flag: isLiked,
-          dislike_flag: isDisliked,
-          saved_flag: isSaved,
-          shared_flag: watchShared,
-          device_type: deviceType
-        };
+      // Only update React state twice per second to reduce rendering
+      const now = Date.now();
+      if (!lastTimeUpdateRef.current || now - lastTimeUpdateRef.current > 500) {
+        lastTimeUpdateRef.current = now;
         
-        updateWatchHistory(watchData).catch(err => {
-          console.error("Failed to update watch history on video end:", err);
-        });
-      }
-    }
-    
-    // Reset the reportedView flag to ensure next video gets a view count
-    reportedViewRef.current = false;
-    
-    // Check if we're near the end of our current video list and need to fetch more
-    if (videos && videos.length > 0 && currentIndex >= videos.length - 3 && hasMore) {
-      console.log("Near end of video list, triggering load more videos");
-      loadMoreVideos();
-    }
-
-    // Determine the next video index
-    let nextIndex;
-    if (currentIndex >= videos.length - 1) {
-      console.log("Reached end of video list, looping to first video");
-      nextIndex = 0;
-    } else {
-      nextIndex = currentIndex + 1;
-      console.log(`Moving to next video (index ${nextIndex})`);
-    }
-    
-    // Set the next video index
-    setCurrentIndex(nextIndex);
-  };
-
-  // Add cleanup function for video switching
-  const cleanupVideo = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.pause();
-      video.currentTime = 0;
-      video.src = '';
-    }
-  };
-
-  const toggleMute = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.muted = !video.muted;
-      setIsMuted(video.muted);
-    }
-  };
-
-  const handleLike = async () => {
-    if (!currentUser) {
-      showLoginPrompt("Please log in to like videos");
-      return;
-    }
-    
-    try {
-      if (isLiked) {
-        // If already liked, just remove the like (toggle behavior)
-        setIsLiked(false);
-        setLikes(prev => Math.max(0, prev - 1));
-        return;
-      }
-      
-      // If disliked, remove the dislike
-      if (isDisliked) {
-        setIsDisliked(false);
-        setDislikes(prev => Math.max(0, prev - 1));
-      }
-      
-      // Show optimistic UI update
-      setIsLiked(true);
-      setLikes(prev => prev + 1);
-      
-      // Make API call
-      const response = await incrementVideoLike(videos[currentIndex].video_id);
-      
-      // Update with server response or keep optimistic update if no response
-      if (response && typeof response.likes === 'number') {
-        setLikes(response.likes);
-      }
-    } catch (error) {
-      // Revert optimistic update on error
-      setIsLiked(false);
-      setLikes(prev => Math.max(0, prev - 1));
-      console.error("Error liking video:", error);
-      setSnackbarMessage("Failed to like video. Please try again.");
-      setShowSnackbar(true);
-    }
-  };
-
-  const handleDislike = async () => {
-    if (!currentUser) {
-      showLoginPrompt("Please log in to dislike videos");
-      return;
-    }
-    
-    try {
-      if (isDisliked) {
-        // If already disliked, just remove the dislike (toggle behavior)
-        setIsDisliked(false);
-        setDislikes(prev => Math.max(0, prev - 1));
-        return;
-      }
-      
-      // If liked, remove the like
-      if (isLiked) {
-        setIsLiked(false);
-        setLikes(prev => Math.max(0, prev - 1));
-      }
-      
-      // Show optimistic UI update
-      setIsDisliked(true);
-      setDislikes(prev => prev + 1);
-      
-      // Make API call
-      const response = await incrementVideoDislike(videos[currentIndex].video_id);
-      
-      // Update with server response or keep optimistic update if no response
-      if (response && typeof response.dislikes === 'number') {
-        setDislikes(response.dislikes);
-      }
-    } catch (error) {
-      // Revert optimistic update on error
-      setIsDisliked(false);
-      setDislikes(prev => Math.max(0, prev - 1));
-      console.error("Error disliking video:", error);
-      setSnackbarMessage("Failed to dislike video. Please try again.");
-      setShowSnackbar(true);
-    }
-  };
-
-  const handleShare = async () => {
-    try {
-      // Try Web Share API first
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: videos[currentIndex]?.title,
-            text: videos[currentIndex]?.description,
-            url: window.location.href,
-          });
-          console.log('Successfully shared');
-          
-          // Update share flag for watch history
-          setWatchShared(true);
-          
-          // Update watch history with shared flag if user is logged in
-          if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-            const video = videoRef.current;
-            if (video) {
-              const watchData = {
-                video_id: videos[currentIndex].video_id,
-                watch_time: video.currentTime || 0,
-                watch_percentage: video.duration ? ((video.currentTime / video.duration) * 100) : 0,
-                completed: false,
-                last_position: video.currentTime || 0,
-                like_flag: isLiked,
-                dislike_flag: isDisliked,
-                saved_flag: isSaved,
-                shared_flag: true,
-                device_type: deviceType
-              };
-              updateWatchHistory(watchData).catch(err => {
-                console.error("Failed to update watch history after share:", err);
-              });
-            }
-          }
-          
-          return;
-        } catch (error) {
-          console.log('Web Share API error:', error);
-          // Fall through to clipboard method
+        // Round the time values to reduce precision and unnecessary updates
+        const currentTimeRounded = Math.floor(video.currentTime);
+        if (currentTimeRounded !== lastTimeValueRef.current) {
+          lastTimeValueRef.current = currentTimeRounded;
+          setCurrentTime(currentTimeRounded);
         }
       }
-
-      // Fallback to clipboard API with multiple methods
-      await copyToClipboard();
+    };
+    
+    const loadedMetadataHandler = () => {
+      if (video) {
+        console.log("Video metadata loaded, duration:", video.duration);
+        setDuration(video.duration);
+      }
+    };
+    
+    // This is where 'ended' event handler was being added multiple times
+    const videoEndHandler = () => {
+      console.log("Video ended, handling progression");
       
-      // Update share flag for watch history
-      setWatchShared(true);
-      
-      // Update watch history with shared flag if user is logged in
+      // Update watch history with completed flag if user is logged in
       if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-        const video = videoRef.current;
-        if (video) {
+        const currentVideo = videos[currentIndex];
+        
+        if (video && currentVideo) {
           const watchData = {
-            video_id: videos[currentIndex].video_id,
-            watch_time: video.currentTime || 0,
-            watch_percentage: video.duration ? ((video.currentTime / video.duration) * 100) : 0,
-            completed: false,
-            last_position: video.currentTime || 0,
+            video_id: currentVideo.video_id,
+            watch_time: video.duration || 0,
+            watch_percentage: 100,
+            completed: true,
+            last_position: video.duration || 0,
             like_flag: isLiked,
             dislike_flag: isDisliked,
             saved_flag: isSaved,
-            shared_flag: true,
+            shared_flag: watchShared,
             device_type: deviceType
           };
+          
           updateWatchHistory(watchData).catch(err => {
-            console.error("Failed to update watch history after share:", err);
+            console.error("Failed to update watch history on video end:", err);
           });
         }
       }
-    } catch (error) {
-      console.error("Share error:", error);
-      setSnackbarMessage("Could not share video");
-      setShowSnackbar(true);
-    }
-  };
-
-  const copyToClipboard = async () => {
-    const urlToCopy = window.location.href;
-    
-    try {
-      // Try the modern Clipboard API first
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(urlToCopy);
-        setSnackbarMessage("Link copied to clipboard!");
-        setShowSnackbar(true);
-        return;
+      
+      // Reset the reportedView flag to ensure next video gets a view count
+      reportedViewRef.current = false;
+      
+      // Check if we're near the end of our current video list and need to fetch more
+      if (videos && videos.length > 0 && currentIndex >= videos.length - 3 && hasMore) {
+        console.log("Near end of video list, triggering load more videos");
+        loadMoreVideos();
       }
-
-      // Fallback to older execCommand method
-      const textArea = document.createElement("textarea");
-      textArea.value = urlToCopy;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-999999px";
-      textArea.style.top = "-999999px";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-
-      try {
-        const successful = document.execCommand('copy');
-        textArea.remove();
-        
-        if (successful) {
-          setSnackbarMessage("Link copied to clipboard!");
-          setShowSnackbar(true);
-          return;
-        }
-      } catch (err) {
-        console.error('execCommand Error:', err);
-        textArea.remove();
-        throw new Error('Copy failed');
-      }
-
-      // If all methods fail, show manual copy message
-      setSnackbarMessage(`Please copy this link manually: ${urlToCopy}`);
-      setShowSnackbar(true);
-      setTimeout(() => setShowSnackbar(false), 5000); // Show message longer for manual copy
-
-    } catch (error) {
-      console.error("Clipboard error:", error);
-      // Show the URL in a snackbar as a last resort
-      setSnackbarMessage(`Please copy this link manually: ${urlToCopy}`);
-      setShowSnackbar(true);
-      setTimeout(() => setShowSnackbar(false), 5000);
-    }
-  };
-
-  const showLoginPrompt = (message) => {
-    setSnackbarMessage(message || "Please log in to use this feature");
-    setShowSnackbar(true);
-  };
   
-  // Used when the user clicks the snackbar close button
-  const handleCloseSnackbar = () => {
-    setShowSnackbar(false);
-  };
-
-  // Navigation functions used by UI controls and keyboard shortcuts
-  const goToPrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
-  const goToNext = () => {
-    if (currentIndex < videos.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
-  };
-
-  // Helper function used for truncating text in the UI
-  const truncateDescription = (text, maxLength = 100) => {
-    if (!text) return '';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-  };
-
-  // Legacy click handler - maintained for compatibility
-  const handleVideoClick = (e) => {
-    handleVideoContainerClick(e);
-  };
-
-  const handleSaveVideo = async () => {
-    if (!currentUser) {
-      showLoginPrompt("Please log in to save videos");
-      return;
-    }
-    
-    try {
-      const videoId = videos[currentIndex].video_id;
-      const shouldSave = !isSaved;
-      
-      await saveVideo(videoId, shouldSave);
-      
-      setIsSaved(shouldSave);
-      
-      if (shouldSave) {
-        setSnackbarMessage("Video saved to your profile");
+      // Determine the next video index
+      let nextIndex;
+      if (currentIndex >= videos.length - 1) {
+        console.log("Reached end of video list, looping to first video");
+        nextIndex = 0;
       } else {
-        setSnackbarMessage("Video removed from saved videos");
+        nextIndex = currentIndex + 1;
+        console.log(`Moving to next video (index ${nextIndex})`);
       }
-      setShowSnackbar(true);
-    } catch (error) {
-      console.error("Error saving video:", error);
-      setSnackbarMessage("Could not save video");
-      setShowSnackbar(true);
-    }
-  };
-
-  const handleDeleteVideo = async () => {
-    if (!currentUser) {
-      showLoginPrompt("Please log in to delete videos");
-      return;
-    }
-
-    const currentVideo = videos[currentIndex];
-    if (!currentVideo || !currentUser || currentUser?.user_id !== currentVideo?.user_id) {
-      setSnackbarMessage("You can only delete your own videos");
-      setShowSnackbar(true);
-      return;
-    }
-
-    setShowDeleteDialog(true);
-  };
-
-  const confirmDelete = async () => {
-    try {
-      setIsDeleting(true);
-      const videoId = videos[currentIndex].video_id;
       
-      await deleteVideo(videoId);
-      
-      setShowDeleteDialog(false);
-      setIsDeleting(false);
-      
-      setSnackbarMessage("Video deleted successfully");
-      setShowSnackbar(true);
-      
-      if (videos.length <= 1) {
-        exitFullScreen();
-    navigate("/demo/");
-      } else if (currentIndex === videos.length - 1) {
-        setCurrentIndex(currentIndex - 1);
-      } else {
-        // Force reload of current index
-        const newIndex = currentIndex;
-        setCurrentIndex(0);
-        setTimeout(() => setCurrentIndex(newIndex), 10);
-      }
-    } catch (error) {
-      console.error("Error deleting video:", error);
-      setIsDeleting(false);
-      setShowDeleteDialog(false);
-      setSnackbarMessage("Failed to delete video");
-      setShowSnackbar(true);
-    }
-  };
-
-  const handleFollowToggle = async () => {
-    if (!currentUser) {
-      showLoginPrompt("Please log in to follow users");
-      return;
-    }
-    
-    if (currentUser.user_id === videos[currentIndex].user_id) {
-      setSnackbarMessage("You cannot follow yourself");
-      setShowSnackbar(true);
-      return;
-    }
-    
-    setFollowLoading(true);
-    
-    try {
-      if (isFollowing) {
-        await unfollowUser(videos[currentIndex].user_id);
-        setIsFollowing(false);
-        setSnackbarMessage(`Unfollowed @${videos[currentIndex].username}`);
-      } else {
-        await followUser(videos[currentIndex].user_id);
-        setIsFollowing(true);
-        setSnackbarMessage(`Now following @${videos[currentIndex].username}`);
-      }
-      setShowSnackbar(true);
-    } catch (error) {
-      console.error("Error toggling follow:", error);
-      setSnackbarMessage("Failed to update follow status");
-      setShowSnackbar(true);
-    } finally {
-      setFollowLoading(false);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    const video = videoRef.current;
-    if (video) {
-      setDuration(video.duration);
-    }
-  };
-
-  const handleProgressClick = (event) => {
-    const video = videoRef.current;
-    if (video) {
-      const progressBar = event.currentTarget;
-      const clickPosition = event.nativeEvent.offsetX;
-      const progressBarWidth = progressBar.offsetWidth;
-      const newTime = (clickPosition / progressBarWidth) * duration;
-      video.currentTime = newTime;
-    }
-  };
-
-  const handleVolumeChange = () => {
-    const video = videoRef.current;
-    if (video) {
-      setVolume(video.volume);
-      setIsMuted(video.muted);
-    }
-  };
-
-  const handlePlaybackSpeedChange = (event) => {
-    const video = videoRef.current;
-    if (video) {
-      const newSpeed = parseFloat(event.target.value);
-      video.playbackRate = newSpeed;
-    }
-  };
-
-  const formatTime = (timeInSeconds) => {
-    if (!timeInSeconds) return "0:00";
-    
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-  };
-
-  // Handle mouse wheel events for volume control
-  const handleWheel = (e) => {
-    // This entire function will be removed
-  };
-
-  // Add effect to show controls at video start and end
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      const handleTimeUpdate = () => {
-        // Show controls if video is at start or end
-        if (video.currentTime < 1 || video.currentTime > video.duration - 1) {
-          setShowControls(true);
-        }
-      };
-
-      video.addEventListener('timeupdate', handleTimeUpdate);
-      return () => video.removeEventListener('timeupdate', handleTimeUpdate);
-    }
-  }, []);
-
-  const handleDoubleClick = (event) => {
-    // This entire function will be removed
-  };
-
-  const handleDoubleTap = (event) => {
-    // This entire function will be removed
-  };
-
-  const handleSeekChange = (e) => {
-    const progressBar = e.currentTarget;
-    const rect = progressBar.getBoundingClientRect();
-    const seekPos = (e.clientX - rect.left) / rect.width;
-    
-    if (videoRef.current) {
-      const newTime = seekPos * videoRef.current.duration;
-      videoRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
-    }
-  };
-
-  // Toggle fullscreen mode
-  const toggleFullScreen = () => {
-    if (isFullScreen) {
-      exitFullScreen();
-    } else {
-      enterFullScreen();
-    }
-  };
-
-  // Add responsive layout calculations
-  const theme = useTheme();
-  const calculateVideoSize = () => {
-    // Use 16:9 aspect ratio for all screen sizes
-      return {
-        width: '100%',
-        height: 'auto',
-        aspectRatio: '16/9',
-        maxWidth: '100%',
-      objectFit: 'contain',
-      margin: '0 auto' // Center the video
+      // Set the next video index
+      setCurrentIndex(nextIndex);
     };
-  };
+    
+    const playHandler = () => setIsPlaying(true);
+    const pauseHandler = () => setIsPlaying(false);
+    const volumeChangeHandler = () => setIsMuted(video.muted);
+    const mouseMoveHandler = handleMouseMove;
+    const touchStartHandler = handleTouchStart;
+    const touchMoveHandler = handleTouchMove;
+    const touchEndHandler = handleTouchEnd;
+    
+    const errorHandler = (event) => {
+      console.error("Video error event triggered");
+      
+      // Safely log video URL
+      const videoUrl = videos && currentIndex < videos.length && videos[currentIndex] 
+        ? videos[currentIndex].video_url 
+        : 'unknown video URL';
+      console.error("Video URL:", videoUrl);
+      
+      // Create a safe error object
+      const safeError = { 
+        type: 'videoerrorevent',
+        timestamp: Date.now(),
+        url: videoUrl
+      };
+      
+      // Call error handler
+      handleVideoError(safeError);
+    };
+    
+    // Clear any previous listeners before adding new ones
+    video.removeEventListener('timeupdate', timeUpdateHandler);
+    video.removeEventListener('loadedmetadata', loadedMetadataHandler);
+    video.removeEventListener('ended', videoEndHandler);
+    video.removeEventListener('play', playHandler);
+    video.removeEventListener('pause', pauseHandler);
+    video.removeEventListener('volumechange', volumeChangeHandler);
+    video.removeEventListener('error', errorHandler);
+    video.removeEventListener('mousemove', mouseMoveHandler);
+    video.removeEventListener('touchstart', touchStartHandler);
+    video.removeEventListener('touchmove', touchMoveHandler);
+    video.removeEventListener('touchend', touchEndHandler);
+    
+    // Log event listeners being added to help with debugging
+    console.log("Adding event listeners to video element");
+    
+    // Add all event listeners
+    video.addEventListener('timeupdate', timeUpdateHandler);
+    video.addEventListener('loadedmetadata', loadedMetadataHandler);
+    video.addEventListener('ended', videoEndHandler);
+    video.addEventListener('play', playHandler);
+    video.addEventListener('pause', pauseHandler);
+    video.addEventListener('volumechange', volumeChangeHandler);
+    video.addEventListener('error', errorHandler);
+    
+    // Mouse and touch events
+    video.addEventListener('mousemove', mouseMoveHandler);
+    video.addEventListener('touchstart', touchStartHandler);
+    video.addEventListener('touchmove', touchMoveHandler);
+    video.addEventListener('touchend', touchEndHandler);
+    
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      console.log("Removing video event listeners");
+      
+      // Remove all event listeners to prevent duplicates
+      video.removeEventListener('timeupdate', timeUpdateHandler);
+      video.removeEventListener('loadedmetadata', loadedMetadataHandler);
+      video.removeEventListener('ended', videoEndHandler);
+      video.removeEventListener('play', playHandler);
+      video.removeEventListener('pause', pauseHandler);
+      video.removeEventListener('volumechange', volumeChangeHandler);
+      video.removeEventListener('error', errorHandler);
+      
+      video.removeEventListener('mousemove', mouseMoveHandler);
+      video.removeEventListener('touchstart', touchStartHandler);
+      video.removeEventListener('touchmove', touchMoveHandler);
+      video.removeEventListener('touchend', touchEndHandler);
+    };
+  }, [
+    // Include all dependencies that these handlers need
+    currentIndex,
+    videos, 
+    hasMore, 
+    loadMoreVideos, 
+    currentUser, 
+    isLiked, 
+    isDisliked, 
+    isSaved, 
+    watchShared, 
+    deviceType,
+    handleMouseMove,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd
+  ]);
 
-  const videoStyles = calculateVideoSize();
+  // Add separate useEffect for window and document level events
+  useEffect(() => {
+    console.log("Adding window and document event listeners");
+    
+    // Add window and document level events
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Use our custom fullscreen change event
+    const fullscreenChangeEvent = fullscreenAPI.fullscreenChangeEventName();
+    document.addEventListener(fullscreenChangeEvent, handleFullscreenChange);
+    
+    return () => {
+      console.log("Removing window and document event listeners");
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener(fullscreenChangeEvent, handleFullscreenChange);
+    };
+  }, [handleKeyDown, handleFullscreenChange]);
 
-  // Navigate to home page
-  const goToHomePage = () => {
-    navigate("/demo/");
-  };
-
-  // Update getVideoSource to better handle S3 URLs that might require signed URLs
-  const getVideoSource = (videoUrl) => {
-    console.log("Original video URL:", videoUrl);
-    if (!videoUrl) {
-      console.error("Video URL is null or undefined");
-      return null;
-    }
-    
-    try {
-      // First normalize the URL
-      let finalUrl = videoUrl;
-      
-      // Clean up URL - sometimes APIs return URLs with escaped characters or extra quotes
-      if (typeof finalUrl === 'string') {
-        // Remove any quotes that might surround the URL
-        finalUrl = finalUrl.replace(/^["'](.*)["']$/, '$1');
-        
-        // Fix any double slashes (except after protocol)
-        finalUrl = finalUrl.replace(/([^:])\/\//g, '$1/');
-        
-        // Remove trailing parameters if they're causing problems
-        if (finalUrl.includes('?') && finalUrl.includes('format=')) {
-          const urlParts = finalUrl.split('?');
-          const extension = urlParts[0].split('.').pop().toLowerCase();
-          
-          // If URL has a valid extension, we can safely remove params
-          if (['mp4', 'webm', 'mov', 'ogg', 'mkv'].includes(extension)) {
-            finalUrl = urlParts[0];
-            console.log("Removed URL parameters to fix format issues");
-          }
-        }
-      }
-      
-      // Special handling for S3 URLs which might need signed URLs
-      if (finalUrl.includes('s3.') && finalUrl.includes('amazonaws.com')) {
-        console.log("Detected S3 URL, using direct access first");
-        return finalUrl; // Try direct access first as it may work depending on bucket policy
-      }
-      
-      // Handle relative URLs from our API
-      if (finalUrl.startsWith('/')) {
-        const baseUrl = API_BASE_URL || "http://127.0.0.1:8000/api";
-        finalUrl = `${baseUrl}${finalUrl}`;
-        console.log("Converted relative URL to:", finalUrl);
-        return finalUrl;
-      }
-      
-      // If URL is already absolute with a protocol
-      if (finalUrl.match(/^https?:\/\//i)) {
-        // Apply CORS proxy if enabled and URL is from a different domain
-        if (VIDEO_PROXY_ENABLED) {
-          const currentDomain = window.location.hostname;
-          
-          try {
-            const urlObj = new URL(finalUrl);
-            const videoDomain = urlObj.hostname;
-            
-            // If video is on a different domain, use the proxy
-            if (videoDomain !== currentDomain && 
-                !videoDomain.includes('localhost') && 
-                !videoDomain.includes('127.0.0.1') &&
-                !videoDomain.includes('amazonaws.com')) { // Skip proxy for S3 URLs
-              console.log(`Applying CORS proxy to URL from domain: ${videoDomain}`);
-              return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
-            }
-          } catch (urlError) {
-            console.warn("Error parsing URL for CORS check:", urlError);
-          }
-        }
-        
-        console.log("Using direct URL:", finalUrl);
-        return finalUrl;
-      }
-      
-      // If URL is missing protocol but isn't relative
-      if (!finalUrl.startsWith('/')) {
-        finalUrl = `http://${finalUrl}`;
-        console.log("Added http protocol to URL:", finalUrl);
-        
-        // Check if we need to apply CORS proxy
-        if (VIDEO_PROXY_ENABLED) {
-          console.log("Applying CORS proxy to URL with added protocol");
-          return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
-        }
-        
-        return finalUrl;
-      }
-      
-      console.log("Final video URL:", finalUrl);
-      return finalUrl;
-    } catch (error) {
-      console.error("Error processing video URL:", error);
-      // Return original URL as fallback, applying proxy if enabled
-      if (VIDEO_PROXY_ENABLED && videoUrl && videoUrl.match(/^https?:\/\//i)) {
-        console.log("Applying CORS proxy to fallback URL");
-        return `${VIDEO_PROXY_URL}${encodeURIComponent(videoUrl)}`;
-      }
-      return videoUrl;
-    }
-  };
-  
-  // Update the MIME type function to better handle video formats
-  const getVideoMimeType = (url) => {
-    if (!url) return 'video/mp4'; // Default
-    
-    // Improved extension detection
-    let extension = "";
-    
-    try {
-      // Extract extension from URL
-      const urlObj = new URL(url);
-      const pathname = urlObj.pathname;
-      const lastDotIndex = pathname.lastIndexOf('.');
-      
-      if (lastDotIndex !== -1) {
-        extension = pathname.substring(lastDotIndex + 1).toLowerCase();
-      }
-    } catch (e) {
-      // If URL parsing fails, try simple regex
-      const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
-      if (match && match[1]) {
-        extension = match[1].toLowerCase();
-      }
-    }
-    
-    // Default to mp4 if no extension found
-    if (!extension) {
-      console.log("No file extension found in URL, defaulting to mp4");
-      return 'video/mp4';
-    }
-    
-    console.log(`Detected file extension: ${extension}`);
-    
-    // Map extensions to MIME types with expanded support
-    switch (extension) {
-      case 'mp4':
-      case 'm4v':
-        return 'video/mp4';
-      case 'webm':
-        return 'video/webm';
-      case 'ogg':
-      case 'ogv':
-        return 'video/ogg';
-      case 'mov':
-      case 'qt':
-        return 'video/quicktime';
-      case 'avi':
-        return 'video/x-msvideo';
-      case 'wmv':
-        return 'video/x-ms-wmv';
-      case 'mkv':
-        return 'video/x-matroska';
-      case '3gp':
-        return 'video/3gpp';
-      case 'mpg':
-      case 'mpeg':
-        return 'video/mpeg';
-      case 'ts':
-        return 'video/mp2t';
-      case 'flv':
-        return 'video/x-flv';
-      case 'm3u8':
-        return 'application/x-mpegURL';
-      default:
-        console.log(`Unknown extension: ${extension}, defaulting to mp4`);
-        return 'video/mp4';
-    }
-  };
-
-  // Update the video error handler
-  const handleVideoError = (error) => {
-    let errorMessage = "Error loading video. Please try again.";
-    let errorCode = null;
-    
-    try {
-      // Check for S3 forbidden errors
-      if (videos && videos.length > 0 && currentIndex < videos.length) {
-        const videoUrl = videos[currentIndex].video_url || '';
-        if (videoUrl.includes('s3.') && videoUrl.includes('amazonaws.com')) {
-          // Try a completely different approach for S3 videos returning 403
-          console.log("Detected potential S3 permission error, trying local fallback");
-          errorMessage = "Access to this video is restricted. Playing local sample instead.";
-          tryLocalFallback();
-          return; // Don't show error message, the local fallback will play instead
-        }
-      }
-      
-      // Safely check if videoRef exists and has a current property
-      if (videoRef && videoRef.current) {
-        const videoElement = videoRef.current;
-        
-        // Check if the video element has an error object
-        if (videoElement.error) {
-          const videoError = videoElement.error;
-          
-          // Safely check if code property exists and is a number
-          if (videoError && typeof videoError.code === 'number') {
-            errorCode = videoError.code;
-            
-            // Only proceed with switch if we have a valid error code
-            switch (errorCode) {
-              case 1: // MEDIA_ERR_ABORTED
-          errorMessage = "Video playback was aborted.";
-          break;
-              case 2: // MEDIA_ERR_NETWORK
-          errorMessage = "Network error occurred while loading the video.";
-          break;
-              case 3: // MEDIA_ERR_DECODE
-                errorMessage = "Video decoding error. Trying alternate format...";
-                tryFallbackFormats();
-                // Suppress this message to prevent user confusion
-                return;
-              case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-                errorMessage = "This video format is not supported by your browser. Trying alternate format...";
-                tryFallbackFormats();
-                // Suppress this message to prevent user confusion
-                return;
-        default:
-                errorMessage = `Unknown video error (code: ${errorCode}).`;
-      }
-      
-            // Log the detailed error information
-      console.error("Video error details:", {
-              code: errorCode,
-              message: videoError.message || 'No detailed error message available',
-              errorMessage: errorMessage
-      });
-    } else {
-            console.error("Video element has error object but code is not available or not a number");
-            tryFallbackFormats();
-          }
-        } else {
-          console.error("Video element doesn't have an error object");
-          tryFallbackFormats();
-        }
-      } else {
-        console.error("Video reference is not available");
-      }
-      
-      // Log error information if we have a passed error object
-      if (error) {
-        console.error("Error passed to handler:", error);
-      }
-      
-      // Always try fallback formats for any error
-      if (!errorCode) {
-        tryFallbackFormats();
-        // Also suppress generic errors when trying fallback formats
-        return;
-      }
-      
-    } catch (e) {
-      // Catch any errors in our error handler to prevent cascading issues
-      console.error("Exception in handleVideoError:", e);
-      errorMessage = "Error playing video. Trying alternative format...";
-      tryFallbackFormats();
-    }
-    
-    // Show error message to user (only for errors we haven't suppressed)
-    setSnackbarMessage(errorMessage);
-    setShowSnackbar(true);
-  };
-  
-  // Add function to try loading different video formats as fallback
+  // Update the tryFallbackFormats function to focus on mp4 only
   const tryFallbackFormats = () => {
     console.log("Attempting to find alternative video formats...");
     
@@ -1528,10 +905,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         console.warn("Error pausing video:", pauseErr);
       }
       
-      // Create a comprehensive list of formats to try
-      const tryFormats = ['mp4', 'webm', 'mov', 'ogg', 'm3u8', 'mpg', 'mpeg', '3gp'];
-      
-      // Instead of removing existing sources, keep track of source URLs we've already tried
+      // Keep track of source URLs we've already tried
       const triedSources = new Set();
       
       // Store a reference to the original video source for checking
@@ -1546,10 +920,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         }
       });
       
-      // Create a flag to track if we attempted any formats
-      let formatAttempted = false;
+      // Clear existing sources
+      while (video.firstChild) {
+        video.removeChild(video.firstChild);
+      }
       
-      // Try static fallback video as a last resort - only if not already present
+      // Try static fallback video as a last resort
       try {
         const fallbackUrl = '/assets/fallback-video.mp4';
         if (!triedSources.has(fallbackUrl)) {
@@ -1563,110 +939,49 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         console.warn("Error adding static fallback:", fallbackErr);
       }
       
-      // Try to extract the base URL without extension
-      let baseUrl = '';
+      // Try to extract the base URL
       let originalUrl = '';
       
       try {
         originalUrl = videoToTry.video_url.toString();
         
-        // Handle URLs with or without file extensions
-        if (originalUrl.includes('.')) {
-          const urlParts = originalUrl.split('.');
-          const extension = urlParts.pop().split('?')[0].toLowerCase();
-          
-          // Check if what we removed is actually a valid video extension
-          const validExtensions = ['mp4', 'webm', 'mov', 'ogg', 'mkv', 'm3u8', 'ts', 'mpg', 'mpeg', '3gp'];
-          if (validExtensions.includes(extension)) {
-            baseUrl = urlParts.join('.');
-            console.log("Extracted base URL:", baseUrl);
-          } else {
-            // If not a video extension, use the full URL as base
-            baseUrl = originalUrl;
-            console.log("URL doesn't have a recognized video extension, using as is");
-          }
-        } else {
-          baseUrl = originalUrl;
-          console.log("URL doesn't have a file extension, using as is");
-        }
-      } catch (urlErr) {
-        console.warn("Error processing video URL:", urlErr);
-        baseUrl = videoToTry.video_url || '';
-      }
-      
-      // Try direct URL first without any format changes
-      try {
+        // Try direct URL first without any format changes
         const directUrl = getVideoSource(originalUrl);
         if (directUrl && !triedSources.has(directUrl)) {
-          console.log("Trying original URL format first:", originalUrl);
+          console.log("Trying original URL format:", originalUrl);
           const directSource = document.createElement('source');
           directSource.src = directUrl;
           directSource.crossOrigin = "anonymous";
-          const mimeType = getVideoMimeType(originalUrl);
-          directSource.type = mimeType;
+          directSource.type = getVideoMimeType(originalUrl);
           video.appendChild(directSource);
           triedSources.add(directUrl);
-          formatAttempted = true;
         }
-      } catch (directErr) {
-        console.warn("Error adding direct source:", directErr);
-      }
-      
-      // Try to add sources for different formats
-      for (const format of tryFormats) {
-        try {
-          // Skip formats that might cause CORS issues
-          if (format === 'm3u8' && originalUrl.includes('youtube')) {
-            console.log("Skipping m3u8 for YouTube URLs");
-            continue;
-          }
-          
-          const formatUrl = `${baseUrl}.${format}`;
-          const processedUrl = getVideoSource(formatUrl);
-          
-          // Skip this format if we've already tried it
-          if (!processedUrl || triedSources.has(processedUrl)) {
-            continue;
-          }
-          
-          console.log(`Trying format: ${format}, URL: ${formatUrl}`);
-          
-          const source = document.createElement('source');
-          source.src = processedUrl;
-          source.crossOrigin = "anonymous";
-          
-          // Set proper MIME type based on format
-          switch (format) {
-            case 'mp4':
+        
+        // For S3 URLs, we only need to try MP4
+        // No need to test multiple formats since we know S3 only has MP4
+        if (originalUrl.includes('s3.') && originalUrl.includes('amazonaws.com')) {
+          console.log("S3 URL detected, using only MP4 format");
+          // No additional sources needed for S3
+        } else {
+          // Only try MP4 format as fallback for non-S3 URLs
+          const mp4Url = originalUrl.replace(/\.[^.]+$/, '.mp4');
+          if (mp4Url !== originalUrl) {
+            const processedUrl = getVideoSource(mp4Url);
+            if (processedUrl && !triedSources.has(processedUrl)) {
+              console.log("Trying MP4 fallback:", mp4Url);
+              const source = document.createElement('source');
+              source.src = processedUrl;
+              source.crossOrigin = "anonymous";
               source.type = 'video/mp4';
-              break;
-            case 'webm':
-              source.type = 'video/webm';
-              break;
-            case 'ogg':
-              source.type = 'video/ogg';
-              break;
-            case 'mov':
-              source.type = 'video/quicktime';
-              break;
-            case 'm3u8':
-              source.type = 'application/x-mpegURL';
-              break;
-            case 'mpg':
-            case 'mpeg':
-              source.type = 'video/mpeg';
-              break;
-            default:
-              source.type = `video/${format}`;
+              video.appendChild(source);
+            }
           }
-          
-          video.appendChild(source);
-          triedSources.add(processedUrl);
-          formatAttempted = true;
-          console.log(`Added ${format} source`);
-        } catch (formatErr) {
-          console.warn(`Error adding ${format} source:`, formatErr);
         }
+        
+        // Set src attribute as a final fallback
+        video.src = directUrl || originalUrl;
+      } catch (urlErr) {
+        console.warn("Error processing video URL:", urlErr);
       }
       
       // Start without muting if possible
@@ -1732,139 +1047,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     }
   };
 
-  // Add event listeners in useEffect
-  useEffect(() => {
-    const video = videoRef.current;
-    const videoContainer = videoContainerRef.current;
-    
-    // Track all the event listeners we add so we can properly clean them up
-    const eventListeners = [];
-    
-    const addEventListenerWithCleanup = (element, event, handler, options) => {
-      if (event === 'ended') {
-        console.log("Adding 'ended' event listener to video element");
-      }
-      element.addEventListener(event, handler, options);
-      eventListeners.push({ element, event, handler, options });
-    };
-
-    if (video) {
-      // Add all event listeners
-      addEventListenerWithCleanup(video, 'timeupdate', handleTimeUpdate);
-      addEventListenerWithCleanup(video, 'loadedmetadata', handleLoadedMetadata);
-      addEventListenerWithCleanup(video, 'ended', handleVideoEnd);
-      addEventListenerWithCleanup(video, 'play', () => setIsPlaying(true));
-      addEventListenerWithCleanup(video, 'pause', () => setIsPlaying(false));
-      addEventListenerWithCleanup(video, 'volumechange', () => setIsMuted(video.muted));
-      
-      // Mouse and touch events
-      addEventListenerWithCleanup(video, 'mouseover', handleMouseMove);
-      addEventListenerWithCleanup(video, 'mousemove', handleMouseMove);
-      addEventListenerWithCleanup(video, 'touchstart', handleTouchStart);
-      addEventListenerWithCleanup(video, 'touchmove', handleTouchMove);
-      addEventListenerWithCleanup(video, 'touchend', handleTouchEnd);
-      
-      // Window and document level events
-      addEventListenerWithCleanup(window, 'keydown', handleKeyDown);
-      
-      // Use our custom fullscreen change event
-      const fullscreenChangeEvent = fullscreenAPI.fullscreenChangeEventName();
-      addEventListenerWithCleanup(document, fullscreenChangeEvent, handleFullscreenChange);
-    }
-
-    // Cleanup on unmount
-    return () => {
-      // Remove all tracked event listeners
-      eventListeners.forEach(({ element, event, handler, options }) => {
-        element.removeEventListener(event, handler, options);
-      });
-    };
-  }, [
-    currentIndex,
-    videos.length,
-    handleTimeUpdate,
-    handleLoadedMetadata,
-    handleVideoEnd,
-    handleMouseMove,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-    handleKeyDown,
-    handleFullscreenChange
-  ]);
-
-  // Add function to play a local fallback video when S3 permissions fail
-  const tryLocalFallback = () => {
-    console.log("Playing local fallback video due to permission issues");
-    
-    // Show loading indicator 
-    setIsLoading(true);
-    
-    try {
-      if (!videoRef || !videoRef.current) {
-        console.warn("Cannot play fallback: video element reference is null");
-        setIsLoading(false);
-        return;
-      }
-      
-      const video = videoRef.current;
-      
-      // Pause any current playback
-      try {
-        video.pause();
-      } catch (pauseErr) {
-        console.warn("Error pausing video:", pauseErr);
-      }
-      
-      // Clear existing sources
-      try {
-        video.innerHTML = '';
-      } catch (clearErr) {
-        console.warn("Error clearing video sources:", clearErr);
-      }
-      
-      // Set src directly to local fallback video
-      video.src = FALLBACK_VIDEO;
-      video.muted = false;
-      setIsMuted(false);
-      
-      // Load and play
-      try {
-        video.load();
-        
-        setTimeout(() => {
-          setIsLoading(false);
-          try {
-            if (videoRef && videoRef.current) {
-              videoRef.current.play()
-                .then(() => {
-                  console.log("Local fallback video playing successfully");
-                })
-                .catch(playErr => {
-                  console.error("Error playing local fallback:", playErr);
-                  // Try muted as last resort
-                  if (videoRef.current) {
-                    videoRef.current.muted = true;
-                    setIsMuted(true);
-                    videoRef.current.play()
-                      .catch(err => console.error("Even muted local fallback failed:", err));
-                  }
-                });
-            }
-          } catch (playErr) {
-            console.error("Exception playing local fallback:", playErr);
-          }
-        }, 1000);
-      } catch (loadErr) {
-        console.error("Error loading local fallback:", loadErr);
-        setIsLoading(false);
-      }
-    } catch (globalErr) {
-      console.error("Global error trying local fallback:", globalErr);
-      setIsLoading(false);
-    }
-  };
-
   // Preload current video when index changes
   useEffect(() => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) return;
@@ -1899,9 +1081,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           return new Promise((resolve) => {
             if (!source.src) {
               resolve({ success: false, index });
-              return;
-            }
-            
+      return;
+    }
+    
             const sourceElement = document.createElement('source');
             sourceElement.src = source.src;
             sourceElement.type = source.type;
@@ -1955,6 +1137,477 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     
     preloadCurrentVideo();
   }, [currentIndex, videos]);
+
+  // Update getVideoSource to better handle S3 URLs
+  const getVideoSource = (videoUrl) => {
+    if (!videoUrl) {
+      console.error("Video URL is null or undefined");
+      return null;
+    }
+    
+    try {
+      // First normalize the URL
+      let finalUrl = videoUrl.toString().trim();
+      
+      // Clean up URL - remove any quotes and fix double slashes
+      finalUrl = finalUrl.replace(/^["'](.*)["']$/, '$1');
+      finalUrl = finalUrl.replace(/([^:])\/\//g, '$1/');
+      
+      // Special handling for S3 URLs - use them directly without modification
+      if (finalUrl.includes('s3.') && finalUrl.includes('amazonaws.com')) {
+        console.log("Using S3 URL directly:", finalUrl);
+        return finalUrl;
+      }
+      
+      // Handle relative URLs from our API
+      if (finalUrl.startsWith('/')) {
+        const baseUrl = API_BASE_URL || "https://api.horizontalreels.com/api/v1";
+        finalUrl = `${baseUrl}${finalUrl}`;
+        return finalUrl;
+      }
+      
+      // If URL is already absolute with a protocol
+      if (finalUrl.match(/^https?:\/\//i)) {
+        // Only apply CORS proxy if needed and not an S3 URL
+        if (VIDEO_PROXY_ENABLED && !finalUrl.includes('amazonaws.com')) {
+          const currentDomain = window.location.hostname;
+          
+          try {
+            const urlObj = new URL(finalUrl);
+            const videoDomain = urlObj.hostname;
+            
+            if (videoDomain !== currentDomain && 
+                !videoDomain.includes('localhost') && 
+                !videoDomain.includes('127.0.0.1')) {
+              return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
+            }
+          } catch (urlError) {
+            console.warn("Error parsing URL for CORS check:", urlError);
+          }
+        }
+        
+        return finalUrl;
+      }
+      
+      // If URL is missing protocol but isn't relative
+      if (!finalUrl.startsWith('/')) {
+        finalUrl = `http://${finalUrl}`;
+        
+        if (VIDEO_PROXY_ENABLED) {
+          return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
+        }
+        
+        return finalUrl;
+      }
+      
+      return finalUrl;
+    } catch (error) {
+      console.error("Error processing video URL:", error);
+      return videoUrl; // Return original URL as fallback
+    }
+  };
+
+  // Simplified MIME type function since we only use MP4
+  const getVideoMimeType = (url) => {
+    if (!url) return 'video/mp4';
+    
+    try {
+      // Extract extension from URL
+      const match = url.toString().match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
+      const extension = match && match[1] ? match[1].toLowerCase() : '';
+      
+      // Since we only have mp4 files in S3, we'll default to mp4 for most cases
+      if (!extension || extension === 'mp4') {
+        return 'video/mp4';
+      }
+      
+      // Add a few other types for compatibility with existing files
+      switch (extension) {
+        case 'webm': return 'video/webm';
+        case 'mov': return 'video/quicktime';
+        case 'ogg': return 'video/ogg';
+        default: return 'video/mp4'; // Default to mp4
+      }
+    } catch (e) {
+      return 'video/mp4'; // Safe fallback
+    }
+  };
+
+  // Add toggleMute function
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
+  };
+
+  // Add toggleFullScreen function
+  const toggleFullScreen = () => {
+    if (isFullScreen) {
+      exitFullScreen();
+    } else {
+      enterFullScreen();
+    }
+  };
+
+  // Add handleVideoError function
+  const handleVideoError = (error) => {
+    console.error("Video error:", error);
+    
+    // Get error code if available
+    let errorMessage = "Error playing video. Trying alternative format...";
+    let errorCode = null;
+    
+    if (error && error.type === 'videoerrorevent' && videoRef.current) {
+      const videoError = videoRef.current.error;
+      
+      if (videoError && typeof videoError.code === 'number') {
+        errorCode = videoError.code;
+        
+        // Only proceed with switch if we have a valid error code
+        switch (errorCode) {
+          case 1: // MEDIA_ERR_ABORTED
+            errorMessage = "Video playback was aborted.";
+            break;
+          case 2: // MEDIA_ERR_NETWORK
+            errorMessage = "Network error occurred while loading the video.";
+            break;
+          case 3: // MEDIA_ERR_DECODE
+            errorMessage = "Video decoding error. Trying alternate format...";
+            tryFallbackFormats();
+            // Suppress this message to prevent user confusion
+            return;
+          case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+            errorMessage = "This video format is not supported by your browser. Trying alternate format...";
+            tryFallbackFormats();
+            // Suppress this message to prevent user confusion
+            return;
+          default:
+            errorMessage = `Unknown video error (code: ${errorCode}).`;
+        }
+        
+        // Log the detailed error information
+        console.error("Video error details:", {
+          code: errorCode,
+          message: videoError.message || 'No detailed error message available',
+          errorMessage: errorMessage
+        });
+      } else {
+        console.error("Video element has error object but code is not available or not a number");
+        tryFallbackFormats();
+      }
+    } else {
+      console.error("Video element doesn't have an error object");
+      tryFallbackFormats();
+    }
+    
+    // Log error information if we have a passed error object
+    if (error) {
+      console.error("Error passed to handler:", error);
+    }
+    
+    // Always try fallback formats for any error
+    if (!errorCode) {
+      tryFallbackFormats();
+      // Also suppress generic errors when trying fallback formats
+      return;
+    }
+    
+    // Show error message to user (only for errors we haven't suppressed)
+    setSnackbarMessage(errorMessage);
+    setShowSnackbar(true);
+  };
+
+  // Add goToHomePage function
+  const goToHomePage = () => {
+    navigate("/");
+  };
+
+  // Add handleSeekChange function
+  const handleSeekChange = (e) => {
+    if (!videoRef.current || duration === 0) return;
+    
+    const video = videoRef.current;
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
+    const percentage = relativeX / rect.width;
+    
+    // Set the video's current time based on the percentage
+    const newTime = percentage * video.duration;
+    video.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
+  // Add formatTime helper function
+  const formatTime = (timeInSeconds) => {
+    if (!timeInSeconds || isNaN(timeInSeconds)) return "0:00";
+    
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  };
+
+  // Add handleLike function
+  const handleLike = async () => {
+    if (!currentUser) {
+      setSnackbarMessage("Please log in to like videos");
+      setShowSnackbar(true);
+      return;
+    }
+    
+    try {
+      const videoId = videos[currentIndex].video_id;
+      
+      if (isLiked) {
+        // Unlike video (toggle off)
+        setIsLiked(false);
+      } else {
+        // Like video
+        setIsLiked(true);
+        // If video was previously disliked, remove dislike
+        if (isDisliked) {
+          setIsDisliked(false);
+        }
+        
+        // Update likes count on server
+        const response = await incrementVideoLike(videoId);
+        
+        if (response && typeof response.likes === 'number') {
+          setLikes(response.likes);
+        }
+      }
+    } catch (error) {
+      console.error("Error liking video:", error);
+      setSnackbarMessage("Failed to update like status");
+      setShowSnackbar(true);
+    }
+  };
+
+  // Add handleDislike function
+  const handleDislike = async () => {
+    if (!currentUser) {
+      setSnackbarMessage("Please log in to dislike videos");
+      setShowSnackbar(true);
+      return;
+    }
+    
+    try {
+      const videoId = videos[currentIndex].video_id;
+      
+      if (isDisliked) {
+        // Remove dislike (toggle off)
+        setIsDisliked(false);
+      } else {
+        // Dislike video
+        setIsDisliked(true);
+        // If video was previously liked, remove like
+        if (isLiked) {
+          setIsLiked(false);
+        }
+        
+        // Update dislikes count on server
+        const response = await incrementVideoDislike(videoId);
+        
+        if (response && typeof response.dislikes === 'number') {
+          setDislikes(response.dislikes);
+        }
+      }
+    } catch (error) {
+      console.error("Error disliking video:", error);
+      setSnackbarMessage("Failed to update dislike status");
+      setShowSnackbar(true);
+    }
+  };
+
+  // Add handleShare function
+  const handleShare = async () => {
+    if (!videos || videos.length === 0 || currentIndex >= videos.length) {
+      return;
+    }
+    
+    try {
+      const currentVideo = videos[currentIndex];
+      const shareUrl = `${window.location.origin}/modern-video/${currentVideo.video_id}`;
+      
+      // Set flag that we've shared this video
+      setWatchShared(true);
+      
+      // Update watch history with shared flag if user is logged in
+      if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+        const videoElement = videoRef.current;
+        const currentTime = videoElement ? videoElement.currentTime : 0;
+        const duration = videoElement ? videoElement.duration : 0;
+        const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+        
+        const watchData = {
+          video_id: currentVideo.video_id,
+          watch_time: currentTime,
+          watch_percentage: watchPercentage,
+          completed: false,
+          last_position: currentTime,
+          like_flag: isLiked,
+          dislike_flag: isDisliked,
+          saved_flag: isSaved,
+          shared_flag: true,
+          device_type: deviceType
+        };
+        
+        updateWatchHistory(watchData).catch(err => {
+          console.error("Failed to update watch history for share:", err);
+        });
+      }
+      
+      // Share the URL
+      if (navigator.clipboard && window.isSecureContext) {
+        // Use clipboard API if available
+        await navigator.clipboard.writeText(shareUrl);
+        setSnackbarMessage("Link copied to clipboard");
+        setShowSnackbar(true);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          document.execCommand('copy');
+          setSnackbarMessage("Link copied to clipboard");
+          setShowSnackbar(true);
+        } catch (err) {
+          console.error("Failed to copy link:", err);
+          setSnackbarMessage("Failed to copy link");
+          setShowSnackbar(true);
+        }
+        
+        document.body.removeChild(textArea);
+      }
+    } catch (error) {
+      console.error("Error sharing video:", error);
+      setSnackbarMessage("Failed to share video");
+      setShowSnackbar(true);
+    }
+  };
+
+  // Add handleSaveVideo function
+  const handleSaveVideo = async () => {
+    if (!currentUser) {
+      setSnackbarMessage("Please log in to save videos");
+      setShowSnackbar(true);
+      return;
+    }
+    
+    try {
+      const videoId = videos[currentIndex].video_id;
+      
+      // Toggle saved status
+      const newSavedStatus = !isSaved;
+      setIsSaved(newSavedStatus);
+      
+      // Update on server
+      await saveVideo(videoId, newSavedStatus);
+      
+      // Show confirmation to user
+      setSnackbarMessage(newSavedStatus ? "Video saved" : "Video removed from saved");
+      setShowSnackbar(true);
+    } catch (error) {
+      console.error("Error saving video:", error);
+      // Revert UI state on error
+      setIsSaved(!isSaved);
+      setSnackbarMessage("Failed to update saved status");
+      setShowSnackbar(true);
+    }
+  };
+
+  // Add handleFollowToggle function
+  const handleFollowToggle = async () => {
+    if (!currentUser) {
+      setSnackbarMessage("Please log in to follow creators");
+      setShowSnackbar(true);
+      return;
+    }
+    
+    // Get creator ID
+    const creatorId = videos[currentIndex].creator_id;
+    
+    // Prevent following yourself
+    if (currentUser.user_id === creatorId) {
+      setSnackbarMessage("You cannot follow yourself");
+      setShowSnackbar(true);
+      return;
+    }
+    
+    setFollowLoading(true);
+    
+    try {
+      if (isFollowing) {
+        // Unfollow
+        await unfollowUser(creatorId);
+        setIsFollowing(false);
+        setSnackbarMessage("Unfollowed creator");
+      } else {
+        // Follow
+        await followUser(creatorId);
+        setIsFollowing(true);
+        setSnackbarMessage("Following creator");
+      }
+      setShowSnackbar(true);
+    } catch (error) {
+      console.error("Error toggling follow status:", error);
+      setSnackbarMessage("Failed to update follow status");
+      setShowSnackbar(true);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  // Add confirmDelete function
+  const confirmDelete = async () => {
+    // Only allow creator to delete their own video
+    if (!currentUser || currentUser.user_id !== videos[currentIndex].user_id) {
+      setSnackbarMessage("You can only delete your own videos");
+      setShowSnackbar(true);
+      setShowDeleteDialog(false);
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      const videoId = videos[currentIndex].video_id;
+      await deleteVideo(videoId);
+      
+      setSnackbarMessage("Video deleted successfully");
+      setShowSnackbar(true);
+      
+      // Close dialog
+      setShowDeleteDialog(false);
+      
+      // Navigate to next video if available
+      if (videos.length > 1) {
+        if (currentIndex < videos.length - 1) {
+          setCurrentIndex(currentIndex + 1);
+        } else if (currentIndex === videos.length - 1) {
+          setCurrentIndex(0);
+        }
+      } else {
+        // If this was the last video, navigate home
+        navigate("/");
+      }
+    } catch (error) {
+      console.error("Error deleting video:", error);
+      setSnackbarMessage("Failed to delete video");
+      setShowSnackbar(true);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
@@ -2092,71 +1745,10 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             loop={false}
             preload="auto"
             poster={videos[currentIndex]?.thumbnail_url}
-            onEnded={handleVideoEnd}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onVolumeChange={handleVolumeChange}
-            onCanPlay={() => {
-              console.log("Video can now play");
-              const video = videoRef.current;
-              if (video) {
-                video.play()
-                  .then(() => console.log("Auto play started successfully"))
-                  .catch(e => {
-                    console.error("Error auto-playing:", e);
-                    if (!video.muted) {
-                      console.log("Trying muted autoplay...");
-                      video.muted = true;
-                      setIsMuted(true);
-                      video.play().catch(err => console.error("Muted autoplay also failed:", err));
-                    }
-                  });
-              }
-            }}
-            onError={() => {
-              // Safe error handling that avoids the null reference issue
-              console.error("Video error event triggered");
-              
-              // Safely log video URL
-              const videoUrl = videos && currentIndex < videos.length && videos[currentIndex] 
-                ? videos[currentIndex].video_url 
-                : 'unknown video URL';
-              console.error("Video URL:", videoUrl);
-              
-              // Create a safe mock error object that won't cause issues
-              // We don't pass video.error directly to avoid null reference issues
-              const safeError = { 
-                type: 'videoerrorevent',
-                timestamp: Date.now(),
-                url: videoUrl
-              };
-              
-              // Call error handler with our safer error object
-              handleVideoError(safeError);
-            }}
             crossOrigin="anonymous"
             style={getVideoStyle()}
           >
-            {/* Adding fallback source types by default */}
-            <source 
-              src={getVideoSource(videos[currentIndex]?.video_url)} 
-              type={getVideoMimeType(videos[currentIndex]?.video_url)} 
-              crossOrigin="anonymous"
-            />
-            {/* MP4 Fallback */}
-            <source 
-              src={getVideoSource(videos[currentIndex]?.video_url.replace(/\.[^.]+$/, '.mp4'))} 
-              type="video/mp4"
-              crossOrigin="anonymous"
-            />
-            {/* WebM Fallback */}
-            <source 
-              src={getVideoSource(videos[currentIndex]?.video_url.replace(/\.[^.]+$/, '.webm'))} 
-              type="video/webm"
-              crossOrigin="anonymous"
-            />
+            {/* Sources will be added dynamically in useEffect */}
             Your browser does not support the video tag.
           </video>
 
@@ -2178,8 +1770,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
               </Typography>
               <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
                 Please try another video
-            </Typography>
-          </Box>
+              </Typography>
+            </Box>
           )}
 
           {/* Loading indicator */}
@@ -2198,16 +1790,16 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
               <CircularProgress color="primary" />
               <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
                 Loading video...
-              </Typography>
-            </Box>
-          )}
+        </Typography>
+      </Box>
+      )}
 
-          {/* Up/Down Navigation repositioned - Up arrow below follow button, Down arrow above player bar */}
-          {videos.length > 1 && (
-          <Box
-            sx={{
-                    position: 'absolute',
-                    right: 20,
+      {/* Up/Down Navigation repositioned - Up arrow below follow button, Down arrow above player bar */}
+      {videos.length > 1 && (
+      <Box
+        sx={{
+                position: 'absolute',
+                right: 20,
                     top: '50%',
                     transform: 'translateY(-50%)',
                     display: 'flex',
@@ -2215,321 +1807,321 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                     height: '200px',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    zIndex: 15,
+                zIndex: 15,
                     opacity: showControls ? 1 : 0,
                     transition: 'opacity 300ms ease-in-out',
-                  }}
-                >
+              }}
+            >
                   {/* Up Arrow */}
                   {currentIndex > 0 && (
-                  <IconButton
-                    onClick={() => setCurrentIndex(currentIndex - 1)}
-                    sx={{
-                      bgcolor: 'rgba(0, 0, 0, 0.6)',
-                      color: '#2CFF05', // Using the neon green from theme
-                      '&:hover': {
-                        bgcolor: 'rgba(0, 0, 0, 0.8)',
-                        boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                      },
-                    }}
-                  >
-                    <ArrowUpward />
-          </IconButton>
-            )}
-
-                  {/* Down Arrow */}
-              {currentIndex < videos.length - 1 && (
-                  <IconButton
-                    onClick={() => setCurrentIndex(currentIndex + 1)}
-                    sx={{
-                      bgcolor: 'rgba(0, 0, 0, 0.6)',
-                      color: '#2CFF05', // Using the neon green from theme
-                      '&:hover': {
-                        bgcolor: 'rgba(0, 0, 0, 0.8)',
-                        boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                      },
-                    }}
-                  >
-                    <ArrowDownward />
-          </IconButton>
-                  )}
-                </Box>
+              <IconButton
+                onClick={() => setCurrentIndex(currentIndex - 1)}
+                sx={{
+                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                  color: '#2CFF05', // Using the neon green from theme
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.8)',
+                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                  },
+                }}
+              >
+                <ArrowUpward />
+        </IconButton>
           )}
 
-          {/* Mobile-optimized video controls overlay */}
-          <Slide direction="up" in={showControls} timeout={300}>
-          <Box
-            sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
-                padding: isMobile ? '8px 12px' : '16px',
-                zIndex: 10,
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'opacity 0.3s ease',
-                opacity: showControls ? 1 : 0,
-              }}
-            >
-              {/* Progress bar */}
-              <Box
+                  {/* Down Arrow */}
+          {currentIndex < videos.length - 1 && (
+              <IconButton
+                onClick={() => setCurrentIndex(currentIndex + 1)}
                 sx={{
-                  width: '100%',
-                  height: isMobile ? '3px' : '4px',
-                  bgcolor: 'rgba(255,255,255,0.3)',
-                  borderRadius: '2px',
-                  mb: isMobile ? 1 : 2,
-                  position: 'relative',
-                  cursor: 'pointer'
-                }}
-                onClick={handleSeekChange}
-              >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    height: '100%',
-                    width: `${(currentTime / duration) * 100}%`,
-                    bgcolor: 'primary.main',
-                    borderRadius: '2px'
-                  }}
-                />
-        </Box>
-
-              {/* Control buttons */}
-          <Box
-            sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%'
+                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                  color: '#2CFF05', // Using the neon green from theme
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.8)',
+                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                  },
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <IconButton
-                    onClick={togglePlayPause}
-                    sx={{ 
-                      color: 'white',
-                      p: isMobile ? 0.5 : 1 
-                    }}
-                  >
-                    {isPlaying ? <Pause /> : <PlayArrow />}
-          </IconButton>
-
-                  <IconButton
-                    onClick={toggleMute}
-                    sx={{ 
-                      color: 'white',
-                      p: isMobile ? 0.5 : 1,
-                      display: { xs: 'none', sm: 'inline-flex' }
-                    }}
-                  >
-                    {isMuted ? <VolumeOff /> : <VolumeUp />}
-          </IconButton>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  {!isMobile && (
-                    <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
-                      {formatTime(currentTime)} / {formatTime(duration)}
-          </Typography>
+                <ArrowDownward />
+        </IconButton>
                   )}
-
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <IconButton
-                      onClick={handleLike}
-                      sx={{ 
-                        color: isLiked ? 'primary.main' : 'white',
-                        p: isMobile ? 0.5 : 1
-                      }}
-                    >
-                      <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
-                    </IconButton>
-
-                    <IconButton
-                      onClick={handleDislike}
-                      sx={{ 
-                        color: isDisliked ? 'error.main' : 'white',
-                        p: isMobile ? 0.5 : 1
-                      }}
-                    >
-                      <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
-                    </IconButton>
-
-                    <IconButton
-                      onClick={handleShare}
-                      sx={{ 
-                        color: 'white',
-                        p: isMobile ? 0.5 : 1
-                      }}
-                    >
-                      <Share fontSize={isMobile ? 'small' : 'medium'} />
-                    </IconButton>
-
-                    <IconButton
-                      onClick={handleSaveVideo}
-                      sx={{ 
-                        color: isSaved ? 'primary.main' : 'white',
-                        p: isMobile ? 0.5 : 1,
-                        display: { xs: 'none', sm: 'inline-flex' }
-                      }}
-                    >
-                      {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
-                    </IconButton>
-
-                    <IconButton
-                      onClick={toggleFullScreen}
-                      sx={{ 
-                        color: 'white',
-                        p: isMobile ? 0.5 : 1
-                      }}
-                    >
-                      <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
-                    </IconButton>
-                  </Box>
-                </Box>
-              </Box>
             </Box>
-          </Slide>
+      )}
 
-          {/* Video Info Overlay */}
-          <Slide direction="down" in={showControls} timeout={300}>
+      {/* Mobile-optimized video controls overlay */}
+          <Slide direction="up" in={showControls} timeout={300}>
+      <Box
+        sx={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+            padding: isMobile ? '8px 12px' : '16px',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            transition: 'opacity 0.3s ease',
+            opacity: showControls ? 1 : 0,
+          }}
+        >
+          {/* Progress bar */}
           <Box
             sx={{
+              width: '100%',
+              height: isMobile ? '3px' : '4px',
+              bgcolor: 'rgba(255,255,255,0.3)',
+              borderRadius: '2px',
+              mb: isMobile ? 1 : 2,
+              position: 'relative',
+              cursor: 'pointer'
+            }}
+            onClick={handleSeekChange}
+          >
+            <Box
+              sx={{
                 position: 'absolute',
-                top: 0,
                 left: 0,
-                right: 0,
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
-                padding: isMobile ? '12px' : '16px',
-                paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
-                zIndex: 10,
-                transition: 'opacity 0.3s ease',
-                opacity: showControls ? 1 : 0,
+                top: 0,
+                height: '100%',
+                width: `${(currentTime / duration) * 100}%`,
+                bgcolor: 'primary.main',
+                borderRadius: '2px'
               }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Avatar 
-                    src={videos[currentIndex]?.creator_profile_picture} 
-                    alt={videos[currentIndex]?.creator_username}
-                    sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }} 
-                  />
-                  <Box>
-                    <Typography 
-                      variant={isMobile ? "body1" : "h6"} 
-                      sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
-                    >
-                      {videos[currentIndex]?.title}
-                    </Typography>
-                    <Typography 
-                      variant={isMobile ? "caption" : "body2"} 
-                      sx={{ color: 'white', opacity: 0.8 }}
-                    >
-                      {videos[currentIndex]?.creator_username}
-                    </Typography>
-                  </Box>
+            />
+      </Box>
+
+          {/* Control buttons */}
+      <Box
+        sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <IconButton
+                onClick={togglePlayPause}
+                sx={{ 
+                  color: 'white',
+                  p: isMobile ? 0.5 : 1 
+                }}
+              >
+                {isPlaying ? <Pause /> : <PlayArrow />}
+        </IconButton>
+
+              <IconButton
+                onClick={toggleMute}
+                sx={{ 
+                  color: 'white',
+                  p: isMobile ? 0.5 : 1,
+                  display: { xs: 'none', sm: 'inline-flex' }
+                }}
+              >
+                {isMuted ? <VolumeOff /> : <VolumeUp />}
+        </IconButton>
+      </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              {!isMobile && (
+                <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
+                  {formatTime(currentTime)} / {formatTime(duration)}
+        </Typography>
+              )}
+
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <IconButton
+                  onClick={handleLike}
+                  sx={{ 
+                    color: isLiked ? 'primary.main' : 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+
+                <IconButton
+                  onClick={handleDislike}
+                  sx={{ 
+                    color: isDisliked ? 'error.main' : 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+
+                <IconButton
+                  onClick={handleShare}
+                  sx={{ 
+                    color: 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <Share fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
+
+                <IconButton
+                  onClick={handleSaveVideo}
+                  sx={{ 
+                    color: isSaved ? 'primary.main' : 'white',
+                    p: isMobile ? 0.5 : 1,
+                    display: { xs: 'none', sm: 'inline-flex' }
+                  }}
+                >
+                  {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
+                </IconButton>
+
+                <IconButton
+                  onClick={toggleFullScreen}
+                  sx={{ 
+                    color: 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
+        </IconButton>
+      </Box>
+            </Box>
+          </Box>
+        </Box>
+      </Slide>
+
+      {/* Video Info Overlay */}
+          <Slide direction="down" in={showControls} timeout={300}>
+      <Box
+        sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+            padding: isMobile ? '12px' : '16px',
+            paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
+            zIndex: 10,
+            transition: 'opacity 0.3s ease',
+            opacity: showControls ? 1 : 0,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Avatar 
+                src={videos[currentIndex]?.creator_profile_picture} 
+                alt={videos[currentIndex]?.creator_username}
+                sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }} 
+              />
+              <Box>
+                <Typography 
+                  variant={isMobile ? "body1" : "h6"} 
+                  sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
+                >
+          {videos[currentIndex]?.title}
+        </Typography>
+                <Typography 
+                  variant={isMobile ? "caption" : "body2"} 
+                  sx={{ color: 'white', opacity: 0.8 }}
+                >
+                  {videos[currentIndex]?.creator_username}
+        </Typography>
+              </Box>
+      </Box>
+
+            {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
+              <Button
+                variant={isFollowing ? "outlined" : "contained"}
+                size={isMobile ? "small" : "medium"}
+                color="primary"
+                startIcon={isFollowing ? <Check /> : <PersonAdd />}
+                onClick={handleFollowToggle}
+                disabled={followLoading}
+        sx={{
+                  minWidth: 'auto', 
+                  px: isMobile ? 1 : 2,
+                  display: { xs: 'none', sm: 'flex' }
+                }}
+              >
+                {followLoading ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  isFollowing ? "Following" : "Follow"
+                )}
+              </Button>
+            )}
           </Box>
 
-                {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
-                  <Button
-                    variant={isFollowing ? "outlined" : "contained"}
-                    size={isMobile ? "small" : "medium"}
-                    color="primary"
-                    startIcon={isFollowing ? <Check /> : <PersonAdd />}
-                    onClick={handleFollowToggle}
-                    disabled={followLoading}
-                    sx={{
-                      minWidth: 'auto', 
-                      px: isMobile ? 1 : 2,
-                      display: { xs: 'none', sm: 'flex' }
-                    }}
-                  >
-                    {followLoading ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : (
-                      isFollowing ? "Following" : "Follow"
-                    )}
-                  </Button>
-                )}
-              </Box>
-
-              {/* Below the video title and user profile section */}
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 2,
-                color: 'white',
-                mt: 1
-              }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <VisibilityIcon sx={{ fontSize: 20 }} />
-                  <Typography variant="body2">
-                    {videos[currentIndex]?.views || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <ThumbUpIcon sx={{ fontSize: 20 }} />
-                  <Typography variant="body2">
-                    {videos[currentIndex]?.likes || 0}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <ThumbDownIcon sx={{ fontSize: 20 }} />
-                  <Typography variant="body2">
-                    {videos[currentIndex]?.dislikes || 0}
-                  </Typography>
-                </Box>
-              </Box>
+          {/* Below the video title and user profile section */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2,
+            color: 'white',
+            mt: 1
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <VisibilityIcon sx={{ fontSize: 20 }} />
+              <Typography variant="body2">
+                {videos[currentIndex]?.views || 0}
+              </Typography>
             </Box>
-          </Slide>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <ThumbUpIcon sx={{ fontSize: 20 }} />
+              <Typography variant="body2">
+                {videos[currentIndex]?.likes || 0}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <ThumbDownIcon sx={{ fontSize: 20 }} />
+              <Typography variant="body2">
+                {videos[currentIndex]?.dislikes || 0}
+        </Typography>
+      </Box>
+          </Box>
+        </Box>
+      </Slide>
         </Box>
 
-        {/* Snackbar for notifications */}
-        <Snackbar
-          open={showSnackbar}
-          autoHideDuration={3000}
-          onClose={() => setShowSnackbar(false)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
-            {snackbarMessage}
-          </Alert>
-        </Snackbar>
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={showSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setShowSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
 
-        {/* Delete confirmation dialog */}
-        <Dialog
-          open={showDeleteDialog}
-          onClose={() => setShowDeleteDialog(false)}
-        >
-          <DialogTitle>Delete Video</DialogTitle>
-          <DialogContent>
-            <Typography>
-              Are you sure you want to delete this video? This action cannot be undone.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button 
-              onClick={() => setShowDeleteDialog(false)} 
-              color="primary"
-              disabled={isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={confirmDelete} 
-              color="error" 
-              variant="contained"
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+      >
+        <DialogTitle>Delete Video</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this video? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setShowDeleteDialog(false)} 
+            color="primary"
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={confirmDelete} 
+            color="error" 
+            variant="contained"
+            disabled={isDeleting}
+          >
+            {isDeleting ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
     </React.Fragment>
   );
 };

@@ -451,7 +451,7 @@ const HomePage = () => {
           <Typography variant="h5">
             Search results for: "{searchQuery}"
           </Typography>
-          <Button onClick={() => navigate('/')}>
+          <Button onClick={() => navigate('/demo/')}>
             Clear Search
           </Button>
         </Box>

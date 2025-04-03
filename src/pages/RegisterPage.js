@@ -212,8 +212,8 @@ const RegisterPage = () => {
                 variant="body1"
                 fontWeight={error.includes('username') || error.includes('email') ? 'bold' : 'normal'}
               >
-                {error}
-              </Typography>
+              {error}
+            </Typography>
               
               {error.includes('username') && (
                 <Typography color="inherit" align="center" variant="body2" sx={{ mt: 1 }}>
@@ -325,30 +325,30 @@ const RegisterPage = () => {
               >
                 Cancel
               </Button>
-              
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                color="primary"
-                size="large"
-                disabled={loading}
-              >
-                {loading ? 'Creating Account...' : 'Register'}
-              </Button>
+            
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              color="primary"
+              size="large"
+              disabled={loading}
+            >
+              {loading ? 'Creating Account...' : 'Register'}
+            </Button>
             </Box>
-
+            
             <Box sx={{ mt: 2, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Already have an account?{' '}
+              Already have an account?{' '}
                 <Link 
                   component={RouterLink} 
                   to={isDemo ? "/demo/login" : "/login"} 
                   variant="body2"
                 >
-                  Login
-                </Link>
-              </Typography>
+                Login
+              </Link>
+            </Typography>
             </Box>
           </form>
         </CardContent>

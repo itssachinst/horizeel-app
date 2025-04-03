@@ -102,10 +102,10 @@ const VideoPage = () => {
           if (newIndex !== -1) {
             console.log(`Video found after fetch, setting index to ${newIndex}`);
             setCurrentIndex(newIndex);
-          } else {
+        } else {
             console.log("Video not found in initial batch, trying to fetch it directly");
             fetchSpecificVideo(videoId);
-          }
+        }
         }, 100);
       } else {
         fetchSpecificVideo(videoId);
@@ -191,7 +191,7 @@ const VideoPage = () => {
       </Box>
     );
   }
-  
+
   // Show error state only if we have no videos
   if ((error || localError) && videos.length === 0) {
     return (
@@ -212,23 +212,23 @@ const VideoPage = () => {
         <Typography variant="h6" gutterBottom>
           {error || localError}
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => navigate('/')}
+          <Button
+            variant="contained"
+            color="primary"
+          onClick={() => navigate('/demo/')}
           sx={{ mt: 2 }}
         >
           Go back to Home
-        </Button>
+          </Button>
       </Box>
     );
   }
-  
+
   // Empty state when no videos are available
   if (!videos || videos.length === 0) {
-    return (
-      <Box
-        sx={{
+  return (
+        <Box 
+          sx={{ 
           width: '100%',
           height: '100vh',
           display: 'flex',
@@ -252,13 +252,13 @@ const VideoPage = () => {
         overflow: 'hidden'
       }}
     >
-      <VideoPlayer
-        videos={videos}
-        currentIndex={currentIndex}
+        <VideoPlayer
+          videos={videos}
+          currentIndex={currentIndex}
         setCurrentIndex={setCurrentIndex}
-        isMobile={isMobile}
-        isTablet={isTablet}
-      />
+          isMobile={isMobile}
+          isTablet={isTablet}
+        />
       
       {/* Only show snackbar for critical messages */}
       <Snackbar

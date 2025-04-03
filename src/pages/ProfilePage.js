@@ -1169,7 +1169,7 @@ const ProfilePage = () => {
                 variant="contained" 
                 color="secondary" 
                 size="large"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/demo/')}
                 sx={{ borderRadius: 2, px: 4 }}
               >
                 Browse Videos
