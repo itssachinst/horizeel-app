@@ -384,7 +384,7 @@ const Header = () => {
                 alignItems: 'center',
                 cursor: 'pointer'
               }}
-              onClick={() => navigate(isDemo ? '/demo/' : '/')}
+              onClick={() => navigate('/demo/')}
             >
               <Logo />
             </Box>

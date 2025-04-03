@@ -67,7 +67,7 @@ const LoginPage = () => {
     try {
       await login(credentials);
       // Navigate back to the appropriate home page based on current path
-      navigate(isDemo ? '/demo/' : '/');
+      navigate('/demo/');
     } catch (err) {
       setError(err.detail || 'Failed to login. Please check your credentials.');
     } finally {
@@ -77,7 +77,7 @@ const LoginPage = () => {
   
   const handleBackToHome = () => {
     // Navigate to the appropriate home page based on where we came from
-    navigate(isDemo ? '/demo/' : '/');
+    navigate('/demo/');
   };
   
   const handleOpenResetDialog = () => {

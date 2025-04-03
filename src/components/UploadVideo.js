@@ -4,7 +4,7 @@ import { TextField, Button, Card, CardContent, Typography, Box, CircularProgress
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Add as AddIcon, Tag as TagIcon } from "@mui/icons-material";
-import { API_BASE_URL } from "../api";
+import { API_BASE_URL, uploadVideo } from "../api";
 
 const UploadVideo = () => {
   const [videoDetails, setVideoDetails] = useState({
@@ -22,6 +22,7 @@ const UploadVideo = () => {
   const [hashtag, setHashtag] = useState("");
   const [hashtags, setHashtags] = useState([]);
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -133,25 +134,35 @@ const UploadVideo = () => {
     const formData = new FormData();
     formData.append("title", videoDetails.title);
     formData.append("description", descriptionWithHashtags);
-    formData.append("category", videoDetails.category);
-    formData.append("privacy", videoDetails.privacy);
     formData.append("vfile", videoFile);
     formData.append("tfile", thumbnailFile);
 
     try {
-      // Get the token from localStorage
+      // Get the token
       const token = localStorage.getItem('token');
-      
       if (!token) {
         setMessage("You must be logged in to upload videos.");
         setUploading(false);
         return;
       }
       
+      // Log the authorization header for debugging
+      const authHeader = `Bearer ${token}`;
+      console.log("Authorization header:", authHeader.substring(0, 15) + "...");
+      
+      // Log form data for debugging
+      console.log("Uploading video with FormData containing:", 
+        Array.from(formData.entries()).map(([key, value]) => 
+          key === 'vfile' || key === 'tfile' 
+            ? `${key}: [${value.name}, ${value.type}, ${value.size} bytes]` 
+            : `${key}: ${value}`
+        )
+      );
+      
       const response = await axios.post(`${API_BASE_URL}/videos/`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
-          "Authorization": `Bearer ${token}`
+          "Authorization": authHeader
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -174,8 +185,18 @@ const UploadVideo = () => {
       }
     } catch (error) {
       console.error("Error uploading video:", error);
-      if (error.response?.status === 401) {
+      
+      // Log detailed error info
+      if (error.response) {
+        console.error("Response status:", error.response.status);
+        console.error("Response headers:", error.response.headers);
+        console.error("Response data:", error.response.data);
+      }
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
         setMessage("Authentication failed. Please log in again.");
+      } else if (error.response?.data?.detail) {
+        setMessage(`Upload failed: ${error.response.data.detail}`);
       } else {
         setMessage("Failed to upload video. Please try again.");
       }

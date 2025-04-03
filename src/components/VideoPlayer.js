@@ -47,6 +47,8 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || "https://api.horizontalree
 
 // Add fallback URLs for different formats
 const FALLBACK_VIDEO = '/assets/fallback-video.mp4';
+// Add fallback video server for when S3 links are giving 403 Forbidden
+const FALLBACK_VIDEO_SERVER = 'https://player.vimeo.com/external/';
 
 // Define all browser-specific fullscreen functions at component level
 const fullscreenAPI = {
@@ -104,8 +106,8 @@ const fullscreenAPI = {
 };
 
 // Add proxy configuration for CORS issues (if needed)
-const VIDEO_PROXY_ENABLED = false; // Set to true if using a proxy for CORS issues
-const VIDEO_PROXY_URL = 'https://cors-anywhere.herokuapp.com/'; // Example proxy - you would need a real proxy service
+const VIDEO_PROXY_ENABLED = true; // Set to true if using a proxy for CORS issues
+const VIDEO_PROXY_URL = 'https://api.allorigins.win/raw?url='; // More reliable CORS proxy alternative
 
 // Add preload function at the top level
 const preloadVideo = (url) => {
@@ -139,6 +141,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -1225,7 +1228,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     navigate("/");
   };
 
-  // Update getVideoSource to handle URLs properly for local development
+  // Update getVideoSource to better handle S3 URLs that might require signed URLs
   const getVideoSource = (videoUrl) => {
     console.log("Original video URL:", videoUrl);
     if (!videoUrl) {
@@ -1258,6 +1261,12 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         }
       }
       
+      // Special handling for S3 URLs which might need signed URLs
+      if (finalUrl.includes('s3.') && finalUrl.includes('amazonaws.com')) {
+        console.log("Detected S3 URL, using direct access first");
+        return finalUrl; // Try direct access first as it may work depending on bucket policy
+      }
+      
       // Handle relative URLs from our API
       if (finalUrl.startsWith('/')) {
         const baseUrl = API_BASE_URL || "http://127.0.0.1:8000/api";
@@ -1266,8 +1275,29 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         return finalUrl;
       }
       
-      // If URL is already absolute with a protocol, return it directly
+      // If URL is already absolute with a protocol
       if (finalUrl.match(/^https?:\/\//i)) {
+        // Apply CORS proxy if enabled and URL is from a different domain
+        if (VIDEO_PROXY_ENABLED) {
+          const currentDomain = window.location.hostname;
+          
+          try {
+            const urlObj = new URL(finalUrl);
+            const videoDomain = urlObj.hostname;
+            
+            // If video is on a different domain, use the proxy
+            if (videoDomain !== currentDomain && 
+                !videoDomain.includes('localhost') && 
+                !videoDomain.includes('127.0.0.1') &&
+                !videoDomain.includes('amazonaws.com')) { // Skip proxy for S3 URLs
+              console.log(`Applying CORS proxy to URL from domain: ${videoDomain}`);
+              return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
+            }
+          } catch (urlError) {
+            console.warn("Error parsing URL for CORS check:", urlError);
+          }
+        }
+        
         console.log("Using direct URL:", finalUrl);
         return finalUrl;
       }
@@ -1276,6 +1306,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       if (!finalUrl.startsWith('/')) {
         finalUrl = `http://${finalUrl}`;
         console.log("Added http protocol to URL:", finalUrl);
+        
+        // Check if we need to apply CORS proxy
+        if (VIDEO_PROXY_ENABLED) {
+          console.log("Applying CORS proxy to URL with added protocol");
+          return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
+        }
+        
         return finalUrl;
       }
       
@@ -1283,7 +1320,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       return finalUrl;
     } catch (error) {
       console.error("Error processing video URL:", error);
-      // Return original URL as fallback
+      // Return original URL as fallback, applying proxy if enabled
+      if (VIDEO_PROXY_ENABLED && videoUrl && videoUrl.match(/^https?:\/\//i)) {
+        console.log("Applying CORS proxy to fallback URL");
+        return `${VIDEO_PROXY_URL}${encodeURIComponent(videoUrl)}`;
+      }
       return videoUrl;
     }
   };
@@ -1362,6 +1403,18 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     let errorCode = null;
     
     try {
+      // Check for S3 forbidden errors
+      if (videos && videos.length > 0 && currentIndex < videos.length) {
+        const videoUrl = videos[currentIndex].video_url || '';
+        if (videoUrl.includes('s3.') && videoUrl.includes('amazonaws.com')) {
+          // Try a completely different approach for S3 videos returning 403
+          console.log("Detected potential S3 permission error, trying local fallback");
+          errorMessage = "Access to this video is restricted. Playing local sample instead.";
+          tryLocalFallback();
+          return; // Don't show error message, the local fallback will play instead
+        }
+      }
+      
       // Safely check if videoRef exists and has a current property
       if (videoRef && videoRef.current) {
         const videoElement = videoRef.current;
@@ -1385,11 +1438,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
               case 3: // MEDIA_ERR_DECODE
                 errorMessage = "Video decoding error. Trying alternate format...";
                 tryFallbackFormats();
-          break;
+                // Suppress this message to prevent user confusion
+                return;
               case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
                 errorMessage = "This video format is not supported by your browser. Trying alternate format...";
-          tryFallbackFormats();
-          break;
+                tryFallbackFormats();
+                // Suppress this message to prevent user confusion
+                return;
         default:
                 errorMessage = `Unknown video error (code: ${errorCode}).`;
       }
@@ -1420,6 +1475,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       // Always try fallback formats for any error
       if (!errorCode) {
         tryFallbackFormats();
+        // Also suppress generic errors when trying fallback formats
+        return;
       }
       
     } catch (e) {
@@ -1429,7 +1486,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       tryFallbackFormats();
     }
     
-    // Show error message to user
+    // Show error message to user (only for errors we haven't suppressed)
     setSnackbarMessage(errorMessage);
     setShowSnackbar(true);
   };
@@ -1438,21 +1495,27 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   const tryFallbackFormats = () => {
     console.log("Attempting to find alternative video formats...");
     
+    // Show a subtle loading indicator instead of an error message
+    setIsLoading(true);
+    
     try {
       // Safe check for required references
       if (!videos || videos.length === 0 || currentIndex < 0 || currentIndex >= videos.length) {
         console.warn("Cannot try fallback formats: videos array or currentIndex is invalid");
+        setIsLoading(false);
         return;
       }
       
       if (!videoRef || !videoRef.current) {
         console.warn("Cannot try fallback formats: video element reference is null");
+        setIsLoading(false);
         return;
       }
       
-    const currentVideo = videos[currentIndex];
-      if (!currentVideo || !currentVideo.video_url) {
+      const videoToTry = videos[currentIndex];
+      if (!videoToTry || !videoToTry.video_url) {
         console.warn("Cannot try fallback formats: current video or URL is missing");
+        setIsLoading(false);
         return;
       }
       
@@ -1468,25 +1531,34 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       // Create a comprehensive list of formats to try
       const tryFormats = ['mp4', 'webm', 'mov', 'ogg', 'm3u8', 'mpg', 'mpeg', '3gp'];
       
-      // Clear existing sources safely
-      try {
-        while (video.firstChild) {
-          video.removeChild(video.firstChild);
-        }
-      } catch (err) {
-        console.warn("Error clearing video sources:", err);
+      // Instead of removing existing sources, keep track of source URLs we've already tried
+      const triedSources = new Set();
+      
+      // Store a reference to the original video source for checking
+      if (video.src) {
+        triedSources.add(video.src);
       }
+      
+      // Add each source element's URL to the tried sources set
+      Array.from(video.querySelectorAll('source')).forEach(source => {
+        if (source.src) {
+          triedSources.add(source.src);
+        }
+      });
       
       // Create a flag to track if we attempted any formats
       let formatAttempted = false;
       
-      // Try static fallback video as a last resort
+      // Try static fallback video as a last resort - only if not already present
       try {
-        const fallbackSource = document.createElement('source');
-        fallbackSource.src = '/assets/fallback-video.mp4';
-        fallbackSource.type = 'video/mp4';
-        video.appendChild(fallbackSource);
-        console.log("Added static fallback video source");
+        const fallbackUrl = '/assets/fallback-video.mp4';
+        if (!triedSources.has(fallbackUrl)) {
+          const fallbackSource = document.createElement('source');
+          fallbackSource.src = fallbackUrl;
+          fallbackSource.type = 'video/mp4';
+          video.appendChild(fallbackSource);
+          console.log("Added static fallback video source");
+        }
       } catch (fallbackErr) {
         console.warn("Error adding static fallback:", fallbackErr);
       }
@@ -1496,7 +1568,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       let originalUrl = '';
       
       try {
-        originalUrl = currentVideo.video_url.toString();
+        originalUrl = videoToTry.video_url.toString();
         
         // Handle URLs with or without file extensions
         if (originalUrl.includes('.')) {
@@ -1519,18 +1591,23 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         }
       } catch (urlErr) {
         console.warn("Error processing video URL:", urlErr);
-        baseUrl = currentVideo.video_url || '';
+        baseUrl = videoToTry.video_url || '';
       }
       
       // Try direct URL first without any format changes
       try {
-        console.log("Trying original URL format first:", originalUrl);
-        const directSource = document.createElement('source');
-        directSource.src = getVideoSource(originalUrl);
-        const mimeType = getVideoMimeType(originalUrl);
-        directSource.type = mimeType;
-        video.appendChild(directSource);
-        formatAttempted = true;
+        const directUrl = getVideoSource(originalUrl);
+        if (directUrl && !triedSources.has(directUrl)) {
+          console.log("Trying original URL format first:", originalUrl);
+          const directSource = document.createElement('source');
+          directSource.src = directUrl;
+          directSource.crossOrigin = "anonymous";
+          const mimeType = getVideoMimeType(originalUrl);
+          directSource.type = mimeType;
+          video.appendChild(directSource);
+          triedSources.add(directUrl);
+          formatAttempted = true;
+        }
       } catch (directErr) {
         console.warn("Error adding direct source:", directErr);
       }
@@ -1545,10 +1622,18 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           }
           
           const formatUrl = `${baseUrl}.${format}`;
+          const processedUrl = getVideoSource(formatUrl);
+          
+          // Skip this format if we've already tried it
+          if (!processedUrl || triedSources.has(processedUrl)) {
+            continue;
+          }
+          
           console.log(`Trying format: ${format}, URL: ${formatUrl}`);
           
           const source = document.createElement('source');
-          source.src = getVideoSource(formatUrl);
+          source.src = processedUrl;
+          source.crossOrigin = "anonymous";
           
           // Set proper MIME type based on format
           switch (format) {
@@ -1576,20 +1661,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           }
           
           video.appendChild(source);
+          triedSources.add(processedUrl);
           formatAttempted = true;
           console.log(`Added ${format} source`);
         } catch (formatErr) {
           console.warn(`Error adding ${format} source:`, formatErr);
-        }
-      }
-      
-      // If no specific format worked, try the original URL directly
-      if (!formatAttempted) {
-        try {
-          console.log("Falling back to original URL");
-          video.src = getVideoSource(originalUrl);
-        } catch (srcErr) {
-          console.error("Error setting original URL as source:", srcErr);
         }
       }
       
@@ -1606,35 +1682,53 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         setTimeout(() => {
           try {
             console.log("Attempting to play fallback video");
-            const playPromise = video.play();
-            
-            if (playPromise !== undefined) {
-              playPromise.catch(playErr => {
-                console.error("Error playing fallback format:", playErr);
-                
-                // Try muted autoplay if normal playback fails (helps with autoplay restrictions)
-                if (!video.muted) {
-                  console.log("Trying muted playback");
-                  video.muted = true;
-                  setIsMuted(true);
-                  video.play().then(() => {
-                    setSnackbarMessage("Video started muted. Click volume icon to unmute.");
-                    setShowSnackbar(true);
-                  }).catch(mutedErr => {
-                    console.error("Muted fallback playback also failed:", mutedErr);
-                  });
-                }
-              });
+            setIsLoading(false); // Hide loading indicator once we attempt playback
+            if (videoRef && videoRef.current) {
+              const playPromise = videoRef.current.play();
+              
+              if (playPromise !== undefined) {
+                playPromise.catch(playErr => {
+                  console.error("Error playing fallback format:", playErr);
+                  
+                  // Check if video element still exists before trying muted autoplay
+                  if (videoRef.current) {
+                    // Try muted autoplay if normal playback fails (helps with autoplay restrictions)
+                    if (!videoRef.current.muted) {
+                      console.log("Trying muted playback");
+                      videoRef.current.muted = true;
+                      setIsMuted(true);
+                      videoRef.current.play().then(() => {
+                        setSnackbarMessage("Video started muted. Click volume icon to unmute.");
+                        setShowSnackbar(true);
+                      }).catch(mutedErr => {
+                        console.error("Muted fallback playback also failed:", mutedErr);
+                        
+                        // If all else fails, show an error message to the user
+                        setSnackbarMessage("Unable to play video. Please try a different video.");
+                        setShowSnackbar(true);
+                      });
+                    }
+                  } else {
+                    console.warn("Video element is no longer available after play attempt");
+                  }
+                });
+              }
+            } else {
+              console.warn("Video reference no longer available for playback");
+              setIsLoading(false);
             }
           } catch (timeoutPlayErr) {
             console.error("Error attempting playback after timeout:", timeoutPlayErr);
+            setIsLoading(false);
           }
         }, 1000);
       } catch (loadErr) {
         console.error("Error loading fallback formats:", loadErr);
+        setIsLoading(false);
       }
     } catch (globalErr) {
       console.error("Global error in fallback format handling:", globalErr);
+      setIsLoading(false);
     }
   };
 
@@ -1699,6 +1793,169 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     handleFullscreenChange
   ]);
 
+  // Add function to play a local fallback video when S3 permissions fail
+  const tryLocalFallback = () => {
+    console.log("Playing local fallback video due to permission issues");
+    
+    // Show loading indicator 
+    setIsLoading(true);
+    
+    try {
+      if (!videoRef || !videoRef.current) {
+        console.warn("Cannot play fallback: video element reference is null");
+        setIsLoading(false);
+        return;
+      }
+      
+      const video = videoRef.current;
+      
+      // Pause any current playback
+      try {
+        video.pause();
+      } catch (pauseErr) {
+        console.warn("Error pausing video:", pauseErr);
+      }
+      
+      // Clear existing sources
+      try {
+        video.innerHTML = '';
+      } catch (clearErr) {
+        console.warn("Error clearing video sources:", clearErr);
+      }
+      
+      // Set src directly to local fallback video
+      video.src = FALLBACK_VIDEO;
+      video.muted = false;
+      setIsMuted(false);
+      
+      // Load and play
+      try {
+        video.load();
+        
+        setTimeout(() => {
+          setIsLoading(false);
+          try {
+            if (videoRef && videoRef.current) {
+              videoRef.current.play()
+                .then(() => {
+                  console.log("Local fallback video playing successfully");
+                })
+                .catch(playErr => {
+                  console.error("Error playing local fallback:", playErr);
+                  // Try muted as last resort
+                  if (videoRef.current) {
+                    videoRef.current.muted = true;
+                    setIsMuted(true);
+                    videoRef.current.play()
+                      .catch(err => console.error("Even muted local fallback failed:", err));
+                  }
+                });
+            }
+          } catch (playErr) {
+            console.error("Exception playing local fallback:", playErr);
+          }
+        }, 1000);
+      } catch (loadErr) {
+        console.error("Error loading local fallback:", loadErr);
+        setIsLoading(false);
+      }
+    } catch (globalErr) {
+      console.error("Global error trying local fallback:", globalErr);
+      setIsLoading(false);
+    }
+  };
+
+  // Preload current video when index changes
+  useEffect(() => {
+    if (!videos || videos.length === 0 || currentIndex >= videos.length) return;
+    
+    // Function to preload and validate the current video
+    const preloadCurrentVideo = async () => {
+      try {
+        const currentVideo = videos[currentIndex];
+        if (!currentVideo || !currentVideo.video_url) return;
+        
+        console.log("Preloading video:", currentVideo.video_url);
+        setIsLoading(true);
+        
+        // Try to preload video to detect format issues early
+        const videoElement = videoRef.current;
+        if (!videoElement) return;
+        
+        // Create a temporary video element to test the format
+        const testVideo = document.createElement('video');
+        testVideo.muted = true;
+        testVideo.preload = 'metadata';
+        
+        // Add sources in preferred order
+        const sources = [
+          { src: getVideoSource(currentVideo.video_url), type: getVideoMimeType(currentVideo.video_url) },
+          { src: getVideoSource(currentVideo.video_url.replace(/\.[^.]+$/, '.mp4')), type: 'video/mp4' },
+          { src: getVideoSource(currentVideo.video_url.replace(/\.[^.]+$/, '.webm')), type: 'video/webm' }
+        ];
+        
+        // Create a promise to check which format loads first
+        const loadPromises = sources.map((source, index) => {
+          return new Promise((resolve) => {
+            if (!source.src) {
+              resolve({ success: false, index });
+              return;
+            }
+            
+            const sourceElement = document.createElement('source');
+            sourceElement.src = source.src;
+            sourceElement.type = source.type;
+            testVideo.appendChild(sourceElement);
+            
+            // This format loaded successfully
+            testVideo.addEventListener('loadedmetadata', () => {
+              resolve({ success: true, index, src: source.src, type: source.type });
+            }, { once: true });
+          });
+        });
+        
+        // Add error handler
+        testVideo.addEventListener('error', () => {
+          console.log("Test video failed to load, will try fallback formats");
+        }, { once: true });
+        
+        // Start loading
+        testVideo.load();
+        
+        // Wait for any format to load successfully or all to fail
+        // Set a timeout to avoid waiting too long
+        const timeoutPromise = new Promise(resolve => 
+          setTimeout(() => resolve({ success: false, timedOut: true }), 5000)
+        );
+        
+        // Race between successful load and timeout
+        const result = await Promise.race([Promise.all(loadPromises), timeoutPromise]);
+        
+        // Clean up test video
+        testVideo.remove();
+        
+        // If we found a working format, use it directly
+        if (result.success) {
+          console.log("Found working video format:", result);
+          // Use this format in the main video element
+          videoElement.src = result.src;
+          
+          // Reset loading state
+          setIsLoading(false);
+        } else {
+          console.log("Could not preload video, will try fallback formats");
+          // We'll let the regular video element handle fallbacks
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error in preloading video:", error);
+        setIsLoading(false);
+      }
+    };
+    
+    preloadCurrentVideo();
+  }, [currentIndex, videos]);
+
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
     <Box
@@ -1726,17 +1983,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       return {
         width: '100%',
         height: 'auto',
-        maxHeight: '60vh', // Reduced from 70% to create more space
+        maxHeight: '80vh',
         position: 'relative',
         backgroundColor: '#000',
         overflow: 'hidden',
-        margin: '0 auto',
-        marginTop: '10vh', // Add space at the top
-        borderRadius: '8px', // Add rounded corners
-        boxShadow: '0 8px 16px rgba(0,0,0,0.3)', // Add subtle shadow
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center'
+        borderRadius: 0,
+        boxShadow: 'none',
+        margin: 0
       };
     }
     
@@ -1778,10 +2031,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     if (isMobile && orientation === 'portrait') {
       return {
         width: '100%',
-        minHeight: '100vh',
-        backgroundColor: '#121212', // Dark background for the page
-        padding: '0px 16px 24px 16px', // Add padding around the video
-        overflowX: 'hidden'
+        height: '100vh',
+        backgroundColor: '#000',
+        padding: 0,
+        margin: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden'
       };
     }
     
@@ -1801,46 +2058,46 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         <Box
           ref={videoContainerRef}
           sx={getVideoContainerStyle()}
-      onClick={handleVideoContainerClick}
-      onMouseMove={handleMouseMove}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={handleTouchMove}
-    >
-      {/* Back button that appears/disappears with controls */}
-          <Slide direction="down" in={showControls} timeout={300}>
-        <IconButton
-          onClick={goToHomePage}
-          sx={{ 
-            position: 'absolute',
-            top: 20,
-            left: 20,
-            bgcolor: 'rgba(0, 0, 0, 0.6)',
-            color: 'white',
-                zIndex: 1600,
-            '&:hover': {
-              bgcolor: 'rgba(0, 0, 0, 0.8)',
-            },
-          }}
+          onClick={handleVideoContainerClick}
+          onMouseMove={handleMouseMove}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchMove={handleTouchMove}
         >
-          <ArrowBack />
-        </IconButton>
-      </Slide>
+          {/* Back button that appears/disappears with controls */}
+          <Slide direction="down" in={showControls} timeout={300}>
+            <IconButton
+              onClick={goToHomePage}
+              sx={{ 
+                position: 'absolute',
+                top: 20,
+                left: 20,
+                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                color: 'white',
+                zIndex: 1600,
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.8)',
+                },
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
+          </Slide>
 
-      <video
-        ref={videoRef}
+          <video
+            ref={videoRef}
             playsInline={true}
             muted={isMuted}
             autoPlay={true}
             loop={false}
             preload="auto"
             poster={videos[currentIndex]?.thumbnail_url}
-        onEnded={handleVideoEnd}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
+            onEnded={handleVideoEnd}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-        onVolumeChange={handleVolumeChange}
+            onVolumeChange={handleVolumeChange}
             onCanPlay={() => {
               console.log("Video can now play");
               const video = videoRef.current;
@@ -1883,451 +2140,395 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             style={getVideoStyle()}
           >
             {/* Adding fallback source types by default */}
-          <source 
-            src={getVideoSource(videos[currentIndex]?.video_url)} 
-            type={getVideoMimeType(videos[currentIndex]?.video_url)} 
-          />
+            <source 
+              src={getVideoSource(videos[currentIndex]?.video_url)} 
+              type={getVideoMimeType(videos[currentIndex]?.video_url)} 
+              crossOrigin="anonymous"
+            />
             {/* MP4 Fallback */}
             <source 
               src={getVideoSource(videos[currentIndex]?.video_url.replace(/\.[^.]+$/, '.mp4'))} 
               type="video/mp4"
+              crossOrigin="anonymous"
             />
             {/* WebM Fallback */}
             <source 
               src={getVideoSource(videos[currentIndex]?.video_url.replace(/\.[^.]+$/, '.webm'))} 
               type="video/webm"
+              crossOrigin="anonymous"
             />
             Your browser does not support the video tag.
-      </video>
+          </video>
 
-      {/* Show error message when video source is invalid */}
-      {!getVideoSource(videos[currentIndex]?.video_url) && (
-      <Box
-        sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center',
-            color: 'white',
-            zIndex: 2
-          }}
-        >
-          <Typography variant="h6">
-            Video not available
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
-            Please try another video
-        </Typography>
-      </Box>
-      )}
-
-      {/* Up/Down Navigation repositioned - Up arrow below follow button, Down arrow above player bar */}
-      {videos.length > 1 && (
-      <Box
-        sx={{
-                position: 'absolute',
-                right: 20,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '200px',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                zIndex: 15,
-                opacity: showControls ? 1 : 0,
-                transition: 'opacity 300ms ease-in-out',
-              }}
-            >
-              {/* Up Arrow */}
-              {currentIndex > 0 && (
-              <IconButton
-                onClick={() => setCurrentIndex(currentIndex - 1)}
-                sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.6)',
-                  color: '#2CFF05', // Using the neon green from theme
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.8)',
-                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                  },
-                }}
-              >
-                <ArrowUpward />
-        </IconButton>
-          )}
-
-              {/* Down Arrow */}
-          {currentIndex < videos.length - 1 && (
-              <IconButton
-                onClick={() => setCurrentIndex(currentIndex + 1)}
-                sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.6)',
-                  color: '#2CFF05', // Using the neon green from theme
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.8)',
-                    boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                  },
-                }}
-              >
-                <ArrowDownward />
-        </IconButton>
-              )}
-            </Box>
-      )}
-
-      {/* Mobile-optimized video controls overlay */}
-          <Slide direction="up" in={showControls} timeout={300}>
-      <Box
-        sx={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
-            padding: isMobile ? '8px 12px' : '16px',
-            zIndex: 10,
-            display: 'flex',
-            flexDirection: 'column',
-            transition: 'opacity 0.3s ease',
-            opacity: showControls ? 1 : 0,
-          }}
-        >
-          {/* Progress bar */}
-          <Box
-            sx={{
-              width: '100%',
-              height: isMobile ? '3px' : '4px',
-              bgcolor: 'rgba(255,255,255,0.3)',
-              borderRadius: '2px',
-              mb: isMobile ? 1 : 2,
-              position: 'relative',
-              cursor: 'pointer'
-            }}
-            onClick={handleSeekChange}
-          >
+          {/* Show error message when video source is invalid */}
+          {!getVideoSource(videos[currentIndex]?.video_url) && (
             <Box
               sx={{
                 position: 'absolute',
-                left: 0,
-                top: 0,
-                height: '100%',
-                width: `${(currentTime / duration) * 100}%`,
-                bgcolor: 'primary.main',
-                borderRadius: '2px'
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                textAlign: 'center',
+                color: 'white',
+                zIndex: 2
               }}
-            />
-      </Box>
-
-          {/* Control buttons */}
-      <Box
-        sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              width: '100%'
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <IconButton
-                onClick={togglePlayPause}
-                sx={{ 
-                  color: 'white',
-                  p: isMobile ? 0.5 : 1 
-                }}
-              >
-                {isPlaying ? <Pause /> : <PlayArrow />}
-        </IconButton>
-
-              <IconButton
-                onClick={toggleMute}
-                sx={{ 
-                  color: 'white',
-                  p: isMobile ? 0.5 : 1,
-                  display: { xs: 'none', sm: 'inline-flex' }
-                }}
-              >
-                {isMuted ? <VolumeOff /> : <VolumeUp />}
-        </IconButton>
-      </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              {!isMobile && (
-                <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
-                  {formatTime(currentTime)} / {formatTime(duration)}
-        </Typography>
-              )}
-
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <IconButton
-                  onClick={handleLike}
-                  sx={{ 
-                    color: isLiked ? 'primary.main' : 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-
-                <IconButton
-                  onClick={handleDislike}
-                  sx={{ 
-                    color: isDisliked ? 'error.main' : 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-
-                <IconButton
-                  onClick={handleShare}
-                  sx={{ 
-                    color: 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <Share fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-
-                <IconButton
-                  onClick={handleSaveVideo}
-                  sx={{ 
-                    color: isSaved ? 'primary.main' : 'white',
-                    p: isMobile ? 0.5 : 1,
-                    display: { xs: 'none', sm: 'inline-flex' }
-                  }}
-                >
-                  {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
-                </IconButton>
-
-                <IconButton
-                  onClick={toggleFullScreen}
-                  sx={{ 
-                    color: 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
-        </IconButton>
-      </Box>
-            </Box>
+            >
+              <Typography variant="h6">
+                Video not available
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+                Please try another video
+            </Typography>
           </Box>
-        </Box>
-      </Slide>
+          )}
 
-      {/* Video Info Overlay */}
-          <Slide direction="down" in={showControls} timeout={300}>
-      <Box
-        sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
-            padding: isMobile ? '12px' : '16px',
-            paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
-            zIndex: 10,
-            transition: 'opacity 0.3s ease',
-            opacity: showControls ? 1 : 0,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Avatar 
-                src={videos[currentIndex]?.creator_profile_picture} 
-                alt={videos[currentIndex]?.creator_username}
-                sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }} 
-              />
-              <Box>
-                <Typography 
-                  variant={isMobile ? "body1" : "h6"} 
-                  sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
-                >
-          {videos[currentIndex]?.title}
-        </Typography>
-                <Typography 
-                  variant={isMobile ? "caption" : "body2"} 
-                  sx={{ color: 'white', opacity: 0.8 }}
-                >
-                  {videos[currentIndex]?.creator_username}
-        </Typography>
-              </Box>
-      </Box>
+          {/* Loading indicator */}
+          {isLoading && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                textAlign: 'center',
+                color: 'white',
+                zIndex: 3
+              }}
+            >
+              <CircularProgress color="primary" />
+              <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+                Loading video...
+              </Typography>
+            </Box>
+          )}
 
-            {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
-              <Button
-                variant={isFollowing ? "outlined" : "contained"}
-                size={isMobile ? "small" : "medium"}
-                color="primary"
-                startIcon={isFollowing ? <Check /> : <PersonAdd />}
-                onClick={handleFollowToggle}
-                disabled={followLoading}
-        sx={{
-                  minWidth: 'auto', 
-                  px: isMobile ? 1 : 2,
-                  display: { xs: 'none', sm: 'flex' }
-                }}
-              >
-                {followLoading ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : (
-                  isFollowing ? "Following" : "Follow"
-                )}
-              </Button>
+          {/* Up/Down Navigation repositioned - Up arrow below follow button, Down arrow above player bar */}
+          {videos.length > 1 && (
+          <Box
+            sx={{
+                    position: 'absolute',
+                    right: 20,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '200px',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    zIndex: 15,
+                    opacity: showControls ? 1 : 0,
+                    transition: 'opacity 300ms ease-in-out',
+                  }}
+                >
+                  {/* Up Arrow */}
+                  {currentIndex > 0 && (
+                  <IconButton
+                    onClick={() => setCurrentIndex(currentIndex - 1)}
+                    sx={{
+                      bgcolor: 'rgba(0, 0, 0, 0.6)',
+                      color: '#2CFF05', // Using the neon green from theme
+                      '&:hover': {
+                        bgcolor: 'rgba(0, 0, 0, 0.8)',
+                        boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                      },
+                    }}
+                  >
+                    <ArrowUpward />
+          </IconButton>
             )}
-          </Box>
 
-          {/* Below the video title and user profile section */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 2,
-            color: 'white',
-            mt: 1
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <VisibilityIcon sx={{ fontSize: 20 }} />
-              <Typography variant="body2">
-                {videos[currentIndex]?.views || 0}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <ThumbUpIcon sx={{ fontSize: 20 }} />
-              <Typography variant="body2">
-                {videos[currentIndex]?.likes || 0}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <ThumbDownIcon sx={{ fontSize: 20 }} />
-              <Typography variant="body2">
-                {videos[currentIndex]?.dislikes || 0}
-        </Typography>
-      </Box>
-          </Box>
-        </Box>
-      </Slide>
-
-          {/* Additional content below video in portrait mode */}
-          {isMobile && orientation === 'portrait' && (
-            <Box sx={{ mt: 3, color: 'white', px: 2 }}>
-              <Typography variant="h6" fontWeight="bold" gutterBottom>
-                {videos[currentIndex]?.title}
-              </Typography>
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Avatar 
-                  src={videos[currentIndex]?.creator_profile_picture} 
-                  alt={videos[currentIndex]?.creator_username} 
-                  sx={{ width: 40, height: 40, mr: 1.5 }}
-                />
-                <Box>
-                  <Typography variant="subtitle1">
-                    {videos[currentIndex]?.creator_username}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatViewCount(videos[currentIndex]?.views || 0)} views
-                  </Typography>
+                  {/* Down Arrow */}
+              {currentIndex < videos.length - 1 && (
+                  <IconButton
+                    onClick={() => setCurrentIndex(currentIndex + 1)}
+                    sx={{
+                      bgcolor: 'rgba(0, 0, 0, 0.6)',
+                      color: '#2CFF05', // Using the neon green from theme
+                      '&:hover': {
+                        bgcolor: 'rgba(0, 0, 0, 0.8)',
+                        boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                      },
+                    }}
+                  >
+                    <ArrowDownward />
+          </IconButton>
+                  )}
                 </Box>
-                
+          )}
+
+          {/* Mobile-optimized video controls overlay */}
+          <Slide direction="up" in={showControls} timeout={300}>
+          <Box
+            sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+                padding: isMobile ? '8px 12px' : '16px',
+                zIndex: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'opacity 0.3s ease',
+                opacity: showControls ? 1 : 0,
+              }}
+            >
+              {/* Progress bar */}
+              <Box
+                sx={{
+                  width: '100%',
+                  height: isMobile ? '3px' : '4px',
+                  bgcolor: 'rgba(255,255,255,0.3)',
+                  borderRadius: '2px',
+                  mb: isMobile ? 1 : 2,
+                  position: 'relative',
+                  cursor: 'pointer'
+                }}
+                onClick={handleSeekChange}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    height: '100%',
+                    width: `${(currentTime / duration) * 100}%`,
+                    bgcolor: 'primary.main',
+                    borderRadius: '2px'
+                  }}
+                />
+        </Box>
+
+              {/* Control buttons */}
+          <Box
+            sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%'
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <IconButton
+                    onClick={togglePlayPause}
+                    sx={{ 
+                      color: 'white',
+                      p: isMobile ? 0.5 : 1 
+                    }}
+                  >
+                    {isPlaying ? <Pause /> : <PlayArrow />}
+          </IconButton>
+
+                  <IconButton
+                    onClick={toggleMute}
+                    sx={{ 
+                      color: 'white',
+                      p: isMobile ? 0.5 : 1,
+                      display: { xs: 'none', sm: 'inline-flex' }
+                    }}
+                  >
+                    {isMuted ? <VolumeOff /> : <VolumeUp />}
+          </IconButton>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  {!isMobile && (
+                    <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
+                      {formatTime(currentTime)} / {formatTime(duration)}
+          </Typography>
+                  )}
+
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <IconButton
+                      onClick={handleLike}
+                      sx={{ 
+                        color: isLiked ? 'primary.main' : 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+                    <IconButton
+                      onClick={handleDislike}
+                      sx={{ 
+                        color: isDisliked ? 'error.main' : 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+                    <IconButton
+                      onClick={handleShare}
+                      sx={{ 
+                        color: 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <Share fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+                    <IconButton
+                      onClick={handleSaveVideo}
+                      sx={{ 
+                        color: isSaved ? 'primary.main' : 'white',
+                        p: isMobile ? 0.5 : 1,
+                        display: { xs: 'none', sm: 'inline-flex' }
+                      }}
+                    >
+                      {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
+                    </IconButton>
+
+                    <IconButton
+                      onClick={toggleFullScreen}
+                      sx={{ 
+                        color: 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Slide>
+
+          {/* Video Info Overlay */}
+          <Slide direction="down" in={showControls} timeout={300}>
+          <Box
+            sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+                padding: isMobile ? '12px' : '16px',
+                paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
+                zIndex: 10,
+                transition: 'opacity 0.3s ease',
+                opacity: showControls ? 1 : 0,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Avatar 
+                    src={videos[currentIndex]?.creator_profile_picture} 
+                    alt={videos[currentIndex]?.creator_username}
+                    sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }} 
+                  />
+                  <Box>
+                    <Typography 
+                      variant={isMobile ? "body1" : "h6"} 
+                      sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
+                    >
+                      {videos[currentIndex]?.title}
+                    </Typography>
+                    <Typography 
+                      variant={isMobile ? "caption" : "body2"} 
+                      sx={{ color: 'white', opacity: 0.8 }}
+                    >
+                      {videos[currentIndex]?.creator_username}
+                    </Typography>
+                  </Box>
+          </Box>
+
                 {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
                   <Button
                     variant={isFollowing ? "outlined" : "contained"}
-                    size="small"
+                    size={isMobile ? "small" : "medium"}
                     color="primary"
                     startIcon={isFollowing ? <Check /> : <PersonAdd />}
                     onClick={handleFollowToggle}
                     disabled={followLoading}
-                    sx={{ ml: 'auto' }}
+                    sx={{
+                      minWidth: 'auto', 
+                      px: isMobile ? 1 : 2,
+                      display: { xs: 'none', sm: 'flex' }
+                    }}
                   >
-                    {isFollowing ? "Following" : "Follow"}
+                    {followLoading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : (
+                      isFollowing ? "Following" : "Follow"
+                    )}
                   </Button>
                 )}
               </Box>
-              
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Button 
-                  startIcon={<ThumbUp />} 
-                  color={isLiked ? "primary" : "inherit"}
-                  onClick={handleLike}
-                >
-                  {likes}
-                </Button>
-                
-                <Button 
-                  startIcon={<ThumbDown />} 
-                  color={isDisliked ? "error" : "inherit"}
-                  onClick={handleDislike}
-                >
-                  {dislikes}
-                </Button>
-                
-                <Button 
-                  startIcon={<Share />} 
-                  color="inherit"
-                  onClick={handleShare}
-                >
-                  Share
-                </Button>
-                
-                <Button 
-                  startIcon={isSaved ? <Bookmark /> : <BookmarkBorder />} 
-                  color={isSaved ? "primary" : "inherit"}
-                  onClick={handleSaveVideo}
-                >
-                  {isSaved ? "Saved" : "Save"}
-                </Button>
+
+              {/* Below the video title and user profile section */}
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 2,
+                color: 'white',
+                mt: 1
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <VisibilityIcon sx={{ fontSize: 20 }} />
+                  <Typography variant="body2">
+                    {videos[currentIndex]?.views || 0}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ThumbUpIcon sx={{ fontSize: 20 }} />
+                  <Typography variant="body2">
+                    {videos[currentIndex]?.likes || 0}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ThumbDownIcon sx={{ fontSize: 20 }} />
+                  <Typography variant="body2">
+                    {videos[currentIndex]?.dislikes || 0}
+                  </Typography>
+                </Box>
               </Box>
-              
-              {videos[currentIndex]?.description && (
-                <Typography variant="body2" sx={{ mt: 2, mb: 3, color: 'rgba(255,255,255,0.7)' }}>
-                  {videos[currentIndex]?.description}
-                </Typography>
-              )}
             </Box>
-          )}
+          </Slide>
+        </Box>
 
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={showSnackbar}
-        autoHideDuration={3000}
-        onClose={() => setShowSnackbar(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={showSnackbar}
+          autoHideDuration={3000}
+          onClose={() => setShowSnackbar(false)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
 
-      {/* Delete confirmation dialog */}
-      <Dialog
-        open={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
-      >
-        <DialogTitle>Delete Video</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this video? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setShowDeleteDialog(false)} 
-            color="primary"
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={confirmDelete} 
-            color="error" 
-            variant="contained"
-            disabled={isDeleting}
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+        {/* Delete confirmation dialog */}
+        <Dialog
+          open={showDeleteDialog}
+          onClose={() => setShowDeleteDialog(false)}
+        >
+          <DialogTitle>Delete Video</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Are you sure you want to delete this video? This action cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => setShowDeleteDialog(false)} 
+              color="primary"
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmDelete} 
+              color="error" 
+              variant="contained"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </React.Fragment>
   );

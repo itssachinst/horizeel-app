@@ -1985,17 +1985,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       return {
         width: '100%',
         height: 'auto',
-        maxHeight: '80vh', // Increased from 60vh to make video larger
+        maxHeight: '80vh',
         position: 'relative',
         backgroundColor: '#000',
         overflow: 'hidden',
-        margin: '0 auto',
-        marginTop: '0', // Removed margin top to center vertically
-        borderRadius: '0', // Removed rounded corners for full-screen look
-        boxShadow: 'none', // Removed shadow
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center'
+        borderRadius: 0,
+        boxShadow: 'none',
+        margin: 0
       };
     }
     
@@ -2037,13 +2033,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     if (isMobile && orientation === 'portrait') {
       return {
         width: '100%',
-        height: '100vh', // Changed from minHeight to height
-        backgroundColor: '#000', // Changed to pure black
-        padding: '0', // Removed padding
-        overflowX: 'hidden',
-        display: 'flex', // Added for centering
-        alignItems: 'center', // Center vertically
-        justifyContent: 'center' // Center horizontally
+        height: '100vh',
+        backgroundColor: '#000',
+        padding: 0,
+        margin: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden'
       };
     }
     
@@ -2393,7 +2390,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                       }}
                     >
                       <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
-          </IconButton>
+                    </IconButton>
                   </Box>
                 </Box>
               </Box>
@@ -2427,14 +2424,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                       variant={isMobile ? "body1" : "h6"} 
                       sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
                     >
-            {videos[currentIndex]?.title}
-          </Typography>
+                      {videos[currentIndex]?.title}
+                    </Typography>
                     <Typography 
                       variant={isMobile ? "caption" : "body2"} 
                       sx={{ color: 'white', opacity: 0.8 }}
                     >
                       {videos[currentIndex]?.creator_username}
-          </Typography>
+                    </Typography>
                   </Box>
           </Box>
 
@@ -2446,7 +2443,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                     startIcon={isFollowing ? <Check /> : <PersonAdd />}
                     onClick={handleFollowToggle}
                     disabled={followLoading}
-            sx={{
+                    sx={{
                       minWidth: 'auto', 
                       px: isMobile ? 1 : 2,
                       display: { xs: 'none', sm: 'flex' }
@@ -2485,8 +2482,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                   <ThumbDownIcon sx={{ fontSize: 20 }} />
                   <Typography variant="body2">
                     {videos[currentIndex]?.dislikes || 0}
-          </Typography>
-        </Box>
+                  </Typography>
+                </Box>
               </Box>
             </Box>
           </Slide>

@@ -68,7 +68,7 @@ const RegisterPage = () => {
       await login({ email, password });
       
       // Redirect to appropriate home page based on current path
-      navigate(isDemo ? '/demo/' : '/');
+      navigate('/demo/');
     } catch (err) {
       console.error('Registration error:', err);
       
@@ -157,7 +157,7 @@ const RegisterPage = () => {
 
   const handleBackToHome = () => {
     // Navigate to the appropriate home page based on current path
-    navigate(isDemo ? '/demo/' : '/');
+    navigate('/demo/');
   };
 
   return (
