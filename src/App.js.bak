@@ -25,7 +25,7 @@ const AppLayout = ({ children }) => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
   const isVideoPage = location.pathname.startsWith('/video/');
-  const isHomePage = location.pathname === '/' || location.pathname === '/demo/' || location.pathname.startsWith('/demo/');
+  const isHomePage = location.pathname === '/';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
@@ -71,12 +71,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/video/:id" element={<VideoPage />} />
-              <Route path="/demo/" element={
-                <AppLayout>
-                  <HomePage />
-                </AppLayout>
-              } />
-              <Route path="/demo/*" element={
+              <Route path="/" element={
                 <AppLayout>
                   <HomePage />
                 </AppLayout>
