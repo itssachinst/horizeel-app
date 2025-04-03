@@ -1225,7 +1225,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
   // Navigate to home page
   const goToHomePage = () => {
-    navigate("/");
+    navigate("/demo/");
   };
 
   // Update getVideoSource to better handle S3 URLs that might require signed URLs
