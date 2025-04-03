@@ -1063,7 +1063,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       
       if (videos.length <= 1) {
         exitFullScreen();
-    navigate("/");
+    navigate("/demo/");
       } else if (currentIndex === videos.length - 1) {
         setCurrentIndex(currentIndex - 1);
       } else {
