@@ -7,21 +7,28 @@
     <meta name="theme-color" content="#000000" />
     <meta
       name="description"
-      content="Join the waiting list for Horizontal Reels"
+      content="Join the waiting list for Horizeel - The World's First Horizontal Reels Platform"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>Join Waiting List - Horizontal Reels</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <title>Join Waitlist - Horizeel</title>
     <style>
       :root {
-        --primary-color: #2CFF05;
-        --dark-bg: #121212;
-        --medium-bg: #1f1f1f;
-        --light-bg: #2d2d2d;
-        --text-color: #ffffff;
-        --muted-text: #a0a0a0;
+        --primary-color: #EEFF00; /* Neon yellow */
+        --primary-glow: rgba(238, 255, 0, 0.5);
+        --dark-bg: #00152a; /* Dark blue */
+        --dark-accent: #0A1128;
+        --overlay-bg: rgba(18, 29, 58, 0.7);
+        --medium-bg: rgba(24, 36, 72, 0.7);
+        --light-bg: rgba(38, 52, 96, 0.7);
+        --text-color: #ffffff; /* White */
+        --muted-text: #BBC7E5;
         --error-color: #ff3d3d;
-        --success-color: #2CFF05;
+        --success-color: #EEFF00;
+        --accent-blue: #5677DE;
       }
       
       * {
@@ -31,61 +38,174 @@
       }
       
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen,
           Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
         background-color: var(--dark-bg);
+        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIwIDEwODAiIGZpbGw9Im5vbmUiPjxyZWN0IHdpZHRoPSIxOTIwIiBoZWlnaHQ9IjEwODAiIGZpbGw9IiMxMjFEM0EiLz48Y2lyY2xlIGN4PSI5NjAiIGN5PSI1NDAiIHI9IjUwMCIgZmlsbD0idXJsKCNhKSIgZmlsbC1vcGFjaXR5PSIuMiIvPjxkZWZzPjxyYWRpYWxHcmFkaWVudCBpZD0iYSIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg5NjAgNTQwKSByb3RhdGUoOTApIHNjYWxlKDUwMCkiPjxzdG9wIHN0b3AtY29sb3I9IiNFRUZGMDAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxMjFEM0EiIHN0b3Atb3BhY2l0eT0iMCIvPjwvcmFkaWFsR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
         color: var(--text-color);
         line-height: 1.6;
+        overflow-x: hidden;
+      }
+      
+      .logo {
+        position: absolute;
+        top: 2rem;
+        left: 2rem;
+        font-family: 'Montserrat', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--text-color);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      
+      .logo-icon {
+        width: 40px;
+        height: 40px;
+        background: var(--primary-color);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 20px var(--primary-glow);
+        overflow: hidden;
+      }
+      
+      .logo-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      
+      .logo-icon-inner {
+        width: 20px;
+        height: 4px;
+        background: var(--dark-bg);
+        border-radius: 2px;
       }
       
       .container {
-        max-width: 100%;
-        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
         min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 1rem;
+        padding: 2rem 1rem;
+        position: relative;
       }
       
       .content {
         width: 100%;
-        max-width: 550px;
-        padding: 2rem;
+        max-width: 800px;
+        padding: 4rem 3rem;
         background-color: var(--medium-bg);
-        border-radius: 12px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(20px);
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
         text-align: center;
+        position: relative;
+        overflow: hidden;
+        animation: fadeIn 1s ease-out;
       }
       
-      .logo {
+      .content::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, 
+          rgba(238, 255, 0, 0.05) 0%, 
+          rgba(86, 119, 222, 0.05) 100%);
+        opacity: 0.2;
+        z-index: -1;
+      }
+      
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        background-color: rgba(238, 255, 0, 0.1);
+        color: var(--primary-color);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 600;
         margin-bottom: 1.5rem;
-        width: 120px;
-        height: auto;
+        border: 1px solid rgba(238, 255, 0, 0.2);
+        animation: pulseGlow 3s infinite ease-in-out;
+        font-family: 'Montserrat', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+      }
+      
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 0 rgba(238, 255, 0, 0.4); }
+        50% { box-shadow: 0 0 20px rgba(238, 255, 0, 0.4); }
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 600;
       }
       
       h1 {
         font-size: 2.5rem;
-        margin-bottom: 1rem;
-        font-weight: 700;
+        line-height: 1.1;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        background: linear-gradient(to right, var(--primary-color), #ffffff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeInUp 0.8s forwards 0.2s;
       }
       
-      h1 .highlight {
+      .tagline {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 2rem;
         color: var(--primary-color);
-        text-shadow: 0 0 10px rgba(44, 255, 5, 0.5);
+        text-shadow: 0 0 10px rgba(238, 255, 0, 0.5);
+        opacity: 0;
+        animation: glow 1.5s infinite alternate, fadeInUp 0.8s forwards 0.4s;
+      }
+      
+      @keyframes glow {
+        from {
+          text-shadow: 0 0 10px rgba(238, 255, 0, 0.5);
+        }
+        to {
+          text-shadow: 0 0 15px rgba(238, 255, 0, 0.8), 0 0 20px rgba(238, 255, 0, 0.5);
+        }
       }
       
       p {
         margin-bottom: 2rem;
         color: var(--muted-text);
         font-size: 1.1rem;
+        line-height: 1.8;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeInUp 0.8s forwards 0.6s;
       }
       
       form {
         display: flex;
         flex-direction: column;
         width: 100%;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeInUp 0.8s forwards 0.8s;
       }
       
       .input-group {
@@ -95,56 +215,90 @@
       
       input {
         width: 100%;
-        padding: 1rem;
-        background-color: var(--light-bg);
-        border: 2px solid transparent;
-        border-radius: 8px;
+        padding: 1.2rem 1.5rem;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        border-radius: 50px;
         color: var(--text-color);
         font-size: 1rem;
         transition: all 0.3s ease;
+        animation: pulseGlow2 3s infinite ease-in-out;
+        backdrop-filter: blur(8px);
+        font-family: 'Roboto', sans-serif;
+      }
+
+      @keyframes pulseGlow2 {
+        0%, 100% { box-shadow: 0 0 0 rgba(2, 8, 74, 0.4); }
+        50% { box-shadow: 0 0 20px rgba(238, 255, 0, 0.4); }
       }
       
       input:focus {
         outline: none;
         border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(44, 255, 5, 0.2);
+        box-shadow: 0 0 0 3px rgba(238, 255, 0, 0.15);
       }
       
       button {
-        padding: 1rem;
-        background-color: var(--primary-color);
+        padding: 1.2rem;
+        background: linear-gradient(90deg, var(--primary-color), #C6D300);
         color: var(--dark-bg);
         border: none;
-        border-radius: 8px;
+        border-radius: 50px;
         font-size: 1.1rem;
-        font-weight: 600;
+        font-weight: 700;
+        font-family: 'Montserrat', sans-serif;
         cursor: pointer;
         transition: all 0.3s ease;
         text-transform: uppercase;
         letter-spacing: 1px;
-        box-shadow: 0 0 15px rgba(44, 255, 5, 0.4);
+        box-shadow: 0 10px 25px rgba(238, 255, 0, 0.25);
+        position: relative;
+        overflow: hidden;
       }
       
       button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 0 20px rgba(44, 255, 5, 0.6);
+        transform: translateY(-3px);
+        box-shadow: 0 15px 30px rgba(238, 255, 0, 0.3);
       }
       
       button:active {
-        transform: translateY(0);
+        transform: translateY(-1px);
+      }
+      
+      button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: all 0.5s ease;
+      }
+      
+      button:hover::before {
+        left: 100%;
+      }
+      
+      .privacy-note {
+        font-size: 0.9rem;
+        color: var(--muted-text);
+        margin-top: 1rem;
+        opacity: 0;
+        animation: fadeInUp 0.8s forwards 1s;
       }
       
       .status-message {
         margin-top: 1.5rem;
         padding: 1rem;
-        border-radius: 8px;
+        border-radius: 12px;
         font-weight: 500;
         display: none;
       }
       
       .success {
-        background-color: rgba(44, 255, 5, 0.15);
-        color: var(--success-color);
+        background-color: rgba(238, 255, 0, 0.1);
+        color: var(--primary-color);
         display: block;
       }
       
@@ -154,38 +308,130 @@
         display: block;
       }
       
+      .section-divider {
+        width: 100%;
+        height: 1px;
+        background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
+        margin: 4rem 0;
+      }
+      
       .features {
-        margin-top: 2.5rem;
-        text-align: left;
+        margin-top: 1rem;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeInUp 0.8s forwards 1.2s;
       }
       
       .features h3 {
-        margin-bottom: 1rem;
-        font-size: 1.3rem;
-        color: var(--primary-color);
+        margin-bottom: 2.5rem;
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--text-color);
+        text-align: center;
+        display: inline-block;
+        position: relative;
+      }
+      
+      .features h3:after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 4px;
+        background: var(--primary-color);
+        border-radius: 2px;
+        animation: fadeIn 1.5s ease-out forwards 1.5s;
       }
       
       .features ul {
         list-style-type: none;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
+        margin-top: 1rem;
+        max-width: 900px;
+        margin: 0 auto;
       }
       
       .features li {
         margin-bottom: 0.75rem;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
+        padding: 2rem;
+        background-color: rgba(255, 255, 255, 0.03);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.3s ease;
+        opacity: 0;
+        transform: translateY(20px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        position: relative;
+        overflow: hidden;
       }
       
       .features li::before {
-        content: "✓";
-        margin-right: 0.75rem;
-        color: var(--primary-color);
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 4px;
+        bottom: 0;
+        left: 0;
+        background: linear-gradient(to right, var(--primary-color), var(--accent-blue));
+      }
+      
+      .features li:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        border-color: rgba(238, 255, 0, 0.1);
+      }
+      
+      .features li:nth-child(1) { animation: fadeInUp 0.8s forwards 1.4s; }
+      .features li:nth-child(2) { animation: fadeInUp 0.8s forwards 1.6s; }
+      .features li:nth-child(3) { animation: fadeInUp 0.8s forwards 1.8s; }
+      .features li:nth-child(4) { animation: fadeInUp 0.8s forwards 2s; }
+      
+      .feature-icon {
+        color: white;
         font-weight: bold;
+        margin-right: 15px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-blue) 100%);
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      
+      .feature-content {
+        flex: 1;
+        text-align: left;
+      }
+      
+      .feature-title {
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+        color: var(--text-color);
+        font-family: 'Montserrat', sans-serif;
+      }
+      
+      .feature-description {
+        color: var(--muted-text);
+        font-size: 1rem;
+        line-height: 1.6;
       }
       
       .footer {
         margin-top: 2rem;
         color: var(--muted-text);
         font-size: 0.9rem;
+        opacity: 0;
+        animation: fadeInUp 0.8s forwards 2.2s;
       }
       
       .footer a {
@@ -197,62 +443,267 @@
         text-decoration: underline;
       }
       
-      @media (max-width: 600px) {
+      .coming-soon-floating {
+        position: absolute;
+        top: 30%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 8rem;
+        font-weight: 900;
+        font-family: 'Montserrat', sans-serif;
+        color: transparent;
+        -webkit-text-stroke: 1px rgba(238, 255, 0, 0.05);
+        opacity: 0.1;
+        z-index: -1;
+        animation: float 6s ease-in-out infinite;
+        white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: -2px;
+      }
+      
+      /* Text animations */
+      .char {
+        display: inline-block;
+        animation: charFadeIn 0.4s forwards;
+        animation-delay: calc(var(--char-index) * 0.05s);
+        opacity: 0;
+      }
+      
+      @keyframes charFadeIn {
+        to { opacity: 1; }
+      }
+      
+      .typing {
+        border-right: 0.15em solid var(--primary-color);
+        white-space: nowrap;
+        overflow: hidden;
+        width: 0;
+        animation: typing 3s steps(40, end) forwards 0.5s,
+                   blink-caret 0.75s step-end infinite;
+      }
+      
+      @keyframes typing {
+        from { width: 0 }
+        to { width: 100% }
+      }
+      
+      @keyframes blink-caret {
+        from, to { border-color: transparent }
+        50% { border-color: var(--primary-color) }
+      }
+      
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      @keyframes float {
+        0% { transform: translate(-50%, -50%) translateY(0px); }
+        50% { transform: translate(-50%, -50%) translateY(-20px); }
+        100% { transform: translate(-50%, -50%) translateY(0px); }
+      }
+      
+      /* Background elements */
+      .decorative-circle {
+        position: absolute;
+        border-radius: 50%;
+        z-index: -1;
+      }
+      
+      .circle-1 {
+        width: 450px;
+        height: 450px;
+        top: -150px;
+        right: -150px;
+        background: linear-gradient(135deg, rgba(238, 255, 0, 0.05) 0%, rgba(86, 119, 222, 0.05) 100%);
+      }
+      
+      .circle-2 {
+        width: 500px;
+        height: 500px;
+        bottom: -150px;
+        left: -200px;
+        background: linear-gradient(135deg, rgba(86, 119, 222, 0.05) 0%, rgba(238, 255, 0, 0.05) 100%);
+      }
+      
+      .circle-3 {
+        width: 300px;
+        height: 300px;
+        top: 40%;
+        right: 10%;
+        background: linear-gradient(135deg, rgba(238, 255, 0, 0.05) 0%, rgba(255, 255, 255, 0.05) 100%);
+      }
+      
+      /* Responsive */
+      @media (max-width: 768px) {
+        .logo {
+          top: 1.5rem;
+          left: 1.5rem;
+        }
+        
         .content {
-          padding: 1.5rem;
+          padding: 3rem 2rem;
+          margin: 0 1rem;
         }
         
         h1 {
-          font-size: 2rem;
+          font-size: 2.2rem;
+        }
+        
+        .tagline {
+          font-size: 1.3rem;
+        }
+        
+        .features ul {
+          grid-template-columns: 1fr;
+        }
+        
+        .coming-soon-floating {
+          font-size: 5rem;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .content {
+          padding: 2rem 1.5rem;
+        }
+        
+        h1 {
+          font-size: 1.8rem;
         }
         
         p {
           font-size: 1rem;
         }
+        
+        .hero-badge {
+          font-size: 0.8rem;
+          padding: 0.4rem 0.8rem;
+        }
       }
     </style>
   </head>
   <body>
+    <div class="decorative-circle circle-1"></div>
+    <div class="decorative-circle circle-2"></div>
+    <div class="decorative-circle circle-3"></div>
+    
+    <div class="logo">
+      <div class="logo-icon">
+        <img src="logo192.png" alt="Horizeel Logo">
+      </div>
+      HORIZEEL
+    </div>
+    
     <div class="container">
+      <div class="coming-soon-floating">Coming soon</div>
       <div class="content">
-        <img src="%PUBLIC_URL%/logo192.png" alt="Horizontal Reels Logo" class="logo" />
-        <h1>Join the <span class="highlight">Waiting List</span></h1>
-        <p>Be the first to experience Horizontal Reels when we launch. Enter your email below to join our exclusive waiting list.</p>
+        <div class="hero-badge">The Next Era of Short-Form Content</div>
+        <h1>Experience the World's First Horizontal Reels Platform</h1>
+        <p>Tired of watching short-form videos in a vertical box on your big screen? Horizeel is revolutionizing content with an immersive, full-screen horizontal experience designed for all laptops, desktops, tablets, TVs, AR, VR, and mobile seamlessly delivering the most impressive and immersive storytelling experience ever.</p>
         
-        <form id="waitingListForm">
-          <div class="input-group">
+        <div class="top-waitlist">
+          <form id="waitingListForm" style="display: flex; flex-direction: row; gap: 1rem; width: 100%; max-width: 500px; margin: 0 auto 3rem;">
             <input 
               type="email" 
               id="email" 
               name="email" 
               placeholder="Enter your email address" 
               required 
+              style="margin-bottom: 0; flex-grow: 1;"
             />
-          </div>
-          <button type="submit" id="submitBtn">Join Waiting List</button>
-        </form>
+            <button type="submit" id="submitBtn" style="width: 350px; white-space: nowrap; padding: 1rem 1.8rem;">Join Waitlist</button>
+          </form>
+        </div>
         
-        <div id="statusMessage" class="status-message"></div>
+        <div class="section-divider"></div>
         
         <div class="features">
-          <h3>Coming Soon:</h3>
+          <h3>Why Horizeel?</h3>
           <ul>
-            <li>Horizontal video watching - the way it's meant to be</li>
-            <li>Seamless browsing experience with intuitive controls</li>
-            <li>High-quality video playback without format issues</li>
-            <li>Beautiful UI designed for landscape viewing</li>
-            <li>Creator-focused tools to grow your audience</li>
+            <li>
+              <div class="feature-icon">✓</div>
+              <div class="feature-content">
+                <div class="feature-title">True Cinematic Experience</div>
+                <div class="feature-description">No more black bars. Just full-screen, immersive horizontal reels.</div>
+              </div>
+            </li>
+            <li>
+              <div class="feature-icon">✓</div>
+              <div class="feature-content">
+                <div class="feature-title">Next-Gen Storytelling</div>
+                <div class="feature-description">From creators to filmmakers, everyone gets the perfect frame.</div>
+              </div>
+            </li>
+            <li>
+              <div class="feature-icon">✓</div>
+              <div class="feature-content">
+                <div class="feature-title">Seamlessly Optimized for Every Screen</div>
+                <div class="feature-description">The only short-form platform designed to adapt perfectly to how you watch, no matter the device!</div>
+              </div>
+            </li>
+            <li>
+              <div class="feature-icon">✓</div>
+              <div class="feature-content">
+                <div class="feature-title">Coming Soon</div>
+                <div class="feature-description">Get ready to experience the world's first immersive horizontal reels platform across all devices!</div>
+              </div>
+            </li>
           </ul>
         </div>
         
+        <div class="section-divider"></div>
+        
+        <h3 style="margin-bottom: 1rem; font-size: 2rem; opacity: 0; animation: fadeInUp 0.8s forwards 2.2s;">Be the First to Experience the Revolution!</h3>
+        <p style="margin-bottom: 1.5rem; opacity: 0; animation: fadeInUp 0.8s forwards 2.4s;">Join our exclusive waitlist and get early access before the world does. Sign up now!</p>
+        
+        <form id="waitingListForm2" style="max-width: 500px; margin: 0 auto;">
+          <div class="input-group">
+            <input 
+              type="email" 
+              id="email2" 
+              name="email" 
+              placeholder="Enter your email address" 
+              required 
+            />
+          </div>
+          <button type="submit" id="submitBtn2">Join the Waitlist</button>
+        </form>
+        
+        <p class="privacy-note">We respect your privacy. No spam, just updates on the launch!</p>
+        
+        <div id="statusMessage" class="status-message"></div>
+        
         <div class="footer">
-          <p>&copy; 2023 Horizontal Reels. All rights reserved. <a href="/demo/">Back to Home</a></p>
+          <p>&copy; 2023 Horizeel. All rights reserved.</p>
         </div>
       </div>
     </div>
     
     <script>
       document.addEventListener('DOMContentLoaded', function() {
+        // Animate title with characters
+        const mainTitle = document.getElementById('mainTitle');
+        const titleText = mainTitle.textContent;
+        let newTitle = '';
+        
+        for (let i = 0; i < titleText.length; i++) {
+          newTitle += `<span class="char" style="--char-index: ${i}">${titleText[i]}</span>`;
+        }
+        mainTitle.innerHTML = newTitle;
+        
+        // Form handling - top form
         const waitingListForm = document.getElementById('waitingListForm');
         const statusMessage = document.getElementById('statusMessage');
         const submitBtn = document.getElementById('submitBtn');
@@ -302,7 +753,60 @@
           })
           .finally(() => {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Join Waiting List';
+            submitBtn.textContent = 'Join Waitlist';
+          });
+        });
+        
+        // Form handling - bottom form
+        const waitingListForm2 = document.getElementById('waitingListForm2');
+        const submitBtn2 = document.getElementById('submitBtn2');
+        
+        waitingListForm2.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          const email = document.getElementById('email2').value;
+          if (!email || !validateEmail(email)) {
+            showMessage('Please enter a valid email address.', 'error');
+            return;
+          }
+          
+          // Change button state
+          submitBtn2.disabled = true;
+          submitBtn2.textContent = 'Joining...';
+          
+          // API endpoint
+          const API_URL = '/api/waiting-list/';
+          
+          fetch(API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            showMessage('Success! You\'ve been added to our waiting list. We\'ll notify you when we launch.', 'success');
+            waitingListForm2.reset();
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            
+            // Check if already registered
+            if (error.message.includes('409')) {
+              showMessage('This email is already on our waiting list.', 'error');
+            } else {
+              showMessage('Something went wrong. Please try again later.', 'error');
+            }
+          })
+          .finally(() => {
+            submitBtn2.disabled = false;
+            submitBtn2.textContent = 'Join the Waitlist';
           });
         });
         
@@ -328,6 +832,24 @@
             }, 5000);
           }
         }
+        
+        // Animate scrolling elements on scroll
+        const animateElements = document.querySelectorAll('.features li');
+        
+        function checkScroll() {
+          const triggerBottom = window.innerHeight * 0.8;
+          
+          animateElements.forEach(element => {
+            const elementTop = element.getBoundingClientRect().top;
+            if(elementTop < triggerBottom) {
+              element.style.opacity = "1";
+              element.style.transform = "translateY(0)";
+            }
+          });
+        }
+        
+        window.addEventListener('scroll', checkScroll);
+        checkScroll(); // Check initial state
       });
     </script>
   </body>

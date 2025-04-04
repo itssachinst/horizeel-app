@@ -13,8 +13,8 @@ let theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#2CFF05', // Neon green from the logo
-      contrastText: '#000000', // Black text for contrast with neon green
+      main: '#ceff00', // Neon green from the logo
+      contrastText: '#002549', // Black text for contrast with neon green
     },
     secondary: {
       main: '#FFFFFF', // White as secondary color
@@ -29,11 +29,11 @@ let theme = createTheme({
       primary: '#FFFFFF', // White text
       secondary: 'rgba(255, 255, 255, 0.7)', // Semi-transparent white
       disabled: 'rgba(255, 255, 255, 0.5)', // More transparent white
-      highlight: '#2CFF05', // Neon green for highlighted text
+      highlight: '#ceff00', // Neon green for highlighted text
     },
     action: {
-      active: '#2CFF05', // Neon green for active elements
-      hover: 'rgba(44, 255, 5, 0.08)', // Semi-transparent neon green for hover
+      active: '#ceff00', // Neon green for active elements
+      hover: 'rgba(206, 255, 0, 0.08)', // Semi-transparent neon green for hover
     },
   },
   typography: {
@@ -121,15 +121,15 @@ let theme = createTheme({
         },
         containedPrimary: {
           '&:hover': {
-            backgroundColor: '#24CC04', // Slightly darker neon green on hover
-            boxShadow: '0 0 10px rgba(44, 255, 5, 0.5)', // Neon glow effect
+            backgroundColor: '#ceff00', // Slightly darker neon green on hover
+            boxShadow: '0 0 10px rgba(206, 255, 5, 0.5)', // Neon glow effect
           },
         },
         outlinedPrimary: {
-          borderColor: '#2CFF05',
+          borderColor: '#ceff00',
           '&:hover': {
-            borderColor: '#2CFF05',
-            boxShadow: '0 0 10px rgba(44, 255, 5, 0.5)', // Neon glow effect
+            borderColor: '#ceff00',
+            boxShadow: '0 0 10px rgba(206, 255, 5, 0.5)', // Neon glow effect
           },
         },
       },
@@ -142,7 +142,7 @@ let theme = createTheme({
           overflow: 'hidden',
           transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 0 15px rgba(44, 255, 5, 0.3)', // Subtle neon glow on hover
+            boxShadow: '0 0 15px rgba(206, 255, 5, 0.3)', // Subtle neon glow on hover
           },
         },
       },
@@ -152,8 +152,8 @@ let theme = createTheme({
         root: {
           color: 'rgba(255, 255, 255, 0.7)',
           '&:hover': {
-            color: '#2CFF05', // Neon green on hover
-            backgroundColor: 'rgba(44, 255, 5, 0.08)', // Very subtle neon green background
+            color: '#ceff00', // Neon green on hover
+            backgroundColor: 'rgba(206, 255, 5, 0.08)', // Very subtle neon green background
           },
         },
       },
@@ -161,7 +161,7 @@ let theme = createTheme({
     MuiAvatar: {
       styleOverrides: {
         root: {
-          border: '2px solid rgba(44, 255, 5, 0.3)', // Subtle neon green border
+          border: '2px solid rgba(206, 255, 5, 0.3)', // Subtle neon green border
         },
       },
     },
@@ -169,7 +169,7 @@ let theme = createTheme({
       styleOverrides: {
         root: {
           backgroundColor: '#121212', // Very dark gray
-          borderTop: '1px solid rgba(44, 255, 5, 0.12)', // Subtle neon green border
+          borderTop: '1px solid rgba(206, 255, 5, 0.12)', // Subtle neon green border
         },
       },
     },
@@ -178,7 +178,7 @@ let theme = createTheme({
         root: {
           color: 'rgba(255, 255, 255, 0.7)',
           '&.Mui-selected': {
-            color: '#2CFF05', // Neon green for selected items
+            color: '#ceff00', // Neon green for selected items
           },
         },
       },
@@ -188,9 +188,9 @@ let theme = createTheme({
         switchBase: {
           color: '#FFFFFF',
           '&.Mui-checked': {
-            color: '#2CFF05', // Neon green when checked
+            color: '#ceff00', // Neon green when checked
             '& + .MuiSwitch-track': {
-              backgroundColor: 'rgba(44, 255, 5, 0.5)', // Semi-transparent neon green track
+              backgroundColor: 'rgba(206, 255, 5, 0.5)', // Semi-transparent neon green track
             },
           },
         },
