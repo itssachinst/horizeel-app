@@ -1321,7 +1321,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
   // Add goToHomePage function
   const goToHomePage = () => {
-    navigate("/");
+    navigate("/demo/");
   };
 
   // Add handleSeekChange function

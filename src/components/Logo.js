@@ -24,7 +24,7 @@ const LogoText = styled(Typography)(({ theme }) => ({
 const Logo = ({ onClick }) => {
   return (
     <LogoWrapper onClick={onClick}>
-      <LogoText variant="h6">
+      <LogoText variant="h6" fontFamily="Roboto">
         Horizeel
       </LogoText>
     </LogoWrapper>
