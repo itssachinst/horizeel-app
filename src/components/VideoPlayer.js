@@ -755,7 +755,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     };
     
     const loadedMetadataHandler = () => {
-      if (video) {
+    if (video) {
         console.log("Video metadata loaded, duration:", video.duration);
         setDuration(video.duration);
       }
@@ -765,30 +765,30 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     const videoEndHandler = () => {
       console.log("Video ended, handling progression");
       
-      // Update watch history with completed flag if user is logged in
-      if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-        const currentVideo = videos[currentIndex];
-        
-        if (video && currentVideo) {
-          const watchData = {
-            video_id: currentVideo.video_id,
-            watch_time: video.duration || 0,
-            watch_percentage: 100,
-            completed: true,
-            last_position: video.duration || 0,
-            like_flag: isLiked,
-            dislike_flag: isDisliked,
-            saved_flag: isSaved,
-            shared_flag: watchShared,
-            device_type: deviceType
-          };
-          
-          updateWatchHistory(watchData).catch(err => {
-            console.error("Failed to update watch history on video end:", err);
-          });
-        }
-      }
+    // Update watch history with completed flag if user is logged in
+    if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+      const currentVideo = videos[currentIndex];
       
+      if (video && currentVideo) {
+        const watchData = {
+          video_id: currentVideo.video_id,
+          watch_time: video.duration || 0,
+            watch_percentage: 100,
+          completed: true,
+          last_position: video.duration || 0,
+          like_flag: isLiked,
+          dislike_flag: isDisliked,
+          saved_flag: isSaved,
+          shared_flag: watchShared,
+          device_type: deviceType
+        };
+        
+        updateWatchHistory(watchData).catch(err => {
+          console.error("Failed to update watch history on video end:", err);
+        });
+      }
+    }
+    
       // Reset the reportedView flag to ensure next video gets a view count
       reportedViewRef.current = false;
       
@@ -803,7 +803,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       if (currentIndex >= videos.length - 1) {
         console.log("Reached end of video list, looping to first video");
         nextIndex = 0;
-      } else {
+    } else {
         nextIndex = currentIndex + 1;
         console.log(`Moving to next video (index ${nextIndex})`);
       }
@@ -1013,8 +1013,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     if (!videoRef.current) return;
     
     const video = videoRef.current;
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
+      video.muted = !video.muted;
+      setIsMuted(video.muted);
   };
 
   // Add toggleFullScreen function
@@ -1084,15 +1084,15 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         // Like video
         setIsLiked(true);
         // If video was previously disliked, remove dislike
-        if (isDisliked) {
-          setIsDisliked(false);
-        }
-        
+      if (isDisliked) {
+        setIsDisliked(false);
+      }
+      
         // Update likes count on server
         const response = await incrementVideoLike(videoId);
-        
-        if (response && typeof response.likes === 'number') {
-          setLikes(response.likes);
+      
+      if (response && typeof response.likes === 'number') {
+        setLikes(response.likes);
         }
       }
     } catch (error) {
@@ -1120,15 +1120,15 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         // Dislike video
         setIsDisliked(true);
         // If video was previously liked, remove like
-        if (isLiked) {
-          setIsLiked(false);
-        }
-        
+      if (isLiked) {
+        setIsLiked(false);
+      }
+      
         // Update dislikes count on server
         const response = await incrementVideoDislike(videoId);
-        
-        if (response && typeof response.dislikes === 'number') {
-          setDislikes(response.dislikes);
+      
+      if (response && typeof response.dislikes === 'number') {
+        setDislikes(response.dislikes);
         }
       }
     } catch (error) {
@@ -1141,9 +1141,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   // Add handleShare function
   const handleShare = async () => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) {
-      return;
-    }
-    
+          return;
+      }
+
     try {
       const currentVideo = videos[currentIndex];
       const shareUrl = `${window.location.origin}/modern-video/${currentVideo.video_id}`;
@@ -1158,20 +1158,20 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         const duration = videoElement ? videoElement.duration : 0;
         const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
         
-        const watchData = {
+          const watchData = {
           video_id: currentVideo.video_id,
           watch_time: currentTime,
           watch_percentage: watchPercentage,
-          completed: false,
+            completed: false,
           last_position: currentTime,
-          like_flag: isLiked,
-          dislike_flag: isDisliked,
-          saved_flag: isSaved,
-          shared_flag: true,
-          device_type: deviceType
-        };
+            like_flag: isLiked,
+            dislike_flag: isDisliked,
+            saved_flag: isSaved,
+            shared_flag: true,
+            device_type: deviceType
+          };
         
-        updateWatchHistory(watchData).catch(err => {
+          updateWatchHistory(watchData).catch(err => {
           console.error("Failed to update watch history for share:", err);
         });
       }
@@ -1184,21 +1184,21 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         setShowSnackbar(true);
       } else {
         // Fallback for older browsers
-        const textArea = document.createElement("textarea");
+      const textArea = document.createElement("textarea");
         textArea.value = shareUrl;
-        textArea.style.position = "fixed";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        try {
+      textArea.style.position = "fixed";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
           document.execCommand('copy');
           setSnackbarMessage("Link copied to clipboard");
           setShowSnackbar(true);
-        } catch (err) {
+      } catch (err) {
           console.error("Failed to copy link:", err);
           setSnackbarMessage("Failed to copy link");
-          setShowSnackbar(true);
+      setShowSnackbar(true);
         }
         
         document.body.removeChild(textArea);
@@ -1217,7 +1217,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       setShowSnackbar(true);
       return;
     }
-    
+
     try {
       const videoId = videos[currentIndex].video_id;
       
@@ -1287,7 +1287,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     // Only allow creator to delete their own video
     if (!currentUser || currentUser.user_id !== videos[currentIndex].user_id) {
       setSnackbarMessage("You can only delete your own videos");
-      setShowSnackbar(true);
+          setShowSnackbar(true);
       setShowDeleteDialog(false);
       return;
     }
@@ -1299,7 +1299,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       await deleteVideo(videoId);
       
       setSnackbarMessage("Video deleted successfully");
-      setShowSnackbar(true);
+          setShowSnackbar(true);
       
       // Close dialog
       setShowDeleteDialog(false);
@@ -1311,14 +1311,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         } else if (currentIndex === videos.length - 1) {
           setCurrentIndex(0);
         }
-      } else {
+    } else {
         // If this was the last video, navigate home
-        navigate("/");
+    navigate("/");
       }
     } catch (error) {
       console.error("Error deleting video:", error);
       setSnackbarMessage("Failed to delete video");
-      setShowSnackbar(true);
+    setShowSnackbar(true);
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
@@ -1427,36 +1427,36 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         <Box
           ref={videoContainerRef}
           sx={getVideoContainerStyle()}
-          onClick={handleVideoContainerClick}
-          onMouseMove={handleMouseMove}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onTouchMove={handleTouchMove}
-        >
-          {/* Back button that appears/disappears with controls */}
+      onClick={handleVideoContainerClick}
+      onMouseMove={handleMouseMove}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
+    >
+      {/* Back button that appears/disappears with controls */}
           <Slide direction="down" in={showControls} timeout={300}>
-            <IconButton
-              onClick={goToHomePage}
-              sx={{ 
-                position: 'absolute',
-                top: 20,
-                left: 20,
-                bgcolor: 'rgba(0, 0, 0, 0.6)',
-                color: 'white',
+        <IconButton
+          onClick={goToHomePage}
+          sx={{ 
+            position: 'absolute',
+            top: 20,
+            left: 20,
+            bgcolor: 'rgba(0, 0, 0, 0.6)',
+            color: 'white',
                 zIndex: 1600,
-                '&:hover': {
-                  bgcolor: 'rgba(0, 0, 0, 0.8)',
-                },
-              }}
-            >
-              <ArrowBack />
-            </IconButton>
-          </Slide>
+            '&:hover': {
+              bgcolor: 'rgba(0, 0, 0, 0.8)',
+            },
+          }}
+        >
+          <ArrowBack />
+        </IconButton>
+      </Slide>
 
-          <video
-            ref={videoRef}
+      <video
+        ref={videoRef}
             playsInline={true}
-            muted={isMuted}
+        muted={isMuted}
             autoPlay={true}
             loop={false}
             preload="auto"
@@ -1466,26 +1466,26 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           >
             {/* Sources will be added dynamically in useEffect */}
             Your browser does not support the video tag.
-          </video>
+      </video>
 
-          {/* Show error message when video source is invalid */}
-          {!getVideoSource(videos[currentIndex]?.video_url) && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                textAlign: 'center',
-                color: 'white',
-                zIndex: 2
-              }}
-            >
-              <Typography variant="h6">
-                Video not available
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
-                Please try another video
+      {/* Show error message when video source is invalid */}
+      {!getVideoSource(videos[currentIndex]?.video_url) && (
+      <Box
+        sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center',
+            color: 'white',
+            zIndex: 2
+          }}
+        >
+          <Typography variant="h6">
+            Video not available
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+            Please try another video
               </Typography>
             </Box>
           )}
