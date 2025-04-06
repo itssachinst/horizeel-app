@@ -202,4 +202,98 @@ export const getFileExtension = (url) => {
     }
     return null;
   }
+};
+
+// Add these utility functions for HLS streams
+
+/**
+ * Checks if a URL is an HLS stream based on the extension
+ * @param {string} url - The URL to check
+ * @returns {boolean} - Whether the URL is an HLS stream
+ */
+export const isHlsStream = (url) => {
+  if (!url) return false;
+  return url.toString().toLowerCase().endsWith('.m3u8');
+};
+
+/**
+ * Gets the appropriate MIME type for a video URL
+ * @param {string} url - The video URL
+ * @returns {string} - The MIME type
+ */
+export const getVideoMimeType = (url) => {
+  if (!url) return 'video/mp4';
+  
+  try {
+    // Extract extension from URL
+    const match = url.toString().match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
+    const extension = match && match[1] ? match[1].toLowerCase() : '';
+    
+    switch (extension) {
+      case 'm3u8':
+        return 'application/vnd.apple.mpegurl';
+      case 'mpd':
+        return 'application/dash+xml';
+      case 'webm': 
+        return 'video/webm';
+      case 'mov': 
+        return 'video/quicktime';
+      case 'ogg': 
+        return 'video/ogg';
+      case 'mp4':
+      default: 
+        return 'video/mp4'; // Default to mp4
+    }
+  } catch (e) {
+    return 'video/mp4'; // Safe fallback
+  }
+};
+
+/**
+ * Determines if the browser has native HLS support
+ * @returns {boolean} - Whether the browser supports HLS natively
+ */
+export const isHlsNativelySupported = () => {
+  const video = document.createElement('video');
+  return video.canPlayType('application/vnd.apple.mpegurl') || 
+         video.canPlayType('application/x-mpegURL');
+};
+
+/**
+ * Processes AWS S3 and other URLs to make them playable
+ * @param {string} videoUrl - The original video URL
+ * @param {string} apiBaseUrl - Optional API base URL for relative paths
+ * @returns {string} - The processed URL
+ */
+export const processVideoUrl = (videoUrl, apiBaseUrl = '') => {
+  if (!videoUrl) return null;
+  
+  try {
+    // Normalize the URL
+    let finalUrl = videoUrl.toString().trim();
+    
+    // Clean up URL - remove quotes and fix double slashes
+    finalUrl = finalUrl.replace(/^["'](.*)["']$/, '$1');
+    finalUrl = finalUrl.replace(/([^:])\/\//g, '$1/');
+    
+    // Special handling for AWS S3 URLs - use them directly
+    if (finalUrl.includes('s3.') && finalUrl.includes('amazonaws.com')) {
+      return finalUrl;
+    }
+    
+    // Handle relative URLs
+    if (finalUrl.startsWith('/') && apiBaseUrl) {
+      return `${apiBaseUrl}${finalUrl}`;
+    }
+    
+    // Add protocol if missing
+    if (!finalUrl.match(/^https?:\/\//i) && !finalUrl.startsWith('/')) {
+      finalUrl = `https://${finalUrl}`;
+    }
+    
+    return finalUrl;
+  } catch (error) {
+    console.error("Error processing video URL:", error);
+    return videoUrl; // Return original as fallback
+  }
 }; 

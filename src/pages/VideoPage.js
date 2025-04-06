@@ -21,6 +21,12 @@ import { useVideoContext } from "../contexts/VideoContext";
 const ITEMS_PER_PAGE = 20;  // Number of videos to fetch per page
 const PREFETCH_THRESHOLD = 5;  // Load more videos when this many videos from the end
 
+// Define a function to check if a URL is an HLS stream
+const isHlsStream = (url) => {
+  if (!url) return false;
+  return url.toLowerCase().endsWith('.m3u8');
+};
+
 const VideoPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -63,7 +69,7 @@ const VideoPage = () => {
     };
   }, []);
   
-  // Update the loadVideo function to ensure videos play correctly
+  // Update the loadVideo function to ensure videos play correctly, including HLS streams
   const loadVideo = useCallback(async (videoId) => {
     console.log("loadVideo called with id:", videoId);
     
@@ -81,6 +87,12 @@ const VideoPage = () => {
       const existingVideo = findVideoById(videoId);
       if (existingVideo) {
         console.log("Video found in existing videos array");
+        
+        // Check if the URL is an HLS stream
+        if (existingVideo.video_url && isHlsStream(existingVideo.video_url)) {
+          console.log("HLS stream detected in existing video:", existingVideo.video_url);
+        }
+        
         const videoIndex = videos.findIndex(v => v.video_id === videoId);
         if (videoIndex !== -1) {
           console.log(`Setting current index to ${videoIndex}`);
@@ -101,11 +113,18 @@ const VideoPage = () => {
           const newIndex = videos.findIndex(v => v.video_id === videoId);
           if (newIndex !== -1) {
             console.log(`Video found after fetch, setting index to ${newIndex}`);
+            
+            // Check for HLS format
+            const video = videos[newIndex];
+            if (video && video.video_url && isHlsStream(video.video_url)) {
+              console.log("HLS stream detected in fetched video:", video.video_url);
+            }
+            
             setCurrentIndex(newIndex);
-        } else {
+          } else {
             console.log("Video not found in initial batch, trying to fetch it directly");
             fetchSpecificVideo(videoId);
-        }
+          }
         }, 100);
       } else {
         fetchSpecificVideo(videoId);
@@ -126,6 +145,11 @@ const VideoPage = () => {
       
       if (specificVideo) {
         console.log("Successfully fetched specific video:", specificVideo);
+        
+        // Check if the video is an HLS stream
+        if (specificVideo.video_url && isHlsStream(specificVideo.video_url)) {
+          console.log("HLS stream detected:", specificVideo.video_url);
+        }
         
         // Add to videos array avoiding duplicates
         setVideos(prev => {
@@ -215,10 +239,10 @@ const VideoPage = () => {
           <Button
             variant="contained"
             color="primary"
-          onClick={() => navigate('/demo/')}
-          sx={{ mt: 2 }}
-        >
-          Go back to Home
+            onClick={() => navigate('/demo/')}
+            sx={{ mt: 2 }}
+          >
+            Go back to Home
           </Button>
       </Box>
     );
@@ -226,9 +250,9 @@ const VideoPage = () => {
 
   // Empty state when no videos are available
   if (!videos || videos.length === 0) {
-  return (
-        <Box 
-          sx={{ 
+    return (
+      <Box 
+        sx={{ 
           width: '100%',
           height: '100vh',
           display: 'flex',
@@ -252,13 +276,13 @@ const VideoPage = () => {
         overflow: 'hidden'
       }}
     >
-        <VideoPlayer
-          videos={videos}
-          currentIndex={currentIndex}
+      <VideoPlayer
+        videos={videos}
+        currentIndex={currentIndex}
         setCurrentIndex={setCurrentIndex}
-          isMobile={isMobile}
-          isTablet={isTablet}
-        />
+        isMobile={isMobile}
+        isTablet={isTablet}
+      />
       
       {/* Only show snackbar for critical messages */}
       <Snackbar

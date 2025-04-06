@@ -92,8 +92,6 @@ const Header = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [trendingHashtags, setTrendingHashtags] = useState(['#shorts', '#music', '#gaming', '#tutorial', '#funny']);
-  const [showTrending, setShowTrending] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
   
   const isMenuOpen = Boolean(anchorEl);
@@ -127,17 +125,6 @@ const Header = () => {
   const handleSearchInputChange = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
-    
-    // Show trending hashtags when the input is empty or starts with #
-    setShowTrending(value === '' || value.startsWith('#'));
-  };
-
-  // Handle hashtag selection
-  const handleHashtagClick = (hashtag) => {
-    setSearchQuery(hashtag);
-    // Auto-submit the search with the hashtag
-    navigate(`/search?q=${encodeURIComponent(hashtag)}`);
-    setShowTrending(false);
   };
 
   // Handle search form submission
@@ -145,7 +132,6 @@ const Header = () => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-      setShowTrending(false);
     }
   };
 
@@ -302,8 +288,6 @@ const Header = () => {
             inputProps={{ 'aria-label': 'search' }}
             value={searchQuery}
             onChange={handleSearchInputChange}
-            onFocus={() => setShowTrending(true)}
-            onBlur={() => setTimeout(() => setShowTrending(false), 200)}
           />
           {searchQuery && (
             <IconButton 
@@ -316,55 +300,12 @@ const Header = () => {
           )}
         </form>
       </Search>
-      
-      {/* Trending hashtags dropdown */}
-      {showTrending && (
-        <Paper
-          elevation={3}
-          sx={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            mt: 0.5,
-            p: 2,
-            maxWidth: 600,
-            mx: 'auto',
-            background: alpha('#121212', 0.95),
-            backdropFilter: 'blur(5px)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
-            Trending Hashtags
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {trendingHashtags.map((hashtag) => (
-              <Chip
-                key={hashtag}
-                label={hashtag}
-                clickable
-                color="primary"
-                variant="outlined"
-                size="small"
-                onClick={() => handleHashtagClick(hashtag)}
-                sx={{
-                  '&:hover': {
-                    backgroundColor: alpha('#3f51b5', 0.2),
-                  }
-                }}
-              />
-            ))}
-          </Box>
-        </Paper>
-      )}
     </Box>
   );
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="sticky" color="default" sx={{ backgroundColor: '#121212' }}>
+      <AppBar position="sticky" color="default" sx={{ backgroundColor: '#00152A' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <IconButton

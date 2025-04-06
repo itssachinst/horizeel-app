@@ -38,9 +38,13 @@ import {
   formatRelativeTime, 
   truncateText,
   fixVideoUrl,
-  getFileExtension 
+  getFileExtension,
+  isHlsStream,
+  getVideoMimeType,
+  processVideoUrl
 } from "../utils/videoUtils";
 import { useVideoContext } from "../contexts/VideoContext";
+import Hls from 'hls.js';
 
 // Get the API base URL from environment
 const API_BASE_URL = process.env.REACT_APP_API_URL || "https://api.horizontalreels.com/api/v1";
@@ -49,6 +53,13 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || "https://api.horizontalree
 const FALLBACK_VIDEO = '/assets/fallback-video.mp4';
 // Add fallback video server for when S3 links are giving 403 Forbidden
 const FALLBACK_VIDEO_SERVER = 'https://player.vimeo.com/external/';
+
+// Check if HLS is supported natively
+const isHlsNativelySupported = () => {
+  const video = document.createElement('video');
+  return video.canPlayType('application/vnd.apple.mpegurl') || 
+         video.canPlayType('application/x-mpegURL');
+};
 
 // Define all browser-specific fullscreen functions at component level
 const fullscreenAPI = {
@@ -161,6 +172,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   
   // Create a ref to track which videos we've reported views for
   const reportedViewRef = useRef(false);
+
+  const hlsRef = useRef(null);
 
   // Add orientation change detection
   useEffect(() => {
@@ -313,84 +326,110 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       try {
         // Clean up current video with error handling
         try {
-          videoElement.pause();
-          
-          // Safely remove child elements
-          while (videoElement.firstChild) {
-            try {
-              videoElement.removeChild(videoElement.firstChild);
-            } catch (err) {
-              console.warn("Error removing video child:", err);
-              break; // Prevent infinite loop if removal fails
-            }
+          // Cleanup any existing HLS instance
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
           }
           
+          videoElement.pause();
           videoElement.removeAttribute('src');
           videoElement.load();
         } catch (cleanupError) {
           console.warn("Error during video cleanup:", cleanupError);
         }
         
-        // Get video source with error handling - directly use S3 URLs
-        let videoSource;
-        try {
-          videoSource = getVideoSource(currentVideo.video_url);
-          console.log("Using video source:", videoSource);
-          
-          if (!videoSource) {
-            console.error("Failed to get valid video source");
-            if (isMounted) {
-              setSnackbarMessage("Invalid video source. Please try another video.");
-              setShowSnackbar(true);
-            }
-            return;
-          }
-        } catch (sourceError) {
-          console.error("Error getting video source:", sourceError);
+        // Get video source URL
+        let videoSource = getVideoSource(currentVideo.video_url);
+        console.log("Using video source:", videoSource);
+        
+        if (!videoSource) {
+          console.error("Failed to get valid video source");
           if (isMounted) {
-            setSnackbarMessage("Error processing video URL");
+            setSnackbarMessage("Invalid video source. Please try another video.");
             setShowSnackbar(true);
           }
           return;
         }
         
-        // Get MIME type with error handling - focus on MP4 for S3
-        let mimeType;
-        try {
-          mimeType = getVideoMimeType(currentVideo.video_url);
-          console.log("Using MIME type:", mimeType);
-        } catch (mimeError) {
-          console.warn("Error getting MIME type:", mimeError);
-          mimeType = 'video/mp4'; // Default to mp4
-        }
+        // Check if this is an HLS stream (.m3u8 extension)
+        const isHlsStream = videoSource.toLowerCase().endsWith('.m3u8');
+        console.log(`Is HLS stream: ${isHlsStream}`);
         
-        // Set sources with error handling
-        try {
-          // Set the source as MP4 - we know S3 files are MP4
-          const sourceElement = document.createElement('source');
-          sourceElement.src = videoSource;
-          sourceElement.type = mimeType;
-          sourceElement.crossOrigin = "anonymous";
+        if (isHlsStream && Hls.isSupported()) {
+          console.log("Using HLS.js for playback");
           
-          try {
-            videoElement.appendChild(sourceElement);
-            console.log("Added primary source:", videoSource);
-          } catch (appendError) {
-            console.warn("Error appending source element:", appendError);
-          }
+          // Create and configure a new HLS instance
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 90,
+            maxBufferLength: 30
+          });
           
-          // No webm fallback since we only use mp4 on S3
+          hlsRef.current = hls;
           
-          // Set src attribute as a final fallback
+          // Bind HLS to the video element and load the source
+          hls.loadSource(videoSource);
+          hls.attachMedia(videoElement);
+          
+          // Listen for HLS events
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            console.log("HLS manifest parsed, attempting to play");
+            if (isMounted) {
+              // Try to play after HLS manifest is parsed
+              attemptPlayback(videoElement, currentVideo);
+            }
+          });
+          
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+              console.error("Fatal HLS error:", data);
+              
+              switch(data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  console.log("Network error occurred, trying to recover");
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  console.log("Media error occurred, trying to recover");
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  // Cannot recover
+                  console.error("Unrecoverable HLS error");
+                  if (isMounted) {
+                    setSnackbarMessage("Error loading video stream");
+                    setShowSnackbar(true);
+                  }
+                  break;
+              }
+            }
+          });
+        } else if (isHlsStream && isHlsNativelySupported()) {
+          console.log("Using native HLS support");
+          
+          // For Safari and iOS which support HLS natively
           videoElement.src = videoSource;
+          videoElement.addEventListener('loadedmetadata', function() {
+            if (isMounted) {
+              attemptPlayback(videoElement, currentVideo);
+            }
+          });
           
-          try {
-            videoElement.load();
-          } catch (loadError) {
-            console.warn("Error during video load():", loadError);
-          }
-        } catch (setupError) {
-          console.error("Error setting up video sources:", setupError);
+        } else {
+          console.log("Using standard video playback");
+          
+          // For non-HLS videos or browsers without HLS support
+          videoElement.src = videoSource;
+          videoElement.load();
+          
+          // Try to play after a short delay
+          setTimeout(() => {
+            if (isMounted) {
+              attemptPlayback(videoElement, currentVideo);
+            }
+          }, 100);
         }
         
         // Update UI metadata
@@ -423,65 +462,68 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             checkFollowStatus(currentVideo.user_id);
           }
         }
-        
-        // Set initial muted state to false unless required by browser
-        videoElement.muted = false;
-        setIsMuted(false);
-        
-        // Attempt to play with full error handling
-        console.log("Attempting to play video...");
-        try {
-          const playPromise = videoElement.play();
-          
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                if (!isMounted) return;
-                console.log("Video playback started successfully");
-                setIsPlaying(true);
-                
-                // Report view if needed
-                if (!reportedViewRef.current) {
-                  incrementVideoView(currentVideo.video_id).catch(err => 
-                    console.error("Failed to increment view count:", err)
-                  );
-                  reportedViewRef.current = true;
-                }
-              })
-              .catch(err => {
-                if (!isMounted) return;
-                console.error("Error playing video:", err);
-                
-                // Try muted playback for autoplay policy only if required by browser
-                if (!videoElement.muted) {
-                  console.log("Trying muted autoplay due to browser policy...");
-                  videoElement.muted = true;
-                  setIsMuted(true);
-                  
-                  videoElement.play().then(() => {
-                    console.log("Muted playback started successfully");
-                    // Explicitly show message to user about unmuting
-                    setSnackbarMessage("Video started muted. Click volume icon to unmute.");
-                    setShowSnackbar(true);
-                  }).catch(e => {
-                    if (!isMounted) return;
-                    console.error("Muted autoplay also failed:", e);
-                    setIsPlaying(false);
-                  });
-                } else {
-                  setIsPlaying(false);
-                }
-              });
-          }
-        } catch (playError) {
-          console.error("Exception during play() attempt:", playError);
-        }
       } catch (globalError) {
         console.error("Global error in video loading process:", globalError);
         if (isMounted) {
           setSnackbarMessage("Error playing video: " + (globalError.message || "Unknown error"));
-          setShowSnackbar(true);
+          setShowSnackbar(false);
         }
+      }
+    };
+    
+    // Helper function to attempt playback with retry logic
+    const attemptPlayback = (video, currentVideo) => {
+      console.log("Attempting to play video...");
+      
+      // Set initial muted state to false unless required by browser
+      video.muted = false;
+      setIsMuted(false);
+      
+      try {
+        const playPromise = video.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              if (!isMounted) return;
+              console.log("Video playback started successfully");
+              setIsPlaying(true);
+              
+              // Report view if needed
+              if (!reportedViewRef.current) {
+                incrementVideoView(currentVideo.video_id).catch(err => 
+                  console.error("Failed to increment view count:", err)
+                );
+                reportedViewRef.current = true;
+              }
+            })
+            .catch(err => {
+              if (!isMounted) return;
+              console.error("Error playing video:", err);
+              
+              // Try muted playback for autoplay policy only if required by browser
+              if (!video.muted) {
+                console.log("Trying muted autoplay due to browser policy...");
+                video.muted = true;
+                setIsMuted(true);
+                
+                video.play().then(() => {
+                  console.log("Muted playback started successfully");
+                  // Explicitly show message to user about unmuting
+                  setSnackbarMessage("Video started muted. Click volume icon to unmute.");
+                  setShowSnackbar(true);
+                }).catch(e => {
+                  if (!isMounted) return;
+                  console.error("Muted autoplay also failed:", e);
+                  setIsPlaying(false);
+                });
+              } else {
+                setIsPlaying(false);
+              }
+            });
+        }
+      } catch (playError) {
+        console.error("Exception during play() attempt:", playError);
       }
     };
 
@@ -496,7 +538,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       isMounted = false;
       clearTimeout(timeoutId);
       
-      // Safely clean up video element on unmount
+      // Safely clean up video element and HLS instance on unmount
       if (videoRef.current) {
         try {
           videoRef.current.pause();
@@ -504,6 +546,15 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           videoRef.current.load();
         } catch (cleanupError) {
           console.warn("Error cleaning up video on unmount:", cleanupError);
+        }
+      }
+      
+      if (hlsRef.current) {
+        try {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        } catch (hlsError) {
+          console.warn("Error cleaning up HLS instance:", hlsError);
         }
       }
     };
@@ -868,185 +919,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     };
   }, [handleKeyDown, handleFullscreenChange]);
 
-  // Update the tryFallbackFormats function to focus on mp4 only
-  const tryFallbackFormats = () => {
-    console.log("Attempting to find alternative video formats...");
-    
-    // Show a subtle loading indicator instead of an error message
-    setIsLoading(true);
-    
-    try {
-      // Safe check for required references
-      if (!videos || videos.length === 0 || currentIndex < 0 || currentIndex >= videos.length) {
-        console.warn("Cannot try fallback formats: videos array or currentIndex is invalid");
-        setIsLoading(false);
-        return;
-      }
-      
-      if (!videoRef || !videoRef.current) {
-        console.warn("Cannot try fallback formats: video element reference is null");
-        setIsLoading(false);
-        return;
-      }
-      
-      const videoToTry = videos[currentIndex];
-      if (!videoToTry || !videoToTry.video_url) {
-        console.warn("Cannot try fallback formats: current video or URL is missing");
-        setIsLoading(false);
-        return;
-      }
-      
-      const video = videoRef.current;
-      
-      // First pause the video to stop any ongoing playback
-      try {
-        video.pause();
-      } catch (pauseErr) {
-        console.warn("Error pausing video:", pauseErr);
-      }
-      
-      // Keep track of source URLs we've already tried
-      const triedSources = new Set();
-      
-      // Store a reference to the original video source for checking
-      if (video.src) {
-        triedSources.add(video.src);
-      }
-      
-      // Add each source element's URL to the tried sources set
-      Array.from(video.querySelectorAll('source')).forEach(source => {
-        if (source.src) {
-          triedSources.add(source.src);
-        }
-      });
-      
-      // Clear existing sources
-      while (video.firstChild) {
-        video.removeChild(video.firstChild);
-      }
-      
-      // Try static fallback video as a last resort
-      try {
-        const fallbackUrl = '/assets/fallback-video.mp4';
-        if (!triedSources.has(fallbackUrl)) {
-          const fallbackSource = document.createElement('source');
-          fallbackSource.src = fallbackUrl;
-          fallbackSource.type = 'video/mp4';
-          video.appendChild(fallbackSource);
-          console.log("Added static fallback video source");
-        }
-      } catch (fallbackErr) {
-        console.warn("Error adding static fallback:", fallbackErr);
-      }
-      
-      // Try to extract the base URL
-      let originalUrl = '';
-      
-      try {
-        originalUrl = videoToTry.video_url.toString();
-        
-        // Try direct URL first without any format changes
-        const directUrl = getVideoSource(originalUrl);
-        if (directUrl && !triedSources.has(directUrl)) {
-          console.log("Trying original URL format:", originalUrl);
-          const directSource = document.createElement('source');
-          directSource.src = directUrl;
-          directSource.crossOrigin = "anonymous";
-          directSource.type = getVideoMimeType(originalUrl);
-          video.appendChild(directSource);
-          triedSources.add(directUrl);
-        }
-        
-        // For S3 URLs, we only need to try MP4
-        // No need to test multiple formats since we know S3 only has MP4
-        if (originalUrl.includes('s3.') && originalUrl.includes('amazonaws.com')) {
-          console.log("S3 URL detected, using only MP4 format");
-          // No additional sources needed for S3
-        } else {
-          // Only try MP4 format as fallback for non-S3 URLs
-          const mp4Url = originalUrl.replace(/\.[^.]+$/, '.mp4');
-          if (mp4Url !== originalUrl) {
-            const processedUrl = getVideoSource(mp4Url);
-            if (processedUrl && !triedSources.has(processedUrl)) {
-              console.log("Trying MP4 fallback:", mp4Url);
-              const source = document.createElement('source');
-              source.src = processedUrl;
-              source.crossOrigin = "anonymous";
-              source.type = 'video/mp4';
-              video.appendChild(source);
-            }
-          }
-        }
-        
-        // Set src attribute as a final fallback
-        video.src = directUrl || originalUrl;
-      } catch (urlErr) {
-        console.warn("Error processing video URL:", urlErr);
-      }
-      
-      // Start without muting if possible
-      video.muted = false;
-      setIsMuted(false);
-      
-      // Try to load and play with proper error handling
-      try {
-        console.log("Loading video with fallback sources");
-        video.load();
-        
-        // Set a timeout to attempt playback
-        setTimeout(() => {
-          try {
-            console.log("Attempting to play fallback video");
-            setIsLoading(false); // Hide loading indicator once we attempt playback
-            if (videoRef && videoRef.current) {
-              const playPromise = videoRef.current.play();
-              
-              if (playPromise !== undefined) {
-                playPromise.catch(playErr => {
-                  console.error("Error playing fallback format:", playErr);
-                  
-                  // Check if video element still exists before trying muted autoplay
-                  if (videoRef.current) {
-                    // Try muted autoplay if normal playback fails (helps with autoplay restrictions)
-                    if (!videoRef.current.muted) {
-                      console.log("Trying muted playback");
-                      videoRef.current.muted = true;
-                      setIsMuted(true);
-                      videoRef.current.play().then(() => {
-                        setSnackbarMessage("Video started muted. Click volume icon to unmute.");
-                        setShowSnackbar(true);
-                      }).catch(mutedErr => {
-                        console.error("Muted fallback playback also failed:", mutedErr);
-                        
-                        // If all else fails, show an error message to the user
-                        setSnackbarMessage("Unable to play video. Please try a different video.");
-                        setShowSnackbar(true);
-                      });
-                    }
-                  } else {
-                    console.warn("Video element is no longer available after play attempt");
-                  }
-                });
-              }
-            } else {
-              console.warn("Video reference no longer available for playback");
-              setIsLoading(false);
-            }
-          } catch (timeoutPlayErr) {
-            console.error("Error attempting playback after timeout:", timeoutPlayErr);
-            setIsLoading(false);
-          }
-        }, 1000);
-      } catch (loadErr) {
-        console.error("Error loading fallback formats:", loadErr);
-        setIsLoading(false);
-      }
-    } catch (globalErr) {
-      console.error("Global error in fallback format handling:", globalErr);
-      setIsLoading(false);
-    }
-  };
-
   // Preload current video when index changes
   useEffect(() => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) return;
@@ -1138,76 +1010,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     preloadCurrentVideo();
   }, [currentIndex, videos]);
 
-  // Update getVideoSource to better handle S3 URLs
-  const getVideoSource = (videoUrl) => {
-    if (!videoUrl) {
-      console.error("Video URL is null or undefined");
-      return null;
-    }
-    
-    try {
-      // First normalize the URL
-      let finalUrl = videoUrl.toString().trim();
-      
-      // Clean up URL - remove any quotes and fix double slashes
-      finalUrl = finalUrl.replace(/^["'](.*)["']$/, '$1');
-      finalUrl = finalUrl.replace(/([^:])\/\//g, '$1/');
-      
-      // Special handling for S3 URLs - use them directly without modification
-      if (finalUrl.includes('s3.') && finalUrl.includes('amazonaws.com')) {
-        console.log("Using S3 URL directly:", finalUrl);
-        return finalUrl;
-      }
-      
-      // Handle relative URLs from our API
-      if (finalUrl.startsWith('/')) {
-        const baseUrl = API_BASE_URL || "https://api.horizontalreels.com/api/v1";
-        finalUrl = `${baseUrl}${finalUrl}`;
-        return finalUrl;
-      }
-      
-      // If URL is already absolute with a protocol
-      if (finalUrl.match(/^https?:\/\//i)) {
-        // Only apply CORS proxy if needed and not an S3 URL
-        if (VIDEO_PROXY_ENABLED && !finalUrl.includes('amazonaws.com')) {
-          const currentDomain = window.location.hostname;
-          
-          try {
-            const urlObj = new URL(finalUrl);
-            const videoDomain = urlObj.hostname;
-            
-            if (videoDomain !== currentDomain && 
-                !videoDomain.includes('localhost') && 
-                !videoDomain.includes('127.0.0.1')) {
-              return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
-            }
-          } catch (urlError) {
-            console.warn("Error parsing URL for CORS check:", urlError);
-          }
-        }
-        
-        return finalUrl;
-      }
-      
-      // If URL is missing protocol but isn't relative
-      if (!finalUrl.startsWith('/')) {
-        finalUrl = `http://${finalUrl}`;
-        
-        if (VIDEO_PROXY_ENABLED) {
-          return `${VIDEO_PROXY_URL}${encodeURIComponent(finalUrl)}`;
-        }
-        
-        return finalUrl;
-      }
-      
-      return finalUrl;
-    } catch (error) {
-      console.error("Error processing video URL:", error);
-      return videoUrl; // Return original URL as fallback
-    }
-  };
+  // Using imported utility functions for videos
+  // Replace getVideoSource with processVideoUrl
+  const getVideoSource = (videoUrl) => processVideoUrl(videoUrl, API_BASE_URL);
 
-  // Simplified MIME type function since we only use MP4
+  // Update MIME type function to handle HLS content
   const getVideoMimeType = (url) => {
     if (!url) return 'video/mp4';
     
@@ -1216,17 +1023,20 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       const match = url.toString().match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
       const extension = match && match[1] ? match[1].toLowerCase() : '';
       
-      // Since we only have mp4 files in S3, we'll default to mp4 for most cases
-      if (!extension || extension === 'mp4') {
-        return 'video/mp4';
-      }
-      
-      // Add a few other types for compatibility with existing files
       switch (extension) {
-        case 'webm': return 'video/webm';
-        case 'mov': return 'video/quicktime';
-        case 'ogg': return 'video/ogg';
-        default: return 'video/mp4'; // Default to mp4
+        case 'm3u8':
+          return 'application/vnd.apple.mpegurl';
+        case 'mpd':
+          return 'application/dash+xml';
+        case 'webm': 
+          return 'video/webm';
+        case 'mov': 
+          return 'video/quicktime';
+        case 'ogg': 
+          return 'video/ogg';
+        case 'mp4':
+        default: 
+          return 'video/mp4'; // Default to mp4
       }
     } catch (e) {
       return 'video/mp4'; // Safe fallback
@@ -1253,70 +1063,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
   // Add handleVideoError function
   const handleVideoError = (error) => {
-    console.error("Video error:", error);
+    console.error("Video error occurred:", error);
     
-    // Get error code if available
-    let errorMessage = "Error playing video. Trying alternative format...";
-    let errorCode = null;
-    
-    if (error && error.type === 'videoerrorevent' && videoRef.current) {
-      const videoError = videoRef.current.error;
-      
-      if (videoError && typeof videoError.code === 'number') {
-        errorCode = videoError.code;
-        
-        // Only proceed with switch if we have a valid error code
-        switch (errorCode) {
-          case 1: // MEDIA_ERR_ABORTED
-            errorMessage = "Video playback was aborted.";
-            break;
-          case 2: // MEDIA_ERR_NETWORK
-            errorMessage = "Network error occurred while loading the video.";
-            break;
-          case 3: // MEDIA_ERR_DECODE
-            errorMessage = "Video decoding error. Trying alternate format...";
-            tryFallbackFormats();
-            // Suppress this message to prevent user confusion
-            return;
-          case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-            errorMessage = "This video format is not supported by your browser. Trying alternate format...";
-            tryFallbackFormats();
-            // Suppress this message to prevent user confusion
-            return;
-          default:
-            errorMessage = `Unknown video error (code: ${errorCode}).`;
-        }
-        
-        // Log the detailed error information
-        console.error("Video error details:", {
-          code: errorCode,
-          message: videoError.message || 'No detailed error message available',
-          errorMessage: errorMessage
-        });
-      } else {
-        console.error("Video element has error object but code is not available or not a number");
-        tryFallbackFormats();
-      }
-    } else {
-      console.error("Video element doesn't have an error object");
-      tryFallbackFormats();
-    }
-    
-    // Log error information if we have a passed error object
-    if (error) {
-      console.error("Error passed to handler:", error);
-    }
-    
-    // Always try fallback formats for any error
-    if (!errorCode) {
-      tryFallbackFormats();
-      // Also suppress generic errors when trying fallback formats
-      return;
-    }
-    
-    // Show error message to user (only for errors we haven't suppressed)
-    setSnackbarMessage(errorMessage);
-    setShowSnackbar(true);
+    // Show error message to user
+    setSnackbarMessage("Error playing video. Please try another video.");
+    setShowSnackbar(false);
   };
 
   // Add goToHomePage function
@@ -1744,7 +1495,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             autoPlay={true}
             loop={false}
             preload="auto"
-            poster={videos[currentIndex]?.thumbnail_url}
             crossOrigin="anonymous"
             style={getVideoStyle()}
           >
