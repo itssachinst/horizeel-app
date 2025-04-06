@@ -23,6 +23,7 @@ import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 import { useVideoContext } from "../contexts/VideoContext";
 import { formatViewCount, formatDuration } from "../utils/videoUtils";
+import './HomePage.css';
 
 const HomePage = () => {
   const { 
@@ -470,17 +471,30 @@ const HomePage = () => {
               </Typography>
             </Box>
           ) : (
-            <Grid container spacing={3}>
+            <div className="video-grid">
               {displayVideos.map((video, index) => (
-                <Grid item xs={12} sm={6} md={4} key={`${video.video_id}-${index}`}>
-                  <VideoThumbnail 
-                    video={video} 
-                    index={index}
-                    isLastElement={index === displayVideos.length - 1 && !isSearching}
-                  />
-                </Grid>
+                <div 
+                  key={`${video.video_id}-${index}`} 
+                  className="video-card"
+                  onClick={() => handleVideoClick(video.video_id, index)}
+                >
+                  <div className="thumbnail-container">
+                    <img 
+                      src={video.thumbnail_url} 
+                      alt={video.title} 
+                      className="video-thumbnail" 
+                    />
+                    <div className="play-icon">▶</div>
+                  </div>
+                  <div className="video-info">
+                    <h3 className="video-title">{video.title}</h3>
+                    <div className="video-meta">
+                      <span>{video.views} views</span>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </Grid>
+            </div>
           )}
           
           {/* Loading indicator for infinite scroll */}

@@ -1,80 +1,89 @@
 import { useState, useCallback } from 'react';
 
 /**
- * Custom hook to handle swipe navigation on mobile devices
- * @param {Function} onSwipeUp callback when user swipes up 
- * @param {Function} onSwipeDown callback when user swipes down
- * @param {number} minSwipeDistance minimum swipe distance to trigger callbacks (in pixels)
- * @param {boolean} isVertical whether to detect vertical (true) or horizontal (false) swipes
- * @returns {Object} handlers for touch events
+ * Custom hook for handling swipe navigation
+ * @param {Function} onNext - Function to call when swiping to next
+ * @param {Function} onPrev - Function to call when swiping to previous
+ * @param {number} threshold - Minimum swipe distance to trigger (in pixels)
+ * @param {boolean} vertical - If true, uses vertical swipe direction
  */
-const useSwipeNavigate = (onSwipeUp, onSwipeDown, minSwipeDistance = 50, isVertical = false) => {
+const useSwipeNavigate = (onNext, onPrev, threshold = 50, vertical = false) => {
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
 
-  // Reset touch positions when touch starts
-  const handleTouchStart = useCallback((e) => {
+  // Reset values when touch is released
+  const resetTouch = () => {
+    setTouchStart(null);
     setTouchEnd(null);
+  };
+
+  // Handle the start of a touch
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.targetTouches[0];
     setTouchStart({
-      x: e.targetTouches[0].clientX,
-      y: e.targetTouches[0].clientY,
+      x: touch.clientX,
+      y: touch.clientY,
       time: Date.now()
     });
+    setTouchEnd(null);
   }, []);
 
-  // Update touch end position
+  // Handle touch movement
   const handleTouchMove = useCallback((e) => {
+    if (!touchStart) return;
+    
+    const touch = e.targetTouches[0];
     setTouchEnd({
-      x: e.targetTouches[0].clientX,
-      y: e.targetTouches[0].clientY,
+      x: touch.clientX,
+      y: touch.clientY,
       time: Date.now()
     });
-  }, []);
+  }, [touchStart]);
 
-  // Process swipe when touch ends
+  // Handle the end of a touch
   const handleTouchEnd = useCallback(() => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStart || !touchEnd) {
+      resetTouch();
+      return;
+    }
+
+    // Determine swipe direction and distance
+    const distanceX = touchEnd.x - touchStart.x;
+    const distanceY = touchEnd.y - touchStart.y;
+    const elapsedTime = touchEnd.time - touchStart.time;
     
-    const distanceX = touchStart.x - touchEnd.x;
-    const distanceY = touchStart.y - touchEnd.y;
-    const time = touchEnd.time - touchStart.time;
-    
-    if (isVertical) {
-      // For vertical swipes
-      // Only trigger if movement is mostly vertical (to avoid scroll conflicts)
-      const isVerticalSwipe = Math.abs(distanceY) > Math.abs(distanceX) * 1.5;
-      
-      // Check if swipe is fast enough (under 500ms) and long enough
-      const isValidSwipe = time < 500 && isVerticalSwipe && Math.abs(distanceY) > minSwipeDistance;
-      
-      if (isValidSwipe) {
+    // Exit if touch was too short (likely just a tap)
+    if (elapsedTime < 100) {
+      resetTouch();
+      return;
+    }
+
+    if (vertical) {
+      // Vertical swipe logic
+      if (Math.abs(distanceY) > threshold) {
         if (distanceY > 0) {
-          // Swiped up
-          onSwipeUp?.();
+          // Swipe down
+          onPrev?.();
         } else {
-          // Swiped down
-          onSwipeDown?.();
+          // Swipe up
+          onNext?.();
         }
       }
     } else {
-      // For horizontal swipes (original behavior)
-      // Only trigger if movement is mostly horizontal
-      const isHorizontalSwipe = Math.abs(distanceX) > Math.abs(distanceY) * 1.5;
-      
-      // Check if swipe is fast enough and long enough
-      const isValidSwipe = time < 500 && isHorizontalSwipe && Math.abs(distanceX) > minSwipeDistance;
-      
-      if (isValidSwipe) {
+      // Horizontal swipe logic
+      if (Math.abs(distanceX) > threshold) {
         if (distanceX > 0) {
-          // Swiped left
-          onSwipeUp?.(); // Using the same parameters but for horizontal
+          // Swipe right
+          onPrev?.();
         } else {
-          // Swiped right
-          onSwipeDown?.(); // Using the same parameters but for horizontal
+          // Swipe left
+          onNext?.();
         }
       }
     }
-  }, [touchStart, touchEnd, onSwipeUp, onSwipeDown, minSwipeDistance, isVertical]);
+
+    resetTouch();
+  }, [touchStart, touchEnd, onNext, onPrev, threshold, vertical]);
 
   return {
     handleTouchStart,

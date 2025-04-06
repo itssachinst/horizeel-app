@@ -1,61 +1,140 @@
 /**
- * Formats a view count with appropriate suffix (K, M) for display
- * @param {number} count - The view count to format
- * @returns {string} Formatted view count (e.g., "1.2K", "3.5M")
+ * Formats a number as a view count (e.g., 1200 -> 1.2K)
+ * @param {number} count - The number to format
+ * @return {string} Formatted count
  */
 export const formatViewCount = (count) => {
-  if (!count) return '0';
+  if (!count && count !== 0) return '0';
   
-  if (count < 1000) return count.toString();
-  if (count < 1000000) return `${(count / 1000).toFixed(1)}K`;
-  return `${(count / 1000000).toFixed(1)}M`;
+  if (count < 1000) {
+    return count.toString();
+  } else if (count < 1000000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  } else {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
 };
 
 /**
- * Formats video duration from seconds to MM:SS format
- * @param {number} seconds - Duration in seconds
- * @returns {string} Formatted duration (e.g., "3:45")
+ * Formats seconds into MM:SS format
+ * @param {number} seconds - Time in seconds
+ * @return {string} Formatted time
  */
 export const formatDuration = (seconds) => {
-  if (!seconds) return '00:00';
+  if (!seconds || isNaN(seconds)) return '0:00';
   
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   
-  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
 };
 
 /**
- * Formats a timestamp to relative time (e.g., "2 days ago")
- * @param {string} timestamp - ISO timestamp or Date object
- * @returns {string} Relative time string
+ * Returns a relative time string (e.g., "3 hours ago")
+ * @param {string} dateString - ISO date string
+ * @return {string} Relative time
  */
 export const formatRelativeTime = (dateString) => {
   if (!dateString) return '';
   
   const date = new Date(dateString);
   const now = new Date();
-  const diffInSeconds = Math.floor((now - date) / 1000);
+  const diff = Math.floor((now - date) / 1000); // difference in seconds
   
-  if (diffInSeconds < 60) return 'just now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-  if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-  if (diffInSeconds < 31536000) return `${Math.floor(diffInSeconds / 2592000)} months ago`;
-  return `${Math.floor(diffInSeconds / 31536000)} years ago`;
+  if (diff < 60) {
+    return 'just now';
+  } else if (diff < 3600) {
+    const minutes = Math.floor(diff / 60);
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  } else if (diff < 86400) {
+    const hours = Math.floor(diff / 3600);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  } else if (diff < 2592000) {
+    const days = Math.floor(diff / 86400);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  } else if (diff < 31536000) {
+    const months = Math.floor(diff / 2592000);
+    return `${months} month${months > 1 ? 's' : ''} ago`;
+  } else {
+    const years = Math.floor(diff / 31536000);
+    return `${years} year${years > 1 ? 's' : ''} ago`;
+  }
 };
 
 /**
- * Truncates a string to a maximum length and adds ellipsis if needed
+ * Truncates text to a specified length
  * @param {string} text - Text to truncate
  * @param {number} maxLength - Maximum length before truncation
- * @returns {string} Truncated text with ellipsis if needed
+ * @return {string} Truncated text
  */
 export const truncateText = (text, maxLength = 100) => {
   if (!text) return '';
   if (text.length <= maxLength) return text;
   
   return text.substring(0, maxLength) + '...';
+};
+
+/**
+ * Preprocesses video URL for consistent format
+ * @param {string} url - Video URL to process
+ * @return {string} Processed URL
+ */
+export const fixVideoUrl = (url) => {
+  if (!url) return '';
+  
+  // Remove quotes
+  url = url.replace(/^["'](.*)["']$/, '$1');
+  
+  // Fix double slashes (except in protocol)
+  url = url.replace(/([^:])\/\//g, '$1/');
+  
+  // Ensure starts with protocol
+  if (!url.match(/^https?:\/\//i) && !url.startsWith('/')) {
+    url = `https://${url}`;
+  }
+  
+  return url;
+};
+
+/**
+ * Gets file extension from URL
+ * @param {string} url - URL to extract extension from
+ * @return {string} File extension
+ */
+export const getFileExtension = (url) => {
+  if (!url) return '';
+  
+  const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
+  return match && match[1] ? match[1].toLowerCase() : '';
+};
+
+/**
+ * Determines MIME type from video URL
+ * @param {string} url - Video URL
+ * @return {string} MIME type
+ */
+export const getVideoMimeType = (url) => {
+  if (!url) return 'video/mp4';
+  
+  try {
+    const extension = getFileExtension(url);
+    
+    // Handle HLS format
+    if (extension === 'm3u8') {
+      return 'application/vnd.apple.mpegurl';
+    }
+    
+    // Handle other formats
+    switch (extension) {
+      case 'webm': return 'video/webm';
+      case 'mov': return 'video/quicktime';
+      case 'ogg': return 'video/ogg';
+      default: return 'video/mp4';
+    }
+  } catch (e) {
+    console.error('Error determining MIME type:', e);
+    return 'video/mp4';
+  }
 };
 
 /**
@@ -146,60 +225,5 @@ export const testVideoUrl = async (url) => {
   } catch (urlError) {
     // Invalid URL format, try to fix it
     return { valid: false, error: `Invalid URL format: ${urlError.message}` };
-  }
-};
-
-// Try to fix common video URL issues
-export const fixVideoUrl = (url) => {
-  if (!url) return null;
-  
-  try {
-    // Check if it's already a valid URL
-    new URL(url);
-    return url;
-  } catch (error) {
-    // Fix relative URLs
-    if (url.startsWith('//')) {
-      return `https:${url}`;
-    }
-    
-    // If it's a path without domain, we can't fix it without knowing the base URL
-    if (url.startsWith('/')) {
-      console.warn("Cannot fix URL without knowing base domain:", url);
-      return null;
-    }
-    
-    // If it's just a string with no protocol, try adding https://
-    if (!url.includes('://')) {
-      return `https://${url}`;
-    }
-    
-    console.warn("Unable to fix invalid video URL:", url);
-    return null;
-  }
-};
-
-// Get file extension from URL
-export const getFileExtension = (url) => {
-  if (!url) return null;
-  
-  try {
-    const urlObj = new URL(url);
-    const pathParts = urlObj.pathname.split('.');
-    if (pathParts.length > 1) {
-      return pathParts.pop().toLowerCase();
-    }
-    return null;
-  } catch (error) {
-    // Try a simpler approach if URL parsing fails
-    const parts = url.split('.');
-    if (parts.length > 1) {
-      const extension = parts.pop().toLowerCase();
-      // Only return if it looks like a valid video extension
-      if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'wmv', 'flv', 'm4v'].includes(extension)) {
-        return extension;
-      }
-    }
-    return null;
   }
 }; 

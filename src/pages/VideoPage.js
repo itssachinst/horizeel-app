@@ -1,277 +1,97 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { 
-  Box, 
-  CircularProgress, 
-  Container, 
-  Typography, 
-  IconButton, 
-  useTheme, 
-  useMediaQuery,
-  Button,
-  Snackbar,
-  Alert
-} from "@mui/material";
-import { ArrowBack, Refresh, Home } from "@mui/icons-material";
-import VideoPlayer from "../components/VideoPlayer";
-import { fetchVideos, incrementVideoView, fetchVideoById } from "../api";
-import { useVideoContext } from "../contexts/VideoContext";
-
-// Configuration constants
-const ITEMS_PER_PAGE = 20;  // Number of videos to fetch per page
-const PREFETCH_THRESHOLD = 5;  // Load more videos when this many videos from the end
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import VideoPlayer from '../components/VideoPlayer';
+import './VideoPage.css';
 
 const VideoPage = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-  
-  // Get videos and state management from context
-  const { 
-    videos, 
-    loading, 
-    error,
-    currentIndex,
-    setCurrentIndex,
-    fetchVideos,
-    loadMoreVideos,
-    setVideos,
-    findVideoById
-  } = useVideoContext();
-  
-  // Local state
-  const [isLoading, setIsLoading] = useState(false);
-  const [localError, setLocalError] = useState(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  
-  // Add ref to track if we've already loaded the initial video
-  const initialLoadDoneRef = useRef(false);
-  const videoLoadedRef = useRef(false);
-  
-  // Add a console log to track the VideoPage lifecycle
+  const [currentVideo, setCurrentVideo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
-    console.log("VideoPage mounted with id:", id);
-    console.log("Current videos array:", videos);
-    console.log("Current index:", currentIndex);
-    
-    // This effect runs once when component mounts
-    return () => {
-      console.log("VideoPage unmounting");
-    };
-  }, []);
-  
-  // Update the loadVideo function to ensure videos play correctly
-  const loadVideo = useCallback(async (videoId) => {
-    console.log("loadVideo called with id:", videoId);
-    
-    if (isLoading || videoLoadedRef.current) {
-      console.log("Already loading or loaded, skipping");
-      return;
-    }
-    
-    setIsLoading(true);
-    videoLoadedRef.current = true;
-    
-    try {
-      // Fast path: First check if the video is already in our array
-      console.log("Checking if video already exists in current list");
-      const existingVideo = findVideoById(videoId);
-      if (existingVideo) {
-        console.log("Video found in existing videos array");
-        const videoIndex = videos.findIndex(v => v.video_id === videoId);
-        if (videoIndex !== -1) {
-          console.log(`Setting current index to ${videoIndex}`);
-          setCurrentIndex(videoIndex);
-          setIsLoading(false);
-          return;
-        }
-      }
+    const fetchVideo = async () => {
+      if (!id) return;
       
-      console.log("Video not found in current list, fetching from API");
-      if (videos.length === 0) {
-        console.log("No videos loaded yet, fetching initial batch");
-        const result = await fetchVideos(0);
-        console.log("Initial fetch result:", result);
-        
-        // Wait a moment for the videos state to update
-        setTimeout(() => {
-          const newIndex = videos.findIndex(v => v.video_id === videoId);
-          if (newIndex !== -1) {
-            console.log(`Video found after fetch, setting index to ${newIndex}`);
-            setCurrentIndex(newIndex);
-        } else {
-            console.log("Video not found in initial batch, trying to fetch it directly");
-            fetchSpecificVideo(videoId);
-        }
-        }, 100);
-      } else {
-        fetchSpecificVideo(videoId);
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/videos/${id}`);
+        if (!response.ok) throw new Error('Failed to fetch video details');
+        const data = await response.json();
+        setCurrentVideo(data);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching video:', err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
+    fetchVideo();
+  }, [id]);
+
+  // Function to fetch and play the next video
+  const handleNextVideo = async () => {
+    try {
+      const response = await fetch('/api/videos/?skip=0&limit=20');
+      if (!response.ok) throw new Error('Failed to fetch videos');
+      const videos = await response.json();
+      
+      // Find current video index and get the next one
+      const currentIndex = videos.findIndex(v => v.video_id === id);
+      if (currentIndex !== -1 && currentIndex < videos.length - 1) {
+        const nextVideo = videos[currentIndex + 1];
+        window.location.href = `/video/${nextVideo.video_id}`;
       }
     } catch (err) {
-      console.error('Error loading video:', err);
-      setLocalError('Unable to load the requested video. Please try again.');
-    } finally {
-      setIsLoading(false);
+      console.error('Error fetching next video:', err);
     }
-  }, [findVideoById, videos, currentIndex, setCurrentIndex, fetchVideos, setVideos, isLoading]);
-  
-  // Helper function to fetch a specific video
-  const fetchSpecificVideo = async (videoId) => {
+  };
+
+  // Function to fetch and play the previous video
+  const handlePreviousVideo = async () => {
     try {
-      console.log(`Fetching specific video with ID: ${videoId}`);
-      const specificVideo = await fetchVideoById(videoId);
+      const response = await fetch('/api/videos/?skip=0&limit=20');
+      if (!response.ok) throw new Error('Failed to fetch videos');
+      const videos = await response.json();
       
-      if (specificVideo) {
-        console.log("Successfully fetched specific video:", specificVideo);
-        
-        // Add to videos array avoiding duplicates
-        setVideos(prev => {
-          if (prev.some(v => v.video_id === specificVideo.video_id)) {
-            console.log("Video already exists in array, not adding duplicate");
-            return prev;
-          }
-          console.log("Adding new video to array");
-          return [...prev, specificVideo];
-        });
-        
-        // Wait a moment for the state to update, then set the index
-        setTimeout(() => {
-          const targetIndex = videos.length;
-          console.log(`Setting current index to: ${targetIndex}`);
-          setCurrentIndex(targetIndex);
-        }, 100);
-      } else {
-        console.error("Failed to fetch specific video, API returned null/undefined");
+      // Find current video index and get the previous one
+      const currentIndex = videos.findIndex(v => v.video_id === id);
+      if (currentIndex > 0) {
+        const prevVideo = videos[currentIndex - 1];
+        window.location.href = `/video/${prevVideo.video_id}`;
       }
-    } catch (error) {
-      console.error("Error fetching specific video:", error);
+    } catch (err) {
+      console.error('Error fetching previous video:', err);
     }
   };
-  
-  // Load video when id changes - but ensure we only do initial load once
-  useEffect(() => {
-    if (id && !initialLoadDoneRef.current) {
-      loadVideo(id);
-      initialLoadDoneRef.current = true;
-    }
-  }, [id, loadVideo]);
-  
-  // Preload next videos aggressively when approaching the end of the list
-  useEffect(() => {
-    if (
-      videos.length > 0 &&
-      currentIndex >= videos.length - PREFETCH_THRESHOLD
-    ) {
-      loadMoreVideos();
-    }
-  }, [currentIndex, videos.length, loadMoreVideos]);
-  
-  // Handle snackbar close
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
-  };
-  
-  // Simplified loading state - only show loading indicator initially
-  if (videos.length === 0 && (loading || isLoading)) {
-    return (
-      <Box
-        sx={{
-          width: '100%',
-          height: '100vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          bgcolor: 'black',
-        }}
-      >
-        <CircularProgress color="primary" />
-      </Box>
-    );
+
+  if (loading) {
+    return <div className="loading">Loading video...</div>;
   }
 
-  // Show error state only if we have no videos
-  if ((error || localError) && videos.length === 0) {
-    return (
-      <Box
-        sx={{
-          width: '100%',
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          bgcolor: 'black',
-          color: 'white',
-          textAlign: 'center',
-          p: 3
-        }}
-      >
-        <Typography variant="h6" gutterBottom>
-          {error || localError}
-        </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-          onClick={() => navigate('/demo/')}
-          sx={{ mt: 2 }}
-        >
-          Go back to Home
-          </Button>
-      </Box>
-    );
+  if (error) {
+    return <div className="error">{error}</div>;
   }
 
-  // Empty state when no videos are available
-  if (!videos || videos.length === 0) {
-  return (
-        <Box 
-          sx={{ 
-          width: '100%',
-          height: '100vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          bgcolor: 'black',
-          color: 'white',
-        }}
-      >
-        <Typography variant="h6">No videos available</Typography>
-      </Box>
-    );
+  if (!currentVideo) {
+    return <div className="error">Video not found</div>;
   }
-  
+
   return (
-    <Box
-      sx={{
-        width: '100%',
-        height: '100vh',
-        bgcolor: 'black',
-        overflow: 'hidden'
-      }}
-    >
-        <VideoPlayer
-          videos={videos}
-          currentIndex={currentIndex}
-        setCurrentIndex={setCurrentIndex}
-          isMobile={isMobile}
-          isTablet={isTablet}
-        />
-      
-      {/* Only show snackbar for critical messages */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={handleSnackbarClose} severity="info">
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+    <div className="video-page">
+      <VideoPlayer 
+        key={currentVideo.video_url}
+        url={currentVideo.video_url}
+        videoTitle={currentVideo.title}
+        views={currentVideo.views}
+        likes={currentVideo.likes}
+        dislikes={currentVideo.dislikes}
+        profile_picture={currentVideo.profile_picture}
+        onNextVideo={handleNextVideo}
+        onPreviousVideo={handlePreviousVideo}
+      />
+    </div>
   );
 };
 

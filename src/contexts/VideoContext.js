@@ -1,135 +1,176 @@
-import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000/api";
-
+// Create context
 const VideoContext = createContext();
 
-export const useVideoContext = () => useContext(VideoContext);
-
+// Provider component
 export const VideoProvider = ({ children }) => {
   const [videos, setVideos] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Use refs to track loading state without triggering re-renders
-  const loadingRef = useRef(false);
-  const initialLoadDoneRef = useRef(false);
-  
-  // Fetch videos with pagination
-  const fetchVideos = useCallback(async (skip = 0, limit = 20) => {
-    // Prevent concurrent API calls
-    if (loadingRef.current) return;
-    
+  const [hasMore, setHasMore] = useState(true);
+  const [pageNum, setPageNum] = useState(0);
+  const [pageSize] = useState(20);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Fetch videos on mount and when page changes
+  const fetchVideos = useCallback(async (reset = false) => {
     try {
-      loadingRef.current = true;
       setLoading(true);
-      setError(null);
       
-      console.log(`Fetching videos: skip=${skip}, limit=${limit}`);
-      const response = await axios.get(`${API_BASE_URL}/videos/`, {
-        params: { skip, limit }
-      });
+      // Reset pagination if requested
+      const page = reset ? 0 : pageNum;
+      if (reset) {
+        setPageNum(0);
+      }
       
-      const newVideos = response.data || [];
-      console.log(`Fetched ${newVideos.length} videos`);
+      // Fetch videos from API
+      const response = await fetch(`/api/videos/?skip=${page * pageSize}&limit=${pageSize}`);
       
-      // Update hasMore flag based on response
-      setHasMore(newVideos.length >= limit);
+      if (!response.ok) {
+        throw new Error('Failed to fetch videos');
+      }
       
-      if (skip === 0) {
-        // Initial load or refresh
-        setVideos(newVideos);
+      const data = await response.json();
+      
+      // Update videos list
+      if (reset) {
+        setVideos(data);
       } else {
-        // Append to existing videos
-        setVideos(prev => {
-          // Avoid duplicates by checking video_id
-          const existingIds = new Set(prev.map(v => v.video_id));
-          const uniqueNewVideos = newVideos.filter(v => !existingIds.has(v.video_id));
-          return [...prev, ...uniqueNewVideos];
+        // Append new videos and remove duplicates
+        const newVideos = [...videos];
+        
+        data.forEach(video => {
+          if (!newVideos.some(v => v.video_id === video.video_id)) {
+            newVideos.push(video);
+          }
         });
+        
+        setVideos(newVideos);
+      }
+      
+      // Update hasMore flag
+      setHasMore(data.length === pageSize);
+      
+      // Increment page number
+      if (!reset && data.length > 0) {
+        setPageNum(prevPage => prevPage + 1);
       }
     } catch (err) {
-      console.error("Error fetching videos:", err);
-      setError("Failed to load videos. Please try again.");
+      console.error('Error fetching videos:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
-      loadingRef.current = false;
     }
-  }, []); // Empty dependency array since we're using refs for tracking state
-  
-  // Load a specific video by ID
-  const fetchVideoById = useCallback(async (videoId) => {
-    try {
-      console.log(`Fetching specific video with ID: ${videoId}`);
-      const response = await axios.get(`${API_BASE_URL}/videos/${videoId}`);
-      return response.data;
-    } catch (err) {
-      console.error(`Error fetching video with ID ${videoId}:`, err);
-      setError(`Failed to load video ID ${videoId}`);
-      return null;
-    }
+  }, [pageNum, pageSize, videos]);
+
+  // Load initial videos
+  useEffect(() => {
+    fetchVideos(true);
   }, []);
 
-  // Load next batch of videos
+  // Function to load more videos
   const loadMoreVideos = useCallback(() => {
-    if (!hasMore || loadingRef.current) return;
+    if (!loading && hasMore) {
+      fetchVideos();
+    }
+  }, [fetchVideos, loading, hasMore]);
+
+  // Search videos
+  const searchVideos = useCallback(async (query) => {
+    if (!query) {
+      // Reset to regular video list if query is empty
+      fetchVideos(true);
+      return;
+    }
     
-    console.log("Loading more videos at offset:", videos.length);
-    fetchVideos(videos.length);
-  }, [fetchVideos, hasMore, videos.length]);
-
-  // Initialize videos on mount, but only once
-  useEffect(() => {
-    if (!initialLoadDoneRef.current) {
-      console.log("Initial video fetch");
-      fetchVideos(0);
-      initialLoadDoneRef.current = true;
+    try {
+      setLoading(true);
+      
+      // Search API
+      const response = await fetch(`/api/videos/search/?query=${encodeURIComponent(query)}`);
+      
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+      
+      const data = await response.json();
+      
+      // Update videos
+      setVideos(data);
+      
+      // Reset pagination
+      setPageNum(0);
+      setHasMore(false);
+    } catch (err) {
+      console.error('Error searching videos:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }, [fetchVideos]);
 
-  // Handle when user approaches end of video list
-  useEffect(() => {
-    // Only load more if we're close to the end and not already loading
-    if (videos.length > 0 && 
-        currentIndex >= videos.length - 3 && 
-        hasMore && 
-        !loadingRef.current) {
-      console.log("Near end of list, loading more videos");
-      loadMoreVideos();
+  // Get video by ID
+  const getVideoById = useCallback(async (videoId) => {
+    // First check if we already have this video
+    const existingVideo = videos.find(v => v.video_id === videoId);
+    
+    if (existingVideo) {
+      return existingVideo;
     }
-  }, [currentIndex, videos.length, hasMore, loadMoreVideos]);
-
-  // Reset everything
-  const resetVideos = useCallback(() => {
-    setVideos([]);
-    setCurrentIndex(0);
-    setHasMore(true);
-    initialLoadDoneRef.current = false; // Allow initial fetch again
-    fetchVideos(0);
-  }, [fetchVideos]);
-  
-  // Find a video by ID in the current videos array
-  const findVideoById = useCallback((videoId) => {
-    const index = videos.findIndex(video => video.video_id === videoId);
-    return index !== -1 ? videos[index] : null;
+    
+    // Otherwise fetch from API
+    try {
+      const response = await fetch(`/api/videos/${videoId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch video');
+      }
+      
+      const data = await response.json();
+      
+      // Add to videos list
+      setVideos(prevVideos => {
+        const newVideos = [...prevVideos];
+        
+        if (!newVideos.some(v => v.video_id === data.video_id)) {
+          newVideos.push(data);
+        }
+        
+        return newVideos;
+      });
+      
+      return data;
+    } catch (err) {
+      console.error('Error fetching video by ID:', err);
+      throw err;
+    }
   }, [videos]);
+
+  // Update a video in the list
+  const updateVideo = useCallback((videoId, newData) => {
+    setVideos(prevVideos => {
+      return prevVideos.map(video => {
+        if (video.video_id === videoId) {
+          return { ...video, ...newData };
+        }
+        return video;
+      });
+    });
+  }, []);
 
   const value = {
     videos,
-    setVideos,
-    currentIndex,
-    setCurrentIndex,
     loading,
-    hasMore,
     error,
-    fetchVideos,
-    fetchVideoById,
+    hasMore,
     loadMoreVideos,
-    resetVideos,
-    findVideoById
+    searchVideos,
+    getVideoById,
+    updateVideo,
+    refreshVideos: () => fetchVideos(true),
+    currentIndex,
+    setCurrentIndex
   };
 
   return (
@@ -139,4 +180,11 @@ export const VideoProvider = ({ children }) => {
   );
 };
 
-export default VideoContext; 
+// Custom hook to use video context
+export const useVideoContext = () => {
+  const context = useContext(VideoContext);
+  if (context === undefined) {
+    throw new Error('useVideoContext must be used within a VideoProvider');
+  }
+  return context;
+}; 
