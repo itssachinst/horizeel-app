@@ -57,7 +57,8 @@ const FALLBACK_VIDEO_SERVER = 'https://player.vimeo.com/external/';
 // Check if HLS is supported natively
 const isHlsNativelySupported = () => {
   const video = document.createElement('video');
-  return video.canPlayType('application/vnd.apple.mpegurl') || 
+  const mimeType = getVideoMimeType();
+  return video.canPlayType(mimeType) || 
          video.canPlayType('application/x-mpegURL');
 };
 
@@ -125,6 +126,7 @@ const preloadVideo = (url) => {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'auto';
+    video.type = getVideoMimeType();
     video.src = url;
     video.onloadeddata = () => resolve(video);
     video.onerror = reject;
@@ -339,9 +341,18 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           console.warn("Error during video cleanup:", cleanupError);
         }
         
-        // Get video source URL
-        let videoSource = getVideoSource(currentVideo.video_url);
-        console.log("Using video source:", videoSource);
+        // Get video source URL - force .m3u8 extension
+        let originalUrl = currentVideo.video_url;
+        // If the URL doesn't end with .m3u8, assume it's the base URL and append index.m3u8
+        if (!originalUrl.toLowerCase().endsWith('.m3u8')) {
+          // Remove any existing extension
+          originalUrl = originalUrl.replace(/\.[^/.]+$/, "");
+          // Append index.m3u8 to ensure HLS format
+          originalUrl = `${originalUrl}/index.m3u8`;
+        }
+        
+        let videoSource = getVideoSource(originalUrl);
+        console.log("Using HLS source:", videoSource);
         
         if (!videoSource) {
           console.error("Failed to get valid video source");
@@ -352,9 +363,9 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           return;
         }
         
-        // Check if this is an HLS stream (.m3u8 extension)
-        const isHlsStream = videoSource.toLowerCase().endsWith('.m3u8');
-        console.log(`Is HLS stream: ${isHlsStream}`);
+        // Always treat as HLS stream
+        const isHlsStream = true;
+        console.log(`Treating as HLS stream: ${isHlsStream}`);
         
         if (isHlsStream && Hls.isSupported()) {
           console.log("Using HLS.js for playback");
@@ -418,18 +429,13 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           });
           
         } else {
-          console.log("Using standard video playback");
+          console.log("HLS is not supported by this browser");
           
-          // For non-HLS videos or browsers without HLS support
-          videoElement.src = videoSource;
-          videoElement.load();
-          
-          // Try to play after a short delay
-          setTimeout(() => {
-            if (isMounted) {
-              attemptPlayback(videoElement, currentVideo);
-            }
-          }, 100);
+          // Show error message to user
+          if (isMounted) {
+            setSnackbarMessage("Your browser doesn't support HLS streaming. Please try a different browser.");
+            setShowSnackbar(true);
+          }
         }
         
         // Update UI metadata
@@ -929,80 +935,65 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         const currentVideo = videos[currentIndex];
         if (!currentVideo || !currentVideo.video_url) return;
         
-        console.log("Preloading video:", currentVideo.video_url);
+        console.log("Preloading HLS video:", currentVideo.video_url);
         setIsLoading(true);
         
-        // Try to preload video to detect format issues early
-        const videoElement = videoRef.current;
-        if (!videoElement) return;
-        
-        // Create a temporary video element to test the format
-        const testVideo = document.createElement('video');
-        testVideo.muted = true;
-        testVideo.preload = 'metadata';
-        
-        // Add sources in preferred order
-        const sources = [
-          { src: getVideoSource(currentVideo.video_url), type: getVideoMimeType(currentVideo.video_url) },
-          { src: getVideoSource(currentVideo.video_url.replace(/\.[^.]+$/, '.mp4')), type: 'video/mp4' },
-          { src: getVideoSource(currentVideo.video_url.replace(/\.[^.]+$/, '.webm')), type: 'video/webm' }
-        ];
-        
-        // Create a promise to check which format loads first
-        const loadPromises = sources.map((source, index) => {
-          return new Promise((resolve) => {
-            if (!source.src) {
-              resolve({ success: false, index });
-      return;
-    }
-    
-            const sourceElement = document.createElement('source');
-            sourceElement.src = source.src;
-            sourceElement.type = source.type;
-            testVideo.appendChild(sourceElement);
-            
-            // This format loaded successfully
-            testVideo.addEventListener('loadedmetadata', () => {
-              resolve({ success: true, index, src: source.src, type: source.type });
-            }, { once: true });
-          });
-        });
-        
-        // Add error handler
-        testVideo.addEventListener('error', () => {
-          console.log("Test video failed to load, will try fallback formats");
-        }, { once: true });
-        
-        // Start loading
-        testVideo.load();
-        
-        // Wait for any format to load successfully or all to fail
-        // Set a timeout to avoid waiting too long
-        const timeoutPromise = new Promise(resolve => 
-          setTimeout(() => resolve({ success: false, timedOut: true }), 5000)
-        );
-        
-        // Race between successful load and timeout
-        const result = await Promise.race([Promise.all(loadPromises), timeoutPromise]);
-        
-        // Clean up test video
-        testVideo.remove();
-        
-        // If we found a working format, use it directly
-        if (result.success) {
-          console.log("Found working video format:", result);
-          // Use this format in the main video element
-          videoElement.src = result.src;
-          
-          // Reset loading state
-          setIsLoading(false);
-        } else {
-          console.log("Could not preload video, will try fallback formats");
-          // We'll let the regular video element handle fallbacks
-          setIsLoading(false);
+        // Force HLS format (.m3u8)
+        let originalUrl = currentVideo.video_url;
+        // If the URL doesn't end with .m3u8, assume it's the base URL and append index.m3u8
+        if (!originalUrl.toLowerCase().endsWith('.m3u8')) {
+          // Remove any existing extension
+          originalUrl = originalUrl.replace(/\.[^/.]+$/, "");
+          // Append index.m3u8 to ensure HLS format
+          originalUrl = `${originalUrl}/index.m3u8`;
         }
+        
+        const hlsUrl = getVideoSource(originalUrl);
+        
+        // For browsers with native HLS support, check if the stream is accessible
+        if (isHlsNativelySupported()) {
+          const testVideo = document.createElement('video');
+          testVideo.muted = true;
+          testVideo.preload = 'metadata';
+          testVideo.type = getVideoMimeType();
+          
+          const preloadPromise = new Promise((resolve) => {
+            testVideo.src = hlsUrl;
+            testVideo.addEventListener('loadedmetadata', () => {
+              resolve({ success: true });
+            }, { once: true });
+            
+            testVideo.addEventListener('error', () => {
+              resolve({ success: false });
+            }, { once: true });
+            
+            // Start loading
+            testVideo.load();
+          });
+          
+          // Set a timeout to avoid waiting too long
+          const timeoutPromise = new Promise(resolve => 
+            setTimeout(() => resolve({ success: false, timedOut: true }), 5000)
+          );
+          
+          // Race between successful load and timeout
+          const result = await Promise.race([preloadPromise, timeoutPromise]);
+          
+          // Clean up test video
+          testVideo.remove();
+          
+          console.log("HLS preload result:", result);
+        } else if (Hls.isSupported()) {
+          // For browsers that support HLS.js, just check if the manifest is accessible
+          console.log("Browser supports HLS.js, checking manifest accessibility");
+        } else {
+          console.log("Browser doesn't support HLS, skipping preload");
+        }
+        
+        // Reset loading state
+        setIsLoading(false);
       } catch (error) {
-        console.error("Error in preloading video:", error);
+        console.error("Error in preloading HLS video:", error);
         setIsLoading(false);
       }
     };
@@ -1014,34 +1005,8 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
   // Replace getVideoSource with processVideoUrl
   const getVideoSource = (videoUrl) => processVideoUrl(videoUrl, API_BASE_URL);
 
-  // Update MIME type function to handle HLS content
-  const getVideoMimeType = (url) => {
-    if (!url) return 'video/mp4';
-    
-    try {
-      // Extract extension from URL
-      const match = url.toString().match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
-      const extension = match && match[1] ? match[1].toLowerCase() : '';
-      
-      switch (extension) {
-        case 'm3u8':
-          return 'application/vnd.apple.mpegurl';
-        case 'mpd':
-          return 'application/dash+xml';
-        case 'webm': 
-          return 'video/webm';
-        case 'mov': 
-          return 'video/quicktime';
-        case 'ogg': 
-          return 'video/ogg';
-        case 'mp4':
-        default: 
-          return 'video/mp4'; // Default to mp4
-      }
-    } catch (e) {
-      return 'video/mp4'; // Safe fallback
-    }
-  };
+  // Update MIME type function to only return HLS MIME type regardless of extension
+  const getVideoMimeType = (url) => 'application/vnd.apple.mpegurl';
 
   // Add toggleMute function
   const toggleMute = () => {
@@ -1497,6 +1462,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
             preload="auto"
             crossOrigin="anonymous"
             style={getVideoStyle()}
+            type={getVideoMimeType()}
           >
             {/* Sources will be added dynamically in useEffect */}
             Your browser does not support the video tag.

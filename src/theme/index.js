@@ -33,7 +33,7 @@ let theme = createTheme({
     },
     action: {
       active: '#ceff00', // Neon green for active elements
-      hover: 'rgba(206, 255, 0, 0.08)', // Semi-transparent neon green for hover
+      hover: 'rgba(187, 255, 0, 0.9)', // Semi-transparent neon green for hover
     },
   },
   typography: {
@@ -122,14 +122,14 @@ let theme = createTheme({
         containedPrimary: {
           '&:hover': {
             backgroundColor: '#ceff00', // Slightly darker neon green on hover
-            boxShadow: '0 0 10px rgba(206, 255, 5, 0.5)', // Neon glow effect
+            boxShadow: '0 0 10px rgba(205, 255, 5, 0.7)', // Neon glow effect
           },
         },
         outlinedPrimary: {
           borderColor: '#ceff00',
           '&:hover': {
             borderColor: '#ceff00',
-            boxShadow: '0 0 10px rgba(206, 255, 5, 0.5)', // Neon glow effect
+            boxShadow: '0 0 10px rgba(189, 255, 0, 1)', // Neon glow effect
           },
         },
       },
@@ -142,7 +142,7 @@ let theme = createTheme({
           overflow: 'hidden',
           transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 0 15px rgba(206, 255, 5, 0.3)', // Subtle neon glow on hover
+            boxShadow: '0 0 15px rgba(187, 255, 0, 0.8)', // Subtle neon glow on hover
           },
         },
       },
@@ -153,7 +153,7 @@ let theme = createTheme({
           color: 'rgba(255, 255, 255, 0.7)',
           '&:hover': {
             color: '#ceff00', // Neon green on hover
-            backgroundColor: 'rgba(206, 255, 5, 0.08)', // Very subtle neon green background
+            backgroundColor: 'rgba(189, 255, 0, 1)', // Very subtle neon green background
           },
         },
       },
@@ -161,7 +161,7 @@ let theme = createTheme({
     MuiAvatar: {
       styleOverrides: {
         root: {
-          border: '2px solid rgba(206, 255, 5, 0.3)', // Subtle neon green border
+          border: '2px solid rgba(189, 255, 0, 1)', // Subtle neon green border
         },
       },
     },
@@ -169,7 +169,7 @@ let theme = createTheme({
       styleOverrides: {
         root: {
           backgroundColor: '#121212', // Very dark gray
-          borderTop: '1px solid rgba(206, 255, 5, 0.12)', // Subtle neon green border
+          borderTop: '1px solid rgba(189, 255, 0, 1)', // Subtle neon green border
         },
       },
     },
@@ -190,12 +190,12 @@ let theme = createTheme({
           '&.Mui-checked': {
             color: '#ceff00', // Neon green when checked
             '& + .MuiSwitch-track': {
-              backgroundColor: 'rgba(206, 255, 5, 0.5)', // Semi-transparent neon green track
+              backgroundColor: 'rgba(189, 255, 0,1)', // Semi-transparent neon green track
             },
           },
         },
         track: {
-          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+          backgroundColor: 'rgba(255, 255, 255, 0)',
         },
       },
     },
