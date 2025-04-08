@@ -27,12 +27,22 @@ export const fetchVideoById = async (id) => {
   }
 }; 
 
-export const fetchVideos = async (skip = 0, limit = 20) => {
+export const fetchVideos = async (options = {}) => {
   try {
-    console.log(`API: Fetching videos with skip=${skip}, limit=${limit}`);
+    const { skip = 0, limit = 20, userId = null } = options;
+    
+    let url = `${API_BASE_URL}/videos/?skip=${skip}&limit=${limit}`;
+    
+    // Add userId filter if provided
+    if (userId) {
+      console.log(`API: Fetching videos for specific user ID: ${userId}`);
+      url = `${API_BASE_URL}/videos/user/${userId}?skip=${skip}&limit=${limit}`;
+    } else {
+      console.log(`API: Fetching all videos with skip=${skip}, limit=${limit}`);
+    }
     
     // Add timeout to prevent hanging requests
-    const response = await axios.get(`${API_BASE_URL}/videos/?skip=${skip}&limit=${limit}`, {
+    const response = await axios.get(url, {
       timeout: 10000 // 10 seconds timeout
     });
     
@@ -80,5 +90,49 @@ export const fetchVideos = async (skip = 0, limit = 20) => {
       console.error("API: No response received from server");
     }
     return []; // Return an empty array on error
+  }
+}; 
+
+export const deleteVideo = async (videoId) => {
+  try {
+    if (!videoId) {
+      throw new Error("Video ID is required for deletion");
+    }
+    
+    console.log(`API: Deleting video with ID: ${videoId}`);
+    
+    // Get the auth token from local storage
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error("Authentication required to delete videos");
+    }
+    
+    // Send the DELETE request with authentication header
+    const response = await axios.delete(`${API_BASE_URL}/videos/${videoId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      timeout: 10000 // 10 seconds timeout
+    });
+    
+    console.log(`API: Successfully deleted video with ID ${videoId}`);
+    return { success: true, message: 'Video deleted successfully' };
+    
+  } catch (error) {
+    console.error(`API: Error deleting video ${videoId}:`, error.message || error);
+    
+    // Handle specific error cases
+    if (error.response) {
+      const status = error.response.status;
+      console.error(`API: Error status: ${status}`);
+      
+      if (status === 401 || status === 403) {
+        throw new Error("You don't have permission to delete this video");
+      } else if (status === 404) {
+        throw new Error("Video not found or already deleted");
+      }
+    }
+    
+    throw new Error("Failed to delete video. Please try again.");
   }
 }; 

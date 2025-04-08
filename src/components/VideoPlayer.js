@@ -177,6 +177,109 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
   const hlsRef = useRef(null);
 
+  // Add a reference for preloaded videos
+  const preloadedVideosRef = useRef({});
+  
+  // Enhanced preload function for HLS streams
+  const preloadHlsVideo = useCallback((videoUrl, videoId) => {
+    if (!videoUrl || preloadedVideosRef.current[videoId]) return;
+    
+    console.log(`Preloading video ${videoId}:`, videoUrl);
+    
+    // Force HLS format (.m3u8)
+    let originalUrl = videoUrl;
+    if (!originalUrl.toLowerCase().endsWith('.m3u8')) {
+      originalUrl = originalUrl.replace(/\.[^/.]+$/, "");
+      originalUrl = `${originalUrl}/index.m3u8`;
+    }
+    
+    const hlsUrl = processVideoUrl(originalUrl, API_BASE_URL);
+    
+    // Create a hidden HLS preloader
+    if (Hls.isSupported()) {
+      const preloadHls = new Hls({
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        enableWorker: true,
+        maxBufferSize: 60 * 1000 * 1000, // 60MB buffer
+        startLevel: -1, // Auto start level selection
+        abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
+        abrBandWidthFactor: 0.95, // Bandwidth safety factor
+        abrBandWidthUpFactor: 0.7, // Factor for upswitch
+        abrMaxWithRealBitrate: true, // Use real bitrate for ABR calculations
+        startFragPrefetch: true // Start prefetching fragments before playback
+      });
+      
+      const preloadVideo = document.createElement('video');
+      preloadVideo.muted = true;
+      preloadVideo.preload = 'auto';
+      preloadVideo.style.display = 'none';
+      
+      // Store the preloaded instance
+      preloadedVideosRef.current[videoId] = {
+        hls: preloadHls,
+        element: preloadVideo,
+        url: hlsUrl,
+        loaded: false
+      };
+      
+      // Load the source and attach media
+      preloadHls.loadSource(hlsUrl);
+      preloadHls.attachMedia(preloadVideo);
+      
+      // Set up event listeners
+      preloadHls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log(`HLS manifest parsed for preload video ${videoId}`);
+        preloadedVideosRef.current[videoId].loaded = true;
+      });
+      
+      // Append to DOM temporarily for better browser handling
+      document.body.appendChild(preloadVideo);
+    }
+  }, []);
+  
+  // Function to preload next few videos
+  const preloadNextVideos = useCallback(() => {
+    if (!videos || videos.length === 0) return;
+    
+    // Preload the next 2 videos
+    for (let i = 1; i <= 2; i++) {
+      const nextIndex = (currentIndex + i) % videos.length;
+      if (videos[nextIndex] && videos[nextIndex].video_url) {
+        preloadHlsVideo(videos[nextIndex].video_url, videos[nextIndex].video_id);
+      }
+    }
+  }, [videos, currentIndex, preloadHlsVideo]);
+
+  // Call preloading function when currentIndex changes
+  useEffect(() => {
+    preloadNextVideos();
+    
+    // Clean up preloaded videos that are no longer needed
+    return () => {
+      // Keep only current and next 2 videos in cache
+      const videosToKeep = [
+        videos?.[currentIndex]?.video_id,
+        videos?.[currentIndex + 1 < videos.length ? currentIndex + 1 : 0]?.video_id,
+        videos?.[currentIndex + 2 < videos.length ? currentIndex + 2 : 1]?.video_id
+      ].filter(Boolean);
+      
+      Object.keys(preloadedVideosRef.current).forEach(videoId => {
+        if (!videosToKeep.includes(videoId)) {
+          // Clean up unused preloaded videos
+          const preloadedItem = preloadedVideosRef.current[videoId];
+          if (preloadedItem) {
+            if (preloadedItem.hls) preloadedItem.hls.destroy();
+            if (preloadedItem.element && preloadedItem.element.parentNode) {
+              preloadedItem.element.parentNode.removeChild(preloadedItem.element);
+            }
+            delete preloadedVideosRef.current[videoId];
+          }
+        }
+      });
+    };
+  }, [currentIndex, videos, preloadNextVideos]);
+
   // Add orientation change detection
   useEffect(() => {
     const handleResize = () => {
@@ -367,21 +470,53 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         const isHlsStream = true;
         console.log(`Treating as HLS stream: ${isHlsStream}`);
         
+        // Check if we have this video preloaded
+        const videoId = currentVideo.video_id;
+        const preloadedVideo = preloadedVideosRef.current[videoId];
+        
         if (isHlsStream && Hls.isSupported()) {
           console.log("Using HLS.js for playback");
           
-          // Create and configure a new HLS instance
-          const hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 90,
-            maxBufferLength: 30
-          });
+          let hls;
+          
+          // Use preloaded HLS instance if available
+          if (preloadedVideo && preloadedVideo.loaded) {
+            console.log("Using preloaded HLS instance");
+            hls = preloadedVideo.hls;
+            
+            // Detach from preload element
+            if (preloadedVideo.element) {
+              hls.detachMedia();
+              if (preloadedVideo.element.parentNode) {
+                preloadedVideo.element.parentNode.removeChild(preloadedVideo.element);
+              }
+            }
+          } else {
+            // Create a new HLS instance
+            hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+              backBufferLength: 90,
+              maxBufferLength: 30,
+              maxBufferSize: 60 * 1000 * 1000, // 60MB buffer
+              maxMaxBufferLength: 60, // Maximum buffer size in seconds
+              startLevel: -1, // Auto start level selection
+              abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
+              abrBandWidthFactor: 0.95, // Bandwidth safety factor
+              abrBandWidthUpFactor: 0.7, // Factor for upswitch
+              abrMaxWithRealBitrate: true, // Use real bitrate for ABR calculations
+              liveSyncDurationCount: 3, // Number of segments to sync for live streams
+              fragLoadingTimeOut: 20000, // Timeout for fragment loading
+              startFragPrefetch: true // Start prefetching fragments before playback
+            });
+            
+            // Load source
+            hls.loadSource(videoSource);
+          }
           
           hlsRef.current = hls;
           
-          // Bind HLS to the video element and load the source
-          hls.loadSource(videoSource);
+          // Attach to actual video element
           hls.attachMedia(videoElement);
           
           // Listen for HLS events
@@ -765,50 +900,64 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     const videoEndHandler = () => {
       console.log("Video ended, handling progression");
       
-    // Update watch history with completed flag if user is logged in
-    if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-      const currentVideo = videos[currentIndex];
-      
-      if (video && currentVideo) {
-        const watchData = {
-          video_id: currentVideo.video_id,
-          watch_time: video.duration || 0,
-            watch_percentage: 100,
-          completed: true,
-          last_position: video.duration || 0,
-          like_flag: isLiked,
-          dislike_flag: isDisliked,
-          saved_flag: isSaved,
-          shared_flag: watchShared,
-          device_type: deviceType
-        };
+      // Update watch history with completed flag if user is logged in
+      if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+        const currentVideo = videos[currentIndex];
         
-        updateWatchHistory(watchData).catch(err => {
-          console.error("Failed to update watch history on video end:", err);
-        });
+        if (video && currentVideo) {
+          const watchData = {
+            video_id: currentVideo.video_id,
+            watch_time: video.duration || 0,
+            watch_percentage: 100,
+            completed: true,
+            last_position: video.duration || 0,
+            like_flag: isLiked,
+            dislike_flag: isDisliked,
+            saved_flag: isSaved,
+            shared_flag: watchShared,
+            device_type: deviceType
+          };
+          
+          updateWatchHistory(watchData).catch(err => {
+            console.error("Failed to update watch history on video end:", err);
+          });
+        }
       }
-    }
-    
+      
       // Reset the reportedView flag to ensure next video gets a view count
       reportedViewRef.current = false;
       
-      // Check if we're near the end of our current video list and need to fetch more
-      if (videos && videos.length > 0 && currentIndex >= videos.length - 3 && hasMore) {
-        console.log("Near end of video list, triggering load more videos");
-        loadMoreVideos();
-      }
-  
       // Determine the next video index
       let nextIndex;
       if (currentIndex >= videos.length - 1) {
         console.log("Reached end of video list, looping to first video");
         nextIndex = 0;
-    } else {
+        
+        // If we're near the end, trigger loadMoreVideos but don't wait for it
+        if (hasMore) {
+          console.log("Near end of video list, triggering load more videos");
+          loadMoreVideos();
+        }
+      } else {
         nextIndex = currentIndex + 1;
         console.log(`Moving to next video (index ${nextIndex})`);
+        
+        // Also check if we need to load more videos when approaching the end
+        if (nextIndex >= videos.length - 3 && hasMore) {
+          console.log("Approaching end of video list, triggering load more videos");
+          loadMoreVideos();
+        }
       }
       
-      // Set the next video index
+      // Fast transition - check if the next video is preloaded
+      const nextVideoId = videos[nextIndex]?.video_id;
+      const isNextVideoPreloaded = nextVideoId && 
+                                preloadedVideosRef.current[nextVideoId] && 
+                                preloadedVideosRef.current[nextVideoId].loaded;
+      
+      console.log(`Next video preloaded: ${isNextVideoPreloaded ? 'Yes' : 'No'}`);
+      
+      // Set the next video index - do this immediately for faster perceived transitions
       setCurrentIndex(nextIndex);
     };
     
@@ -924,82 +1073,6 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       document.removeEventListener(fullscreenChangeEvent, handleFullscreenChange);
     };
   }, [handleKeyDown, handleFullscreenChange]);
-
-  // Preload current video when index changes
-  useEffect(() => {
-    if (!videos || videos.length === 0 || currentIndex >= videos.length) return;
-    
-    // Function to preload and validate the current video
-    const preloadCurrentVideo = async () => {
-      try {
-        const currentVideo = videos[currentIndex];
-        if (!currentVideo || !currentVideo.video_url) return;
-        
-        console.log("Preloading HLS video:", currentVideo.video_url);
-        setIsLoading(true);
-        
-        // Force HLS format (.m3u8)
-        let originalUrl = currentVideo.video_url;
-        // If the URL doesn't end with .m3u8, assume it's the base URL and append index.m3u8
-        if (!originalUrl.toLowerCase().endsWith('.m3u8')) {
-          // Remove any existing extension
-          originalUrl = originalUrl.replace(/\.[^/.]+$/, "");
-          // Append index.m3u8 to ensure HLS format
-          originalUrl = `${originalUrl}/index.m3u8`;
-        }
-        
-        const hlsUrl = getVideoSource(originalUrl);
-        
-        // For browsers with native HLS support, check if the stream is accessible
-        if (isHlsNativelySupported()) {
-          const testVideo = document.createElement('video');
-          testVideo.muted = true;
-          testVideo.preload = 'metadata';
-          testVideo.type = getVideoMimeType();
-          
-          const preloadPromise = new Promise((resolve) => {
-            testVideo.src = hlsUrl;
-            testVideo.addEventListener('loadedmetadata', () => {
-              resolve({ success: true });
-            }, { once: true });
-            
-            testVideo.addEventListener('error', () => {
-              resolve({ success: false });
-            }, { once: true });
-            
-            // Start loading
-            testVideo.load();
-          });
-          
-          // Set a timeout to avoid waiting too long
-          const timeoutPromise = new Promise(resolve => 
-            setTimeout(() => resolve({ success: false, timedOut: true }), 5000)
-          );
-          
-          // Race between successful load and timeout
-          const result = await Promise.race([preloadPromise, timeoutPromise]);
-          
-          // Clean up test video
-          testVideo.remove();
-          
-          console.log("HLS preload result:", result);
-        } else if (Hls.isSupported()) {
-          // For browsers that support HLS.js, just check if the manifest is accessible
-          console.log("Browser supports HLS.js, checking manifest accessibility");
-        } else {
-          console.log("Browser doesn't support HLS, skipping preload");
-        }
-        
-        // Reset loading state
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Error in preloading HLS video:", error);
-        setIsLoading(false);
-      }
-    };
-    
-    preloadCurrentVideo();
-  }, [currentIndex, videos]);
 
   // Using imported utility functions for videos
   // Replace getVideoSource with processVideoUrl

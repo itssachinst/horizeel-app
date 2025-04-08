@@ -70,7 +70,7 @@
     }
 
     .intro {
-      font-size: clamp(12px, 2vh, 20px);
+      font-size: clamp(12px, 2vh, 25px);
       font-weight: bold;
       color: #BDFA03;
       margin-bottom: 1rem;
@@ -97,13 +97,13 @@
 
     @keyframes glow {
       from {
-        text-shadow: 0 0 10px rgba(189, 250, 3, 0.5),
+        text-shadow: 0 0 5px rgba(189, 250, 3, 0.5),
           0 0 20px rgba(189, 250, 3, 0.3),
           0 0 30px rgba(189, 250, 3, 0.2);
       }
 
       to {
-        text-shadow: 0 0 20px rgba(189, 250, 3, 0.6),
+        text-shadow: 0 0 10px rgba(189, 250, 3, 0.6),
           0 0 30px rgba(189, 250, 3, 0.4),
           0 0 40px rgba(189, 250, 3, 0.3);
       }
@@ -114,6 +114,8 @@
     }
 
     .waitlist-form {
+      position: relative;
+      /* necessary for pseudo-element */
       display: flex;
       align-items: center;
       background: rgba(255, 255, 255, 0.1);
@@ -126,19 +128,62 @@
       opacity: 0;
       transform: translateY(20px);
       animation: formAppear 1s ease-out forwards;
+      overflow: hidden;
+      /* clip pseudo-element */
+      z-index: 1;
+    }
+
+    /* Glowing rotating pointer */
+    .waitlist-form::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: conic-gradient(from 0deg,
+          #d6ff00,
+          transparent,
+          #d6ff00,
+          transparent,
+          #d6ff00);
+      animation: rotateGlow 4s linear infinite;
+      z-index: -1;
+      filter: blur(12px);
+      border-radius: 50%;
+    }
+
+    /* Inner border mask to prevent glow bleeding inside */
+    .waitlist-form::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      right: 2px;
+      bottom: 2px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: inherit;
+      z-index: -1;
+    }
+
+    /* Animation keyframes */
+    @keyframes rotateGlow {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
     }
 
     @keyframes formAppear {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-
       to {
         opacity: 1;
         transform: translateY(0);
       }
     }
+
 
     .email-input {
       flex-grow: 1;
