@@ -12,12 +12,14 @@ import {
   Bookmark, Person, PhotoCamera, Close
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchVideos, deleteVideo, getSavedVideos, getFollowStats, uploadProfileImage, updateUserProfile } from '../api';
+import { useVideoContext } from '../contexts/VideoContext';
+import { deleteVideo, getSavedVideos, getFollowStats, uploadProfileImage, updateUserProfile } from '../api';
 import { useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 
 const ProfilePage = () => {
   const { currentUser, logout, updateAuthUser } = useAuth();
+  const { fetchVideos } = useVideoContext();
   const [userVideos, setUserVideos] = useState([]);
   const [savedVideos, setSavedVideos] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -105,8 +107,8 @@ const ProfilePage = () => {
 
       console.log("Current user ID:", currentUser.user_id);
 
-      // Use the updated fetchVideos function that takes an options object with userId
-      const videos = await fetchVideos({ userId: currentUser.user_id });
+      // Use the updated fetchVideos function from VideoContext
+      const videos = await fetchVideos(0, 20, currentUser.user_id);
       console.log(`Fetched ${videos.length} videos for user ${currentUser.user_id}`);
 
       setUserVideos(videos);
@@ -892,67 +894,23 @@ const ProfilePage = () => {
             </Box>
           </Grid>
 
-          {/* Right column - stats and social links */}
+          {/* Right column - Social links and stats */}
           <Grid item xs={12} md={4}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              {/* Stats */}
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-around', 
-                mb: 2,
-                p: 2,
-                borderRadius: 2,
-                background: 'rgba(30, 30, 30, 0.6)',
-                border: '1px solid rgba(80, 80, 80, 0.2)'
-              }}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                    {followerCount}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">Followers</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                    {followingCount}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">Following</Typography>
-                </Box>
-              </Box>
-              
-              {/* Social media links */}
-              {!isEditing ? (
-                <Box sx={{ 
-                  mt: 'auto',
-                  display: 'flex',
-                  gap: 2,
-                  flexWrap: 'wrap',
-                  justifyContent: 'center'
-                }}>
-                  {Object.entries(updatedProfile.social || {}).map(([platform, link]) => 
-                    link && (
-                      <IconButton
-                        key={platform}
-                        color="primary"
-                        component="a"
-                        href={link.startsWith('http') ? link : `https://${link}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{
-                          backgroundColor: 'rgba(30, 30, 30, 0.8)',
-                          '&:hover': { backgroundColor: 'rgba(60, 60, 60, 0.8)' }
-                        }}
-                      >
-                        {socialIcons[platform]}
-                      </IconButton>
-                    )
-                  )}
-                </Box>
-              ) : (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1, color: 'white' }}>
-                    Social Media Links
-                  </Typography>
-                  {Object.keys(updatedProfile.social || {}).map(platform => (
+            <Box sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              p: 2,
+              backgroundColor: 'rgba(30, 30, 30, 0.5)',
+              borderRadius: 2,
+              border: '1px solid rgba(80, 80, 80, 0.2)'
+            }}>
+              <Typography variant="h6" sx={{ color: 'white', mb: 1 }}>
+                Social Links
+              </Typography>
+              {isEditing ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {Object.keys(socialIcons).map((platform) => (
                     <TextField
                       key={platform}
                       label={platform.charAt(0).toUpperCase() + platform.slice(1)}
@@ -960,97 +918,113 @@ const ProfilePage = () => {
                       value={updatedProfile.social[platform]}
                       onChange={handleInputChange}
                       fullWidth
-                      margin="normal"
                       size="small"
                       InputLabelProps={{ style: { color: 'gray' } }}
-                      InputProps={{ style: { color: 'white' } }}
-                      sx={{ mb: 1 }}
-                      variant="outlined"
+                      InputProps={{
+                        style: { color: 'white' },
+                        startAdornment: React.cloneElement(socialIcons[platform], {
+                          style: { marginRight: 8, color: 'gray' }
+                        })
+                      }}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                     />
                   ))}
                 </Box>
-              )}
-
-              {/* Edit/Save/Cancel buttons */}
-              {isEditing && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    onClick={() => {
-                      setIsEditing(false);
-                      loadUserData();
-                    }}
-                    startIcon={<Cancel />}
-                    disabled={isUploading}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleSaveProfile}
-                    startIcon={<Save />}
-                    disabled={isUploading}
-                  >
-                    {isUploading ? 'Saving...' : 'Save Profile'}
-                  </Button>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  {Object.entries(updatedProfile.social).map(([platform, link]) => (
+                    link && (
+                      <IconButton
+                        key={platform}
+                        href={link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          color: 'white',
+                          '&:hover': { color: '#3f51b5' }
+                        }}
+                      >
+                        {socialIcons[platform]}
+                      </IconButton>
+                    )
+                  ))}
                 </Box>
               )}
             </Box>
           </Grid>
         </Grid>
+
+        {/* Edit/Save buttons */}
+        {isEditing && (
+          <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
+            <Button
+              variant="outlined"
+              onClick={handleEditToggle}
+              startIcon={<Cancel />}
+              sx={{
+                color: 'white',
+                borderColor: 'white',
+                '&:hover': { borderColor: 'white', backgroundColor: 'rgba(255, 255, 255, 0.1)' }
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSaveProfile}
+              startIcon={<Save />}
+              disabled={isUploading}
+              sx={{
+                backgroundColor: '#3f51b5',
+                '&:hover': { backgroundColor: '#303f9f' }
+              }}
+            >
+              {isUploading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </Box>
+        )}
       </Paper>
 
-      {/* Videos & Saved Content Tabs */}
-      <Paper 
+      {/* Tabs and Videos Section */}
+      <Paper
         elevation={3}
         sx={{
           borderRadius: 4,
           background: 'rgba(18, 18, 18, 0.90)',
           backdropFilter: 'blur(20px)',
           color: 'white',
-          position: 'relative',
-          zIndex: 10,
-          overflow: 'hidden',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-          border: '1px solid rgba(80, 80, 80, 0.2)'
+          overflow: 'hidden'
         }}
       >
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
           variant="fullWidth"
-          indicatorColor="primary"
-          textColor="primary"
           sx={{
-            borderBottom: '1px solid rgba(80, 80, 80, 0.2)',
+            borderBottom: 1,
+            borderColor: 'divider',
             '& .MuiTab-root': {
               color: 'rgba(255, 255, 255, 0.7)',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              textTransform: 'none',
-              py: 2,
               '&.Mui-selected': {
-                color: 'primary.main',
-              },
+                color: 'white'
+              }
             }
           }}
         >
           <Tab
-            icon={<VideoCall />}
+            icon={<VideoLibrary />}
             label="My Videos"
-            iconPosition="start"
+            sx={{ textTransform: 'none' }}
           />
           <Tab
             icon={<Bookmark />}
             label="Saved Videos"
-            iconPosition="start"
+            sx={{ textTransform: 'none' }}
           />
           <Tab
             icon={<Person />}
             label="About Me"
-            iconPosition="start"
+            sx={{ textTransform: 'none' }}
           />
         </Tabs>
 
@@ -1063,27 +1037,19 @@ const ProfilePage = () => {
               ) : error ? (
                 renderError(error)
               ) : userVideos.length === 0 ? (
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                    py: 5,
-                    px: 2
-                  }}
-                >
+                <Box sx={{ textAlign: 'center', py: 4 }}>
                   <VideoLibrary sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="h6" gutterBottom>
+                  <Typography variant="h6" color="text.secondary" gutterBottom>
                     No videos uploaded yet
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Upload videos to share with your followers
                   </Typography>
                   <Button
                     variant="contained"
                     color="primary"
+                    startIcon={<VideoCall />}
                     onClick={() => navigate('/upload')}
-                    sx={{ borderRadius: '28px', px: 3 }}
+                    sx={{ mt: 2 }}
                   >
-                    Upload Videos
+                    Upload Your First Video
                   </Button>
                 </Box>
               ) : (
@@ -1102,32 +1068,18 @@ const ProfilePage = () => {
               ) : error ? (
                 renderError(error)
               ) : savedVideos.length === 0 ? (
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                    py: 5,
-                    px: 2
-                  }}
-                >
+                <Box sx={{ textAlign: 'center', py: 4 }}>
                   <Bookmark sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-                  <Typography variant="h6" gutterBottom>
-                    No saved videos
+                  <Typography variant="h6" color="text.secondary" gutterBottom>
+                    No saved videos yet
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Save videos to watch them later
+                  <Typography variant="body2" color="text.secondary">
+                    Videos you save will appear here
                   </Typography>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={() => navigate('/')}
-                    sx={{ borderRadius: '28px', px: 3 }}
-                  >
-                    Browse Videos
-                  </Button>
                 </Box>
               ) : (
                 <Grid container spacing={3}>
-                  {savedVideos.map(video => renderVideoCard(video))}
+                  {savedVideos.map(video => renderVideoCard(video, false))}
                 </Grid>
               )}
             </>
@@ -1135,130 +1087,117 @@ const ProfilePage = () => {
 
           {/* About Me Tab */}
           {activeTab === 2 && (
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h5" gutterBottom sx={{ 
-                fontWeight: 'bold',
-                mb: 3,
-                background: 'linear-gradient(90deg, #ffffff 0%, #e0e0e0 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
-              }}>
+            <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+              <Typography variant="h5" gutterBottom sx={{ color: 'white', mb: 3 }}>
                 About {currentUser?.username}
               </Typography>
               
-              <Typography variant="body1" paragraph sx={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.8 }}>
-                {updatedProfile.bio || "No bio available"}
-              </Typography>
-              
-              <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 2, color: 'primary.light' }}>
-                Creator Stats
-              </Typography>
-              
-              <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid item xs={6} sm={3}>
-                  <Paper sx={{ p: 2, background: 'rgba(30, 30, 30, 0.6)', textAlign: 'center', borderRadius: 2 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                      {userVideos.length}
+              <Paper sx={{
+                p: 3,
+                mb: 3,
+                backgroundColor: 'rgba(30, 30, 30, 0.5)',
+                borderRadius: 2,
+                border: '1px solid rgba(80, 80, 80, 0.2)'
+              }}>
+                <Typography variant="body1" paragraph sx={{ color: 'rgba(255, 255, 255, 0.9)' }}>
+                  {updatedProfile.bio || "No bio available"}
+                </Typography>
+              </Paper>
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{
+                    p: 3,
+                    backgroundColor: 'rgba(30, 30, 30, 0.5)',
+                    borderRadius: 2,
+                    border: '1px solid rgba(80, 80, 80, 0.2)'
+                  }}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'white' }}>
+                      Stats
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">Videos</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography color="text.secondary">Videos</Typography>
+                        <Typography color="white">{userVideos.length}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography color="text.secondary">Total Views</Typography>
+                        <Typography color="white">{totalViews}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography color="text.secondary">Total Likes</Typography>
+                        <Typography color="white">{totalLikes}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography color="text.secondary">Member Since</Typography>
+                        <Typography color="white">{joinDate}</Typography>
+                      </Box>
+                    </Box>
                   </Paper>
                 </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Paper sx={{ p: 2, background: 'rgba(30, 30, 30, 0.6)', textAlign: 'center', borderRadius: 2 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                      {totalViews}
+                
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{
+                    p: 3,
+                    backgroundColor: 'rgba(30, 30, 30, 0.5)',
+                    borderRadius: 2,
+                    border: '1px solid rgba(80, 80, 80, 0.2)'
+                  }}>
+                    <Typography variant="h6" gutterBottom sx={{ color: 'white' }}>
+                      Social Links
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">Views</Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Paper sx={{ p: 2, background: 'rgba(30, 30, 30, 0.6)', textAlign: 'center', borderRadius: 2 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                      {totalLikes}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">Likes</Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Paper sx={{ p: 2, background: 'rgba(30, 30, 30, 0.6)', textAlign: 'center', borderRadius: 2 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#fff' }}>
-                      {followerCount}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">Followers</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {Object.entries(updatedProfile.social).map(([platform, link]) => (
+                        link && (
+                          <Box key={platform} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {socialIcons[platform]}
+                            <Typography
+                              component="a"
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{
+                                color: 'white',
+                                textDecoration: 'none',
+                                '&:hover': { textDecoration: 'underline' }
+                              }}
+                            >
+                              {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                            </Typography>
+                          </Box>
+                        )
+                      ))}
+                    </Box>
                   </Paper>
                 </Grid>
               </Grid>
-              
-              <Typography variant="h6" gutterBottom sx={{ mt: 4, mb: 2, color: 'primary.light' }}>
-                Joined
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                {joinDate}
-              </Typography>
             </Box>
           )}
         </Box>
       </Paper>
 
-      {/* Dialogs */}
-      <Dialog
-        open={openDialog}
-        onClose={handleCloseDialog}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            backgroundColor: 'rgba(25, 25, 25, 0.95)',
-            backdropFilter: 'blur(10px)',
-            color: 'white',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-            border: '1px solid rgba(80, 80, 80, 0.3)',
-          }
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 'bold' }}>Confirm Logout</DialogTitle>
+      {/* Dialogs and Snackbars */}
+      <Dialog open={openDialog} onClose={handleCloseDialog}>
+        <DialogTitle>Confirm Logout</DialogTitle>
         <DialogContent>
-          <Typography>
-            Are you sure you want to log out?
-          </Typography>
+          Are you sure you want to logout?
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog} color="primary">
-            Cancel
-          </Button>
-          <Button onClick={handleLogout} color="error" variant="contained">
-            Logout
-          </Button>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleLogout} color="error">Logout</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={openDeleteDialog}
-        onClose={handleCloseDeleteDialog}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            backgroundColor: 'rgba(25, 25, 25, 0.95)',
-            backdropFilter: 'blur(10px)',
-            color: 'white',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-            border: '1px solid rgba(80, 80, 80, 0.3)',
-          }
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 'bold', color: '#f44336' }}>Delete Video</DialogTitle>
+      <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
+        <DialogTitle>Delete Video</DialogTitle>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete "{selectedVideo?.title}"? This action cannot be undone.
-          </Typography>
+          Are you sure you want to delete "{selectedVideo?.title}"? This action cannot be undone.
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDeleteDialog} color="primary">
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleDeleteVideo} 
-            color="error" 
-            variant="contained"
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button
+            onClick={handleDeleteVideo}
+            color="error"
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
@@ -1266,17 +1205,15 @@ const ProfilePage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar for notifications */}
       <Snackbar
         open={showSnackbar}
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbarSeverity} 
-          variant="filled"
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbarSeverity}
           sx={{ width: '100%' }}
         >
           {snackbarMessage}

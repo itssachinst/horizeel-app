@@ -135,7 +135,7 @@ const HomePage = () => {
   const formatTimeAgo = (timestamp) => {
     if (!timestamp) return 'Recently';
     try {
-      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
     } catch (error) {
       return 'Recently';
     }
@@ -456,7 +456,7 @@ const HomePage = () => {
           </Button>
         </Box>
       )}
-
+      
       {isLoading && displayVideos.length === 0 ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
           <CircularProgress />
@@ -467,9 +467,9 @@ const HomePage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
               <Typography variant="h6" color="text.secondary">
                 {isSearching ? "No results found" : "No videos available"}
-              </Typography>
-            </Box>
-          ) : (
+          </Typography>
+        </Box>
+      ) : (
             <Grid container spacing={3}>
               {displayVideos.map((video, index) => (
                 <Grid item xs={12} sm={6} md={4} key={`${video.video_id}-${index}`}>
@@ -493,8 +493,8 @@ const HomePage = () => {
           {error && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
               <Typography color="error">{error}</Typography>
-            </Box>
-          )}
+              </Box>
+        )}
         </>
       )}
     </Container>

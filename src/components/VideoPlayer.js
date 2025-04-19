@@ -900,30 +900,30 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     const videoEndHandler = () => {
       console.log("Video ended, handling progression");
       
-      // Update watch history with completed flag if user is logged in
-      if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-        const currentVideo = videos[currentIndex];
-        
-        if (video && currentVideo) {
-          const watchData = {
-            video_id: currentVideo.video_id,
-            watch_time: video.duration || 0,
-            watch_percentage: 100,
-            completed: true,
-            last_position: video.duration || 0,
-            like_flag: isLiked,
-            dislike_flag: isDisliked,
-            saved_flag: isSaved,
-            shared_flag: watchShared,
-            device_type: deviceType
-          };
-          
-          updateWatchHistory(watchData).catch(err => {
-            console.error("Failed to update watch history on video end:", err);
-          });
-        }
-      }
+    // Update watch history with completed flag if user is logged in
+    if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+      const currentVideo = videos[currentIndex];
       
+      if (video && currentVideo) {
+        const watchData = {
+          video_id: currentVideo.video_id,
+          watch_time: video.duration || 0,
+            watch_percentage: 100,
+          completed: true,
+          last_position: video.duration || 0,
+          like_flag: isLiked,
+          dislike_flag: isDisliked,
+          saved_flag: isSaved,
+          shared_flag: watchShared,
+          device_type: deviceType
+        };
+        
+        updateWatchHistory(watchData).catch(err => {
+          console.error("Failed to update watch history on video end:", err);
+        });
+      }
+    }
+    
       // Reset the reportedView flag to ensure next video gets a view count
       reportedViewRef.current = false;
       
@@ -938,7 +938,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           console.log("Near end of video list, triggering load more videos");
           loadMoreVideos();
         }
-      } else {
+    } else {
         nextIndex = currentIndex + 1;
         console.log(`Moving to next video (index ${nextIndex})`);
         

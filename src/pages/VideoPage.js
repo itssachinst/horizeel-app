@@ -68,7 +68,7 @@ const VideoPage = () => {
       console.log("VideoPage unmounting");
     };
   }, []);
-  
+
   // Update the loadVideo function to ensure videos play correctly, including HLS streams
   const loadVideo = useCallback(async (videoId) => {
     console.log("loadVideo called with id:", videoId);
@@ -126,13 +126,13 @@ const VideoPage = () => {
             fetchSpecificVideo(videoId);
           }
         }, 100);
-      } else {
+        } else {
         fetchSpecificVideo(videoId);
-      }
-    } catch (err) {
+        }
+      } catch (err) {
       console.error('Error loading video:', err);
       setLocalError('Unable to load the requested video. Please try again.');
-    } finally {
+      } finally {
       setIsLoading(false);
     }
   }, [findVideoById, videos, currentIndex, setCurrentIndex, fetchVideos, setVideos, isLoading]);
@@ -250,7 +250,7 @@ const VideoPage = () => {
 
   // Empty state when no videos are available
   if (!videos || videos.length === 0) {
-    return (
+  return (
       <Box 
         sx={{ 
           width: '100%',
@@ -276,13 +276,13 @@ const VideoPage = () => {
         overflow: 'hidden'
       }}
     >
-      <VideoPlayer
-        videos={videos}
-        currentIndex={currentIndex}
+        <VideoPlayer
+          videos={videos}
+          currentIndex={currentIndex}
         setCurrentIndex={setCurrentIndex}
-        isMobile={isMobile}
-        isTablet={isTablet}
-      />
+          isMobile={isMobile}
+          isTablet={isTablet}
+        />
       
       {/* Only show snackbar for critical messages */}
       <Snackbar

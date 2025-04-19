@@ -31,12 +31,12 @@ export const fetchVideos = async (options = {}) => {
   try {
     const { skip = 0, limit = 20, userId = null } = options;
     
-    let url = `${API_BASE_URL}/videos/?skip=${skip}&limit=${limit}`;
+    let url = `${API_BASE_URL}/videos?skip=${skip}&limit=${limit}`;
     
     // Add userId filter if provided
     if (userId) {
       console.log(`API: Fetching videos for specific user ID: ${userId}`);
-      url = `${API_BASE_URL}/videos/user/${userId}?skip=${skip}&limit=${limit}`;
+      url = `${API_BASE_URL}/videos?user_id=${userId}&limit=${limit}&skip=${skip}`;
     } else {
       console.log(`API: Fetching all videos with skip=${skip}, limit=${limit}`);
     }

@@ -19,7 +19,7 @@ export const VideoProvider = ({ children }) => {
   const initialLoadDoneRef = useRef(false);
   
   // Fetch videos with pagination
-  const fetchVideos = useCallback(async (skip = 0, limit = 20) => {
+  const fetchVideos = useCallback(async (skip = 0, limit = 20, userId = null) => {
     // Prevent concurrent API calls
     if (loadingRef.current) return;
     
@@ -28,10 +28,19 @@ export const VideoProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      console.log(`Fetching videos: skip=${skip}, limit=${limit}`);
-      const response = await axios.get(`${API_BASE_URL}/videos/`, {
-        params: { skip, limit }
-      });
+      let url = `${API_BASE_URL}/videos`;
+      const params = { skip, limit };
+      
+      // Add userId filter if provided
+      if (userId) {
+        console.log(`Fetching videos for specific user ID: ${userId}`);
+        params.user_id = userId;
+      } else {
+        console.log(`Fetching all videos with skip=${skip}, limit=${limit}`);
+      }
+      
+      console.log('API URL:', url, 'Params:', params);
+      const response = await axios.get(url, { params });
       
       const newVideos = response.data || [];
       console.log(`Fetched ${newVideos.length} videos`);
@@ -74,11 +83,11 @@ export const VideoProvider = ({ children }) => {
   }, []);
 
   // Load next batch of videos
-  const loadMoreVideos = useCallback(() => {
+  const loadMoreVideos = useCallback((userId = null) => {
     if (!hasMore || loadingRef.current) return;
     
     console.log("Loading more videos at offset:", videos.length);
-    fetchVideos(videos.length);
+    fetchVideos(videos.length, 20, userId);
   }, [fetchVideos, hasMore, videos.length]);
 
   // Initialize videos on mount, but only once

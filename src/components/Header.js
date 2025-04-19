@@ -305,7 +305,7 @@ const Header = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="sticky" color="default" sx={{ boxShadow: 'none', backgroundColor: '#00152A' }}>
+      <AppBar position="sticky" color="default" sx={{ boxShadow: 'none', backgroundColor: 'black'}}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <IconButton

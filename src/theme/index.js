@@ -13,27 +13,27 @@ let theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#ceff00', // Neon green from the logo
-      contrastText: '#002549', // Black text for contrast with neon green
+      main: '#bdfa03', // Lime green 
+      contrastText: '#002549', // Deep blue text for contrast with lime green
     },
     secondary: {
       main: '#FFFFFF', // White as secondary color
-      contrastText: '#000000', // Black text on white background
+      contrastText: '#002549', // Deep blue text on white background
     },
     background: {
-      default: '#000000', // Black background
-      paper: '#121212', // Very dark gray for paper elements
-      card: '#181818', // Slightly lighter dark for cards
+      default: '#00000', // Deep blue background
+      paper: '#001c38', // Slightly lighter deep blue for paper elements
+      card: '#00213f', // Slightly lighter deep blue for cards
     },
     text: {
       primary: '#FFFFFF', // White text
       secondary: 'rgba(255, 255, 255, 0.7)', // Semi-transparent white
       disabled: 'rgba(255, 255, 255, 0.5)', // More transparent white
-      highlight: '#ceff00', // Neon green for highlighted text
+      highlight: '#bdfa03', // Lime green for highlighted text
     },
     action: {
-      active: '#ceff00', // Neon green for active elements
-      hover: 'rgba(187, 255, 0, 0.9)', // Semi-transparent neon green for hover
+      active: '#bdfa03', // Lime green for active elements
+      hover: 'rgba(189, 250, 3, 0.9)', // Semi-transparent lime green for hover
     },
   },
   typography: {
@@ -121,15 +121,15 @@ let theme = createTheme({
         },
         containedPrimary: {
           '&:hover': {
-            backgroundColor: '#ceff00', // Slightly darker neon green on hover
-            boxShadow: '0 0 10px rgba(205, 255, 5, 0.7)', // Neon glow effect
+            backgroundColor: '#bdfa03', // Lime green on hover
+            boxShadow: '0 0 10px rgba(189, 250, 3, 0.7)', // Lime green glow effect
           },
         },
         outlinedPrimary: {
-          borderColor: '#ceff00',
+          borderColor: '#bdfa03',
           '&:hover': {
-            borderColor: '#ceff00',
-            boxShadow: '0 0 10px rgba(189, 255, 0, 1)', // Neon glow effect
+            borderColor: '#bdfa03',
+            boxShadow: '0 0 10px rgba(189, 250, 3, 0.7)', // Lime green glow effect
           },
         },
       },
@@ -137,12 +137,12 @@ let theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          backgroundColor: '#181818', // Dark gray
+          backgroundColor: '#00213f', // Slightly lighter deep blue
           borderRadius: 12,
           overflow: 'hidden',
           transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 0 15px rgba(187, 255, 0, 0.8)', // Subtle neon glow on hover
+            boxShadow: '0 0 15px rgba(189, 250, 3, 0.8)', // Subtle lime green glow on hover
           },
         },
       },
@@ -152,8 +152,8 @@ let theme = createTheme({
         root: {
           color: 'rgba(255, 255, 255, 0.7)',
           '&:hover': {
-            color: '#ceff00', // Neon green on hover
-            backgroundColor: 'rgba(189, 255, 0, 1)', // Very subtle neon green background
+            color: '#bdfa03', // Lime green on hover
+            backgroundColor: 'rgba(189, 250, 3, 0.1)', // Very subtle lime green background
           },
         },
       },
@@ -161,15 +161,15 @@ let theme = createTheme({
     MuiAvatar: {
       styleOverrides: {
         root: {
-          border: '2px solid rgba(189, 255, 0, 1)', // Subtle neon green border
+          border: '2px solid rgba(189, 250, 3, 0.7)', // Subtle lime green border
         },
       },
     },
     MuiBottomNavigation: {
       styleOverrides: {
         root: {
-          backgroundColor: '#121212', // Very dark gray
-          borderTop: '1px solid rgba(189, 255, 0, 1)', // Subtle neon green border
+          backgroundColor: '#001c38', // Slightly lighter deep blue
+          borderTop: '1px solid rgba(189, 250, 3, 0.5)', // Subtle lime green border
         },
       },
     },
@@ -178,7 +178,7 @@ let theme = createTheme({
         root: {
           color: 'rgba(255, 255, 255, 0.7)',
           '&.Mui-selected': {
-            color: '#ceff00', // Neon green for selected items
+            color: '#bdfa03', // Lime green for selected items
           },
         },
       },
@@ -188,14 +188,14 @@ let theme = createTheme({
         switchBase: {
           color: '#FFFFFF',
           '&.Mui-checked': {
-            color: '#ceff00', // Neon green when checked
+            color: '#bdfa03', // Lime green when checked
             '& + .MuiSwitch-track': {
-              backgroundColor: 'rgba(189, 255, 0,1)', // Semi-transparent neon green track
+              backgroundColor: 'rgba(189, 250, 3, 0.5)', // Semi-transparent lime green track
             },
           },
         },
         track: {
-          backgroundColor: 'rgba(255, 255, 255, 0)',
+          backgroundColor: 'rgba(255, 255, 255, 0.2)',
         },
       },
     },
