@@ -86,7 +86,7 @@ axios.interceptors.response.use(
 // Update fetchVideos to use the horizontalreels.com API
 export const fetchVideos = async (skip = 0, limit = 20) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/videos`, {
+    const response = await axios.get(`${API_BASE_URL}/videos/`, {
       params: { skip, limit }
     });
     

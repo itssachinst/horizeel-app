@@ -95,6 +95,7 @@ const ProfilePage = () => {
 
   const loadUserVideos = async () => {
     setLoadingUserVideos(true);
+    setError(null); // Clear any previous errors
     try {
       console.log("Fetching user videos...");
       // Check if currentUser is available
@@ -106,16 +107,30 @@ const ProfilePage = () => {
       }
 
       console.log("Current user ID:", currentUser.user_id);
+      console.log("About to call fetchVideos with params:", 0, 20, currentUser.user_id);
 
       // Use the updated fetchVideos function from VideoContext
       const videos = await fetchVideos(0, 20, currentUser.user_id);
-      console.log(`Fetched ${videos.length} videos for user ${currentUser.user_id}`);
+      console.log(`Fetched ${videos ? videos.length : 0} videos for user ${currentUser.user_id}`);
 
-      setUserVideos(videos);
+      if (videos && Array.isArray(videos)) {
+        setUserVideos(videos);
+      } else {
+        console.error("Invalid response format from fetchVideos", videos);
+        setError("Received invalid data format from server");
+        showSnackbarMessage("Received invalid data format from server", "error");
+      }
     } catch (error) {
       console.error("Error loading user videos:", error);
-      setError("Failed to load your videos");
-      showSnackbarMessage("Failed to load your videos", "error");
+      const errorMessage = error.message || "Failed to load your videos";
+      setError(errorMessage);
+      showSnackbarMessage(errorMessage, "error");
+      
+      // Log additional error details if available
+      if (error.response) {
+        console.error("Error response data:", error.response.data);
+        console.error("Error response status:", error.response.status);
+      }
     } finally {
       setLoadingUserVideos(false);
     }
@@ -512,14 +527,25 @@ const ProfilePage = () => {
       <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
         {message || "We couldn't load your content. Please try again."}
       </Typography>
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleRetry}
-        startIcon={<Refresh />}
-      >
-        Try Again
-      </Button>
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleRetry}
+          startIcon={<Refresh />}
+        >
+          Try Again
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => {
+            console.log("Debug - Current user:", currentUser);
+            console.log("Debug - API base URL:", process.env.REACT_APP_API_URL || "http://127.0.0.1:8000/api");
+          }}
+        >
+          Debug Info
+        </Button>
+      </Box>
     </Box>
   );
 

@@ -28,7 +28,7 @@ export const VideoProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      let url = `${API_BASE_URL}/videos`;
+      let url = `${API_BASE_URL}/videos/`;
       const params = { skip, limit };
       
       // Add userId filter if provided
@@ -39,8 +39,11 @@ export const VideoProvider = ({ children }) => {
         console.log(`Fetching all videos with skip=${skip}, limit=${limit}`);
       }
       
-      console.log('API URL:', url, 'Params:', params);
-      const response = await axios.get(url, { params });
+      console.log('API URL:', url, 'Full request URL:', `${url}?${new URLSearchParams(params)}`);
+      const response = await axios.get(url, { 
+        params,
+        timeout: 15000 // 15 seconds timeout
+      });
       
       const newVideos = response.data || [];
       console.log(`Fetched ${newVideos.length} videos`);
@@ -60,9 +63,30 @@ export const VideoProvider = ({ children }) => {
           return [...prev, ...uniqueNewVideos];
         });
       }
+      
+      // Return the videos for direct use
+      return newVideos;
     } catch (err) {
-      console.error("Error fetching videos:", err);
+      console.error("Error fetching videos:", err.message || err);
+      
+      // Log more detailed error information
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error("Error response data:", err.response.data);
+        console.error("Error response status:", err.response.status);
+        console.error("Error response headers:", err.response.headers);
+      } else if (err.request) {
+        // The request was made but no response was received
+        console.error("Error request:", err.request);
+        console.error("No response received from server");
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error("Error message:", err.message);
+      }
+      
       setError("Failed to load videos. Please try again.");
+      return []; // Return an empty array for direct use
     } finally {
       setLoading(false);
       loadingRef.current = false;
@@ -73,7 +97,7 @@ export const VideoProvider = ({ children }) => {
   const fetchVideoById = useCallback(async (videoId) => {
     try {
       console.log(`Fetching specific video with ID: ${videoId}`);
-      const response = await axios.get(`${API_BASE_URL}/videos/${videoId}`);
+      const response = await axios.get(`${API_BASE_URL}/videos/${videoId}/`);
       return response.data;
     } catch (err) {
       console.error(`Error fetching video with ID ${videoId}:`, err);
@@ -94,7 +118,7 @@ export const VideoProvider = ({ children }) => {
   useEffect(() => {
     if (!initialLoadDoneRef.current) {
       console.log("Initial video fetch");
-      fetchVideos(0);
+      fetchVideos(0, 20, null);
       initialLoadDoneRef.current = true;
     }
   }, [fetchVideos]);
