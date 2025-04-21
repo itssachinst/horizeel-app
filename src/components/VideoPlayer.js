@@ -533,11 +533,11 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     setShowQualityMenu(false);
   };
   
-  // Enhanced preload function for HLS streams
+  // Enhanced preload function for HLS streams - optimized for short-form videos
   const preloadHlsVideo = useCallback((videoUrl, videoId) => {
     if (!videoUrl || preloadedVideosRef.current[videoId]) return;
     
-    console.log(`Preloading video ${videoId} manifest only`);
+    console.log(`Preloading short-form video ${videoId}`);
     
     // Force HLS format (.m3u8)
     let originalUrl = videoUrl;
@@ -548,75 +548,165 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     
     const hlsUrl = processVideoUrl(originalUrl, API_BASE_URL);
     
-    // Create a hidden HLS preloader - with more conservative settings
+    // Create an optimized HLS preloader for TikTok-like short videos
     if (Hls.isSupported()) {
       const preloadHls = new Hls({
-        maxBufferLength: 5, // Very minimal buffer for preloading
-        maxMaxBufferLength: 10, // Never buffer more than 10 seconds
+        // Aggressive preloading for short videos
+        maxBufferLength: 10,              // Buffer 10s of content
+        maxMaxBufferLength: 15,           // Maximum 15s buffer
         enableWorker: true,
-        maxBufferSize: 5 * 1000 * 1000, // 5MB max buffer for preloading
-        startLevel: -1, // Auto start level selection
-        abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
-        abrMaxWithRealBitrate: false, // Don't use real bitrate for preloading
-        startFragPrefetch: false, // Don't prefetch fragments while preloading
-        progressive: true, // Enable progressive loading
-        // Only preload manifest and first segment
-        preloadSegments: 1,
-        autoStartLoad: false, // Don't auto start loading segments
+        maxBufferSize: 8 * 1000 * 1000,   // 8MB buffer size - optimized for short content
+        
+        // More aggressive ABR for short content
+        startLevel: 1,                    // Start at quality level 1 (usually 720p) for faster start
+        abrEwmaDefaultEstimate: 2000000,  // 2Mbps initial estimate (assume decent connection)
+        abrBandWidthFactor: 0.95,         // Conservative bandwidth estimation for stability
+        
+        // Enable prefetching for smoother TikTok-like experience
+        startFragPrefetch: true,          // Prefetch first fragment for instant start
+        
+        // AWS S3 optimizations
+        xhrSetup: function(xhr, url) {
+          xhr.responseType = 'arraybuffer';
+          
+          // Cache settings
+          if (url.endsWith('.m3u8')) {
+            xhr.setRequestHeader('Cache-Control', 'max-age=1');
+          } else if (url.endsWith('.ts')) {
+            xhr.setRequestHeader('Cache-Control', 'public, max-age=31536000');
+          }
+          
+          // AWS S3 specific optimizations
+          if (url.includes('amazonaws.com')) {
+            xhr.setRequestHeader('Connection', 'keep-alive');
+          }
+        },
+        
+        // Start loading automatically
+        autoStartLoad: true,
+        
+        // Use progressive loading
+        progressive: true
       });
       
       const preloadVideo = document.createElement('video');
       preloadVideo.muted = true;
-      preloadVideo.preload = 'none'; // Changed from 'metadata' to 'none' to be even more conservative
+      preloadVideo.preload = 'auto';       // Changed from 'none' to 'auto' for faster preloading
+      preloadVideo.playsinline = true;     // Required for mobile playback
       preloadVideo.style.display = 'none';
       
-      // Store the preloaded instance
+      // Enhanced tracking for preloaded items
       preloadedVideosRef.current[videoId] = {
         hls: preloadHls,
         element: preloadVideo,
         url: hlsUrl,
-        loaded: false
+        loaded: false,
+        loadedSegments: 0,
+        totalSegments: 0,
+        preloadStartTime: Date.now()
       };
       
       // Load the source and attach media
       preloadHls.loadSource(hlsUrl);
       preloadHls.attachMedia(preloadVideo);
       
-      // Set up event listeners
-      preloadHls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log(`HLS manifest parsed for preload video ${videoId}`);
-        preloadedVideosRef.current[videoId].loaded = true;
-        
-        // Only load manifest - don't start loading any segments
-        // This is the key change - we only preload the manifest, not any segments
-        
-        // Optional: load just the first segment for faster start when selected
-        if (navigator.connection && 
-            (navigator.connection.effectiveType === '4g' || navigator.connection.effectiveType === 'wifi')) {
-          console.log('Fast connection detected, preloading first segment only');
-          preloadHls.startLoad(-1);
+      // Track segment loading for preloaded videos
+      preloadHls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+        if (preloadedVideosRef.current[videoId]) {
+          preloadedVideosRef.current[videoId].loadedSegments += 1;
           
-          // Stop loading after 500ms - just enough to get the first segment
-          setTimeout(() => {
-            preloadHls.stopLoad();
-          }, 500);
+          // Log preloading progress
+          const progress = preloadedVideosRef.current[videoId].totalSegments > 0 
+            ? (preloadedVideosRef.current[videoId].loadedSegments / preloadedVideosRef.current[videoId].totalSegments * 100).toFixed(0)
+            : "unknown";
+            
+          console.log(`Preloaded video ${videoId}: ${progress}% complete`);
+        }
+      });
+      
+      // Set up event listeners
+      preloadHls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        console.log(`HLS manifest parsed for preload video ${videoId} with ${data.levels.length} quality levels`);
+        
+        if (preloadedVideosRef.current[videoId]) {
+          // Mark as loaded
+          preloadedVideosRef.current[videoId].loaded = true;
+          
+          // Save total number of segments for progress tracking
+          if (data.levels && data.levels.length > 0 && data.levels[0].details) {
+            const fragments = data.levels[0].details.fragments || [];
+            preloadedVideosRef.current[videoId].totalSegments = fragments.length;
+            
+            console.log(`Video ${videoId} has ${fragments.length} segments to preload`);
+          }
+          
+          // For TikTok-style experience, preload more aggressively based on connection
+          if (navigator.connection) {
+            const connectionType = navigator.connection.effectiveType || '4g';
+            const isGoodConnection = ['4g', 'wifi'].includes(connectionType);
+            
+            if (isGoodConnection) {
+              // On good connections, load ~30% of the video
+              console.log(`Fast connection detected (${connectionType}), preloading first 30% of video ${videoId}`);
+              preloadHls.startLoad(-1);
+              
+              // After loading some segments, pause loading until this video is selected
+              setTimeout(() => {
+                // Don't stop if this becomes the current video
+                if (preloadedVideosRef.current[videoId] && videos[currentIndex]?.video_id !== videoId) {
+                  preloadHls.stopLoad();
+                  console.log(`Pausing preload for video ${videoId} after initial segments`);
+                }
+              }, 2000); // Load for 2 seconds to get more segments
+            } else {
+              // On slower connections, just load first segment
+              console.log(`Slower connection detected (${connectionType}), preloading only first segment of video ${videoId}`);
+              preloadHls.startLoad(-1);
+              
+              setTimeout(() => {
+                if (preloadedVideosRef.current[videoId] && videos[currentIndex]?.video_id !== videoId) {
+                  preloadHls.stopLoad();
+                }
+              }, 500);
+            }
+          } else {
+            // No connection API - load conservatively
+            preloadHls.startLoad(-1);
+            
+            setTimeout(() => {
+              if (preloadedVideosRef.current[videoId] && videos[currentIndex]?.video_id !== videoId) {
+                preloadHls.stopLoad();
+              }
+            }, 800); // Load for 800ms
+          }
         }
       });
       
       // Append to DOM temporarily for better browser handling
       document.body.appendChild(preloadVideo);
     }
-  }, []);
-  
-  // Function to preload next few videos
+  }, [currentIndex, videos]);
+
+  // Enhanced preloading strategy for TikTok-style short videos
   const preloadNextVideos = useCallback(() => {
     if (!videos || videos.length === 0) return;
     
-    // Preload the next 2 videos
-    for (let i = 1; i <= 2; i++) {
+    // More aggressive preloading for TikTok/Instagram Reels-style feed
+    console.log('Preloading videos for TikTok-style experience');
+    
+    // Preload next 3 videos for vertical scrolling feed
+    for (let i = 1; i <= 3; i++) {
       const nextIndex = (currentIndex + i) % videos.length;
       if (videos[nextIndex] && videos[nextIndex].video_url) {
         preloadHlsVideo(videos[nextIndex].video_url, videos[nextIndex].video_id);
+      }
+    }
+    
+    // Also preload the previous video for smooth navigation
+    if (currentIndex > 0) {
+      const prevIndex = currentIndex - 1;
+      if (videos[prevIndex] && videos[prevIndex].video_url) {
+        preloadHlsVideo(videos[prevIndex].video_url, videos[prevIndex].video_id);
       }
     }
   }, [videos, currentIndex, preloadHlsVideo]);
@@ -627,19 +717,30 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     
     // Clean up preloaded videos that are no longer needed
     return () => {
-      // Keep only current and next 2 videos in cache
+      // Keep current, 3 next videos, and 1 previous video in cache
       const videosToKeep = [
         videos?.[currentIndex]?.video_id,
+        // Next 3 videos
         videos?.[currentIndex + 1 < videos.length ? currentIndex + 1 : 0]?.video_id,
-        videos?.[currentIndex + 2 < videos.length ? currentIndex + 2 : 1]?.video_id
+        videos?.[currentIndex + 2 < videos.length ? currentIndex + 2 : 1]?.video_id,
+        videos?.[currentIndex + 3 < videos.length ? currentIndex + 3 : 2]?.video_id,
+        // Previous video
+        videos?.[currentIndex > 0 ? currentIndex - 1 : videos.length - 1]?.video_id
       ].filter(Boolean);
+      
+      console.log(`Keeping videos in preload cache: ${videosToKeep.join(', ')}`);
       
       Object.keys(preloadedVideosRef.current).forEach(videoId => {
         if (!videosToKeep.includes(videoId)) {
           // Clean up unused preloaded videos
           const preloadedItem = preloadedVideosRef.current[videoId];
           if (preloadedItem) {
-            if (preloadedItem.hls) preloadedItem.hls.destroy();
+            console.log(`Cleaning up preloaded video ${videoId}`);
+            if (preloadedItem.hls) {
+              // Stop loading and destroy instance
+              preloadedItem.hls.stopLoad();
+              preloadedItem.hls.destroy();
+            }
             if (preloadedItem.element && preloadedItem.element.parentNode) {
               preloadedItem.element.parentNode.removeChild(preloadedItem.element);
             }
@@ -869,46 +970,55 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
               lowLatencyMode: false,
               debug: false,
               
-              // Buffer optimization
-              backBufferLength: 90,
-              maxBufferLength: 30,
-              maxBufferSize: 15 * 1000 * 1000, // 15MB buffer
-              maxMaxBufferLength: 60,
+              // Short-form video optimization - smaller buffers, faster startup
+              backBufferLength: 30,        // 30 seconds back buffer for smoother replay
+              maxBufferLength: 15,         // 15 seconds ahead - reduced for short videos
+              maxBufferSize: 12 * 1000 * 1000, // 12MB buffer (optimized for high-quality short clips)
+              maxMaxBufferLength: 30,      // Reduced maximum buffer for short videos
               
-              // Adaptive bitrate optimization
-              startLevel: -1, // Auto start level selection
-              abrEwmaDefaultEstimate: 1000000, // 1Mbps initial estimate
-              abrBandWidthFactor: 0.9, // Conservative bandwidth estimate
-              abrBandWidthUpFactor: 0.7, // More aggressive quality upgrades
+              // Aggressive ABR for faster quality switches in short content
+              startLevel: -1,               // Auto start level
+              abrEwmaDefaultEstimate: 2000000, // Higher initial bitrate estimate (2Mbps)
+              abrBandWidthFactor: 0.95,     // More conservative bandwidth estimate for stability
+              abrBandWidthUpFactor: 0.85,   // More aggressive upswitch for short videos
               abrMaxWithRealBitrate: true,
               
-              // Segment loading optimization
-              progressive: true,
-              liveSyncDurationCount: 3,
-              fragLoadingTimeOut: 8000,
-              fragLoadingMaxRetry: 4,
-              fragLoadingRetryDelay: 500,
-              manifestLoadingMaxRetry: 4,
-              levelLoadingMaxRetry: 4,
+              // Segment loading optimization for immediate playback
+              liveSyncDurationCount: 2,     // Sync to 2 segments for faster start
+              fragLoadingTimeOut: 4000,     // Shorter timeout for fragment loading
+              fragLoadingMaxRetry: 6,       // More retries for short content
+              fragLoadingRetryDelay: 300,   // Faster retry for fragments
+              manifestLoadingMaxRetry: 4,   // More manifest retries
+              manifestLoadingTimeOut: 3000, // Faster manifest timeout
               
-              // Initial loading behavior  
-              autoStartLoad: false,
-              testBandwidth: true,
+              // Instant start settings
+              autoStartLoad: true,         // Auto-start loading (changed from false)
+              startFragPrefetch: true,     // Prefetch first fragment
+              testBandwidth: false,        // Skip initial bandwidth test for faster start
               
-              // XHR setup for optimal segment loading
+              // Optimized for S3 hosted content
               xhrSetup: function(xhr, url) {
                 xhr.responseType = 'arraybuffer';
                 
-                // Optimize caching behavior
+                // Apply optimal Cache-Control headers based on content type
                 if (url.endsWith('.m3u8')) {
-                  // Don't cache manifests (they might change)
-                  xhr.setRequestHeader('Cache-Control', 'no-cache');
+                  // Minimal caching for playlists - allows for dynamic updates
+                  xhr.setRequestHeader('Cache-Control', 'max-age=1');
                 } else if (url.endsWith('.ts')) {
-                  // Strongly cache segments (they never change)
-                  xhr.setRequestHeader('Cache-Control', 'max-age=31536000');
+                  // Aggressive caching for segments - they never change
+                  xhr.setRequestHeader('Cache-Control', 'public, max-age=31536000');
                 }
                 
-                // Log requests for monitoring
+                // Add AWS specific optimizations
+                if (url.includes('amazonaws.com')) {
+                  // Add range request capabilities
+                  xhr.setRequestHeader('Range', 'bytes=0-');
+                  
+                  // Ensure connection is kept alive between segment requests
+                  xhr.setRequestHeader('Connection', 'keep-alive');
+                }
+                
+                // Log requests for debugging
                 console.log(`Loading HLS chunk: ${url.split('/').pop()}`);
               }
             });
