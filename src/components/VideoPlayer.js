@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { IconButton, Typography, Box, Avatar, Tooltip, Snackbar, Alert, Dialog, DialogContent, DialogTitle, Button, DialogActions, CircularProgress, Slide, useTheme, useMediaQuery } from "@mui/material";
 import { 
@@ -24,7 +24,9 @@ import {
   Fullscreen,
   Home,
   ArrowBack,
-  FullscreenExit
+  FullscreenExit,
+  HighQuality,
+  Settings
 } from "@mui/icons-material";
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
@@ -133,12 +135,356 @@ const preloadVideo = (url) => {
   });
 };
 
+// Add a segment loading tracker
+const segmentLoadingStats = {
+  totalSegments: 0,
+  loadedSegments: 0,
+  loadingStartTime: 0,
+  totalBytesLoaded: 0,
+  segmentsLoading: {},
+  averageSegmentDuration: 0
+};
+
+// Add before VideoPlayer component
+const resetSegmentStats = () => {
+  segmentLoadingStats.totalSegments = 0;
+  segmentLoadingStats.loadedSegments = 0;
+  segmentLoadingStats.loadingStartTime = Date.now();
+  segmentLoadingStats.totalBytesLoaded = 0;
+  segmentLoadingStats.segmentsLoading = {};
+  segmentLoadingStats.averageSegmentDuration = 0;
+};
+
+// Monitor HLS segment loading
+const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) => {
+  if (!hls) return;
+  
+  resetSegmentStats();
+  
+  // Log manifest parsing
+  hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+    console.log('HLS Manifest parsed:', data);
+    // Get segment details from the first level
+    if (data.levels && data.levels.length > 0 && data.levels[0].details) {
+      const firstLevel = data.levels[0];
+      const fragments = firstLevel.details.fragments || [];
+      const segmentDuration = firstLevel.details.targetduration || 0;
+      
+      segmentLoadingStats.totalSegments = fragments.length;
+      segmentLoadingStats.averageSegmentDuration = segmentDuration;
+      
+      console.log(`HLS stream: ${fragments.length} segments, ~${segmentDuration.toFixed(1)}s each`);
+      console.log(`Total segments in manifest: ~${segmentLoadingStats.totalSegments}`);
+      
+      // Calculate optimal buffering based on segment size
+      const targetBuffer = Math.min(3 * segmentDuration, 15); // Buffer 3 segments or max 15 seconds
+      hls.config.maxBufferLength = targetBuffer;
+      console.log(`Set target buffer to ${targetBuffer.toFixed(1)}s based on segment size`);
+      
+      // Get available quality levels
+      if (data.levels && data.levels.length > 0) {
+        const qualities = data.levels.map((level, index) => ({
+          index,
+          height: level.height || 0,
+          width: level.width || 0,
+          bitrate: level.bitrate || 0,
+          name: level.height ? `${level.height}p` : `Quality ${index + 1}`
+        }));
+        
+        // Add auto quality option
+        qualities.unshift({
+          index: -1,
+          name: 'Auto'
+        });
+        
+        if (setAvailableQualities) {
+          setAvailableQualities(qualities);
+        }
+        if (setCurrentQuality) {
+          setCurrentQuality(hls.currentLevel);
+        }
+      }
+    }
+  });
+  
+  // Log fragment loading
+  hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+    const fragId = data.frag.sn;
+    const fragDuration = data.frag.duration;
+    const fragLevel = data.frag.level;
+    
+    segmentLoadingStats.segmentsLoading[fragId] = {
+      startTime: Date.now(),
+      url: data.frag.url,
+      loaded: false,
+      duration: fragDuration,
+      level: fragLevel
+    };
+    
+    // Add level info
+    const levelInfo = hls.levels && hls.levels[fragLevel] ? 
+      `L${fragLevel}(${hls.levels[fragLevel].width}x${hls.levels[fragLevel].height})` : `L${fragLevel}`;
+    
+    console.log(`Loading segment ${fragId} (${fragDuration.toFixed(1)}s, ${levelInfo}) from ${data.frag.url.split('/').pop()}`);
+  });
+  
+  // Log fragment loaded
+  hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+    const fragId = data.frag.sn;
+    segmentLoadingStats.loadedSegments++;
+    segmentLoadingStats.totalBytesLoaded += data.stats.total;
+    
+    if (segmentLoadingStats.segmentsLoading[fragId]) {
+      const loadTime = Date.now() - segmentLoadingStats.segmentsLoading[fragId].startTime;
+      segmentLoadingStats.segmentsLoading[fragId].loaded = true;
+      segmentLoadingStats.segmentsLoading[fragId].loadTime = loadTime;
+      segmentLoadingStats.segmentsLoading[fragId].bytes = data.stats.total;
+      
+      // Calculate segment bitrate
+      const durationSec = data.frag.duration;
+      const bytesLoaded = data.stats.total;
+      const bitrate = (bytesLoaded * 8) / durationSec; // in bits per second
+      
+      console.log(`Segment ${fragId} loaded: ${(bytesLoaded / 1024).toFixed(1)}KB in ${loadTime}ms, bitrate: ${(bitrate/1000).toFixed(0)}kbps`);
+      console.log(`Progress: ${segmentLoadingStats.loadedSegments}/${segmentLoadingStats.totalSegments} segments loaded`);
+    }
+  });
+  
+  // Log buffer status
+  hls.on(Hls.Events.BUFFER_APPENDING, (event, data) => {
+    console.log(`Appending ${data.type} buffer: ${(data.data.byteLength / 1024).toFixed(1)}KB`);
+  });
+  
+  // Log level switching
+  hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+    if (hls.levels && hls.levels[data.level]) {
+      const level = hls.levels[data.level];
+      console.log(`HLS quality switched to level ${data.level}: ${level.width}x${level.height}, ${(level.bitrate/1000).toFixed(0)}kbps`);
+      
+      // Update current quality state
+      if (setCurrentQuality) {
+        setCurrentQuality(data.level);
+      }
+    } else {
+      console.log(`HLS quality level switched to ${data.level}`);
+    }
+  });
+  
+  // Monitor for stalls
+  let lastCurrentTime = 0;
+  let stallCount = 0;
+  const stallCheckInterval = setInterval(() => {
+    const video = document.querySelector('video');
+    if (!video || !hls.media) {
+      clearInterval(stallCheckInterval);
+      return;
+    }
+    
+    // If video is playing but time isn't advancing, might be stalling
+    if (!video.paused && video.currentTime === lastCurrentTime) {
+      stallCount++;
+      console.log(`Potential stall detected #${stallCount}: Time stuck at ${video.currentTime.toFixed(1)}s`);
+      
+      // If stalled for several checks, try recovery
+      if (stallCount >= 3) {
+        console.log('Stall recovery: attempting to resolve playback issue');
+        
+        // Strategy 1: Skip ahead slightly if we have buffer
+        if (video.buffered.length > 0 && 
+            video.currentTime < video.buffered.end(video.buffered.length - 1)) {
+          const skipAmount = 0.1; // Skip 100ms forward
+          console.log(`Trying micro-skip ahead by ${skipAmount}s`);
+          video.currentTime += skipAmount;
+        } 
+        // Strategy 2: Reduce buffer and reload segment
+        else if (stallCount >= 5) {
+          console.log('Advanced stall recovery: reducing buffer and reloading current fragment');
+          // Temporarily reduce buffer target
+          hls.config.maxBufferLength = 5;
+          // Try to recover media error
+          hls.recoverMediaError();
+        }
+        // Strategy 3: Last resort - reload stream at current position
+        if (stallCount >= 8) {
+          console.log('Critical stall: reloading stream at current position');
+          const currentTime = video.currentTime;
+          hls.startLoad();
+          // After reloading, seek back to where we were
+          hls.once(Hls.Events.FRAG_LOADED, () => {
+            video.currentTime = currentTime;
+          });
+        }
+      }
+    } else {
+      // Reset stall count when time advances
+      if (stallCount > 0) {
+        console.log('Playback resumed normally');
+        stallCount = 0;
+        // Restore normal buffer settings if they were reduced
+        if (hls.config.maxBufferLength < 30) {
+          hls.config.maxBufferLength = 30;
+        }
+      }
+      lastCurrentTime = video.currentTime;
+    }
+  }, 1000);
+  
+  // Clean up interval on destroy
+  hls.on(Hls.Events.DESTROYING, () => {
+    clearInterval(stallCheckInterval);
+  });
+};
+
+// Add playback monitoring function
+const startPlaybackMonitoring = (videoElement, hls) => {
+  if (!videoElement || !hls) return;
+  
+  // Initialize metrics
+  const metrics = {
+    startTime: Date.now(),
+    firstSegmentLoadedAt: 0,
+    playbackStartedAt: 0,
+    bufferedRanges: [],
+    bitrateHistory: [],
+    bandwidth: 0,
+    estimatedBandwidth: 0,
+    droppedFrames: 0,
+    stallEvents: 0,
+  };
+  
+  // Update metrics periodically
+  const metricsInterval = setInterval(() => {
+    if (!videoElement || !hls || !hls.media) {
+      clearInterval(metricsInterval);
+      return;
+    }
+    
+    // Get buffer status
+    const buffered = videoElement.buffered;
+    metrics.bufferedRanges = [];
+    for (let i = 0; i < buffered.length; i++) {
+      metrics.bufferedRanges.push({
+        start: buffered.start(i),
+        end: buffered.end(i)
+      });
+    }
+    
+    // Get bandwidth estimates
+    if (hls.bandwidthEstimate) {
+      metrics.estimatedBandwidth = hls.bandwidthEstimate;
+    }
+    
+    // Get current bitrate
+    if (hls.currentLevel >= 0 && hls.levels && hls.levels[hls.currentLevel]) {
+      const currentBitrate = hls.levels[hls.currentLevel].bitrate;
+      metrics.bitrateHistory.push({
+        timestamp: Date.now(),
+        bitrate: currentBitrate,
+        level: hls.currentLevel
+      });
+      // Keep history at max 20 entries
+      if (metrics.bitrateHistory.length > 20) {
+        metrics.bitrateHistory.shift();
+      }
+    }
+    
+    // Check for dropped frames (if available)
+    if (videoElement.getVideoPlaybackQuality) {
+      const quality = videoElement.getVideoPlaybackQuality();
+      metrics.droppedFrames = quality.droppedVideoFrames;
+    }
+    
+    // Debug log every 10 seconds
+    if (Date.now() % 10000 < 1000) {
+      console.log("Playback Metrics:", {
+        currentTime: videoElement.currentTime.toFixed(1),
+        buffered: metrics.bufferedRanges.map(r => `${r.start.toFixed(1)}-${r.end.toFixed(1)}`).join(', '),
+        bandwidth: `${(metrics.estimatedBandwidth / 1000).toFixed(0)} kbps`,
+        currentBitrate: metrics.bitrateHistory.length > 0 
+          ? `${(metrics.bitrateHistory[metrics.bitrateHistory.length - 1].bitrate / 1000).toFixed(0)} kbps`
+          : 'unknown',
+        droppedFrames: metrics.droppedFrames
+      });
+    }
+    
+    // Update metrics in component state if needed
+    return metrics;
+  }, 1000);
+  
+  // Track video events
+  videoElement.addEventListener('playing', () => {
+    if (!metrics.playbackStartedAt) {
+      metrics.playbackStartedAt = Date.now();
+      console.log(`Playback started in ${(metrics.playbackStartedAt - metrics.startTime)}ms`);
+    }
+  });
+  
+  // First segment loaded
+  hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+    if (!metrics.firstSegmentLoadedAt && data.frag.sn === 0) {
+      metrics.firstSegmentLoadedAt = Date.now();
+      console.log(`First segment loaded in ${(metrics.firstSegmentLoadedAt - metrics.startTime)}ms`);
+    }
+    
+    // Track actual bandwidth from segment loading
+    const loadTime = data.stats.loading.end - data.stats.loading.start;
+    const bytes = data.stats.total;
+    if (loadTime > 0 && bytes > 0) {
+      // Calculate bandwidth in bits per second
+      const bandwidthBps = (bytes * 8) / (loadTime / 1000);
+      metrics.bandwidth = bandwidthBps;
+    }
+  });
+  
+  // Track stalls
+  let lastTime = 0;
+  let lastTimeUpdate = Date.now();
+  const stallCheckInterval = setInterval(() => {
+    if (!videoElement || videoElement.paused || !hls.media) {
+      clearInterval(stallCheckInterval);
+      return;
+    }
+    
+    const now = Date.now();
+    const timeDiff = now - lastTimeUpdate;
+    
+    // If more than 200ms has passed and video time hasn't changed (while playing)
+    if (timeDiff > 200 && videoElement.currentTime === lastTime && !videoElement.paused) {
+      metrics.stallEvents++;
+    }
+    
+    lastTime = videoElement.currentTime;
+    lastTimeUpdate = now;
+  }, 200);
+  
+  // Clean up
+  const cleanup = () => {
+    clearInterval(metricsInterval);
+    clearInterval(stallCheckInterval);
+  };
+  
+  return {
+    getMetrics: () => ({ ...metrics }),
+    cleanup
+  };
+};
+
 const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet }) => {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { hasMore, loadMoreVideos } = useVideoContext();
+  
+  // Important refs
+  const hlsRef = useRef(null);
+  const lastTimeUpdateRef = useRef(null);
+  const lastTimeValueRef = useRef(null);
+  const reportedViewRef = useRef(false);
+  const preloadedVideosRef = useRef({});
+  const metricsRef = useRef(null);
+  
+  // State variables
   const [likes, setLikes] = useState(0);
   const [dislikes, setDislikes] = useState(0);
   const [views, setViews] = useState(0);
@@ -168,23 +514,30 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     window.innerHeight > window.innerWidth ? 'portrait' : 'landscape'
   );
   
-  // Add refs for tracking time updates without causing re-renders
-  const lastTimeUpdateRef = useRef(null);
-  const lastTimeValueRef = useRef(null);
+  // Quality selection state
+  const [availableQualities, setAvailableQualities] = useState([]);
+  const [currentQuality, setCurrentQuality] = useState(-1);
+  const [showQualityMenu, setShowQualityMenu] = useState(false);
   
-  // Create a ref to track which videos we've reported views for
-  const reportedViewRef = useRef(false);
-
-  const hlsRef = useRef(null);
-
-  // Add a reference for preloaded videos
-  const preloadedVideosRef = useRef({});
+  // Metrics state
+  const [connectionSpeed, setConnectionSpeed] = useState('');
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  
+  // Add this function to handle quality changes
+  const handleQualityChange = (level) => {
+    if (!hlsRef.current) return;
+    
+    console.log(`Manually changing quality to level: ${level}`);
+    hlsRef.current.currentLevel = level;
+    setCurrentQuality(level);
+    setShowQualityMenu(false);
+  };
   
   // Enhanced preload function for HLS streams
   const preloadHlsVideo = useCallback((videoUrl, videoId) => {
     if (!videoUrl || preloadedVideosRef.current[videoId]) return;
     
-    console.log(`Preloading video ${videoId}:`, videoUrl);
+    console.log(`Preloading video ${videoId} manifest only`);
     
     // Force HLS format (.m3u8)
     let originalUrl = videoUrl;
@@ -195,24 +548,26 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
     
     const hlsUrl = processVideoUrl(originalUrl, API_BASE_URL);
     
-    // Create a hidden HLS preloader
+    // Create a hidden HLS preloader - with more conservative settings
     if (Hls.isSupported()) {
       const preloadHls = new Hls({
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
+        maxBufferLength: 5, // Very minimal buffer for preloading
+        maxMaxBufferLength: 10, // Never buffer more than 10 seconds
         enableWorker: true,
-        maxBufferSize: 60 * 1000 * 1000, // 60MB buffer
+        maxBufferSize: 5 * 1000 * 1000, // 5MB max buffer for preloading
         startLevel: -1, // Auto start level selection
         abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
-        abrBandWidthFactor: 0.95, // Bandwidth safety factor
-        abrBandWidthUpFactor: 0.7, // Factor for upswitch
-        abrMaxWithRealBitrate: true, // Use real bitrate for ABR calculations
-        startFragPrefetch: true // Start prefetching fragments before playback
+        abrMaxWithRealBitrate: false, // Don't use real bitrate for preloading
+        startFragPrefetch: false, // Don't prefetch fragments while preloading
+        progressive: true, // Enable progressive loading
+        // Only preload manifest and first segment
+        preloadSegments: 1,
+        autoStartLoad: false, // Don't auto start loading segments
       });
       
       const preloadVideo = document.createElement('video');
       preloadVideo.muted = true;
-      preloadVideo.preload = 'auto';
+      preloadVideo.preload = 'none'; // Changed from 'metadata' to 'none' to be even more conservative
       preloadVideo.style.display = 'none';
       
       // Store the preloaded instance
@@ -231,6 +586,21 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       preloadHls.on(Hls.Events.MANIFEST_PARSED, () => {
         console.log(`HLS manifest parsed for preload video ${videoId}`);
         preloadedVideosRef.current[videoId].loaded = true;
+        
+        // Only load manifest - don't start loading any segments
+        // This is the key change - we only preload the manifest, not any segments
+        
+        // Optional: load just the first segment for faster start when selected
+        if (navigator.connection && 
+            (navigator.connection.effectiveType === '4g' || navigator.connection.effectiveType === 'wifi')) {
+          console.log('Fast connection detected, preloading first segment only');
+          preloadHls.startLoad(-1);
+          
+          // Stop loading after 500ms - just enough to get the first segment
+          setTimeout(() => {
+            preloadHls.stopLoad();
+          }, 500);
+        }
       });
       
       // Append to DOM temporarily for better browser handling
@@ -494,24 +864,60 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           } else {
             // Create a new HLS instance
             hls = new Hls({
+              // Core settings
               enableWorker: true,
-              lowLatencyMode: true,
+              lowLatencyMode: false,
+              debug: false,
+              
+              // Buffer optimization
               backBufferLength: 90,
               maxBufferLength: 30,
-              maxBufferSize: 60 * 1000 * 1000, // 60MB buffer
-              maxMaxBufferLength: 60, // Maximum buffer size in seconds
+              maxBufferSize: 15 * 1000 * 1000, // 15MB buffer
+              maxMaxBufferLength: 60,
+              
+              // Adaptive bitrate optimization
               startLevel: -1, // Auto start level selection
-              abrEwmaDefaultEstimate: 500000, // Default bandwidth estimate
-              abrBandWidthFactor: 0.95, // Bandwidth safety factor
-              abrBandWidthUpFactor: 0.7, // Factor for upswitch
-              abrMaxWithRealBitrate: true, // Use real bitrate for ABR calculations
-              liveSyncDurationCount: 3, // Number of segments to sync for live streams
-              fragLoadingTimeOut: 20000, // Timeout for fragment loading
-              startFragPrefetch: true // Start prefetching fragments before playback
+              abrEwmaDefaultEstimate: 1000000, // 1Mbps initial estimate
+              abrBandWidthFactor: 0.9, // Conservative bandwidth estimate
+              abrBandWidthUpFactor: 0.7, // More aggressive quality upgrades
+              abrMaxWithRealBitrate: true,
+              
+              // Segment loading optimization
+              progressive: true,
+              liveSyncDurationCount: 3,
+              fragLoadingTimeOut: 8000,
+              fragLoadingMaxRetry: 4,
+              fragLoadingRetryDelay: 500,
+              manifestLoadingMaxRetry: 4,
+              levelLoadingMaxRetry: 4,
+              
+              // Initial loading behavior  
+              autoStartLoad: false,
+              testBandwidth: true,
+              
+              // XHR setup for optimal segment loading
+              xhrSetup: function(xhr, url) {
+                xhr.responseType = 'arraybuffer';
+                
+                // Optimize caching behavior
+                if (url.endsWith('.m3u8')) {
+                  // Don't cache manifests (they might change)
+                  xhr.setRequestHeader('Cache-Control', 'no-cache');
+                } else if (url.endsWith('.ts')) {
+                  // Strongly cache segments (they never change)
+                  xhr.setRequestHeader('Cache-Control', 'max-age=31536000');
+                }
+                
+                // Log requests for monitoring
+                console.log(`Loading HLS chunk: ${url.split('/').pop()}`);
+              }
             });
             
             // Load source
             hls.loadSource(videoSource);
+            
+            // Setup event tracking
+            setupHlsEventListeners(hls, setAvailableQualities, setCurrentQuality);
           }
           
           hlsRef.current = hls;
@@ -520,11 +926,71 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           hls.attachMedia(videoElement);
           
           // Listen for HLS events
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            console.log("HLS manifest parsed, attempting to play");
+          hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+            console.log("HLS manifest parsed, analyzing quality levels:", data.levels.length);
+            
+            // Log available bitrates to help with debugging
+            data.levels.forEach((level, index) => {
+              console.log(`Level ${index}: ${level.bitrate / 1000} Kbps, resolution: ${level.width}x${level.height}`);
+            });
+            
+            // Choose optimal level based on device and connection
+            let startLevel = -1; // Auto by default
+            
+            // On mobile devices, prefer lower quality to start playback faster
+            if (isMobile) {
+              // Find a level with resolution <= 720p for faster initial load
+              const mediumQualityIndex = data.levels.findIndex(level => level.height <= 720);
+              if (mediumQualityIndex !== -1) {
+                startLevel = mediumQualityIndex;
+                console.log(`Selected medium quality level ${startLevel} for faster mobile start`);
+              }
+            }
+            
+            // Set the start level
+            hls.startLevel = startLevel;
+            
+            // Start loading fragments from the beginning
+            hls.startLoad(-1);
+            
+            // Only load what we need initially
+            setTimeout(() => {
+              if (videoRef.current && videoRef.current.currentTime < 5) {
+                console.log("Initial buffer established, switching to progressive loading");
+                // After getting initial buffer, let HLS.js manage loading based on playback
+                hls.config.maxBufferLength = 15; // Increase slightly after initial load
+              }
+            }, 3000);
+            
             if (isMounted) {
+              // Set initial play position to beginning
+              videoRef.current.currentTime = 0;
+              
               // Try to play after HLS manifest is parsed
-              attemptPlayback(videoElement, currentVideo);
+              attemptPlayback(videoRef.current, currentVideo);
+              
+              // Start playback monitoring
+              startPlaybackMonitoring(videoRef.current, hls);
+            }
+          });
+          
+          // Add fragment loaded event for bandwidth monitoring
+          hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+            // Calculate bandwidth from segment loading
+            const loadTime = data.stats.loading.end - data.stats.loading.start;
+            const bytes = data.stats.total;
+            if (loadTime > 0 && bytes > 0) {
+              // Calculate bandwidth in kbps
+              const bandwidthKbps = Math.round((bytes * 8) / (loadTime / 1000) / 1000);
+              
+              // Get connection speed description
+              let speedDescription = 'Unknown';
+              if (bandwidthKbps > 5000) speedDescription = 'Excellent';
+              else if (bandwidthKbps > 2000) speedDescription = 'Good';
+              else if (bandwidthKbps > 800) speedDescription = 'Fair';
+              else speedDescription = 'Poor';
+              
+              setConnectionSpeed(`${speedDescription} (${bandwidthKbps} kbps)`);
             }
           });
           
@@ -582,7 +1048,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           // Update URL without navigation (only if needed)
           try {
             const currentPath = window.location.pathname;
-            const targetPath = `/modern-video/${currentVideo.video_id}`;
+            const targetPath = `/video/${currentVideo.video_id}`;
             
             // Only update if the path actually changed
             if (!currentPath.includes(currentVideo.video_id)) {
@@ -699,7 +1165,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
         }
       }
     };
-  }, [videos, currentIndex, currentUser]);
+  }, [videos, currentIndex, currentUser, setAvailableQualities, setCurrentQuality]);
 
   // Check if a video is saved by the current user - used when video changes
   const checkSavedStatus = async (videoId) => {
@@ -1219,7 +1685,7 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
 
     try {
       const currentVideo = videos[currentIndex];
-      const shareUrl = `${window.location.origin}/modern-video/${currentVideo.video_id}`;
+      const shareUrl = `${window.location.origin}/video/${currentVideo.video_id}`;
       
       // Set flag that we've shared this video
       setWatchShared(true);
@@ -1397,6 +1863,25 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
       setShowDeleteDialog(false);
     }
   };
+
+  // Add this useEffect to start and cleanup the metrics monitoring
+  useEffect(() => {
+    if (videoRef.current && hlsRef.current) {
+      // Clean up any existing metrics monitoring
+      if (metricsRef.current) {
+        metricsRef.current.cleanup();
+      }
+      
+      // Start new monitoring
+      metricsRef.current = startPlaybackMonitoring(videoRef.current, hlsRef.current);
+    }
+    
+    return () => {
+      if (metricsRef.current) {
+        metricsRef.current.cleanup();
+      }
+    };
+  }, [currentIndex]);
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
   return (
@@ -1770,7 +2255,16 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                 >
                   <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
         </IconButton>
-      </Box>
+
+                <Tooltip title="Quality Settings">
+                  <IconButton
+                    onClick={() => setShowQualityMenu(!showQualityMenu)}
+                    sx={{ color: 'white' }}
+                  >
+                    <Settings />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Box>
           </Box>
         </Box>
@@ -1910,6 +2404,113 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Quality selector menu */}
+      {showQualityMenu && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 60,
+            right: 10,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            borderRadius: 1,
+            padding: 1,
+            zIndex: 1000,
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ color: 'white', mb: 1 }}>
+            Quality
+          </Typography>
+          {availableQualities.map((quality) => (
+            <Box
+              key={quality.index}
+              onClick={() => handleQualityChange(quality.index)}
+              sx={{
+                py: 0.5,
+                px: 2,
+                cursor: 'pointer',
+                backgroundColor: currentQuality === quality.index ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                },
+                borderRadius: 1,
+                mb: 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <Typography variant="body2" sx={{ color: 'white' }}>
+                {quality.name}
+              </Typography>
+              {currentQuality === quality.index && (
+                <HighQuality fontSize="small" sx={{ color: 'white', ml: 1 }} />
+              )}
+            </Box>
+          ))}
+        </Box>
+      )}
+      
+      {/* Connection quality indicator (optional) */}
+      {connectionSpeed && (
+        <Tooltip title={`Connection Speed: ${connectionSpeed}`}>
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              color: 'white',
+              padding: '2px 8px',
+              borderRadius: 1,
+              fontSize: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              cursor: 'pointer'
+            }}
+            onClick={() => setShowDebugInfo(!showDebugInfo)}
+          >
+            <HighQuality fontSize="small" />
+            {connectionSpeed.split(' ')[0]} {/* Just show "Excellent", "Good", etc. */}
+          </Box>
+        </Tooltip>
+      )}
+      
+      {/* Debug info panel (can be toggled on/off) */}
+      {showDebugInfo && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 40,
+            right: 10,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: 'white',
+            padding: 1,
+            borderRadius: 1,
+            fontSize: '0.75rem',
+            maxWidth: 250,
+            zIndex: 1000
+          }}
+        >
+          <Typography variant="caption" component="div" sx={{ mb: 0.5, fontWeight: 'bold' }}>
+            Playback Info
+          </Typography>
+          <Typography variant="caption" component="div">
+            Speed: {connectionSpeed}
+          </Typography>
+          <Typography variant="caption" component="div">
+            Quality: {hlsRef.current && hlsRef.current.currentLevel >= 0 && hlsRef.current.levels 
+              ? `${hlsRef.current.levels[hlsRef.current.currentLevel].height}p` 
+              : 'Auto'}
+          </Typography>
+          <Typography variant="caption" component="div">
+            Buffer: {videoRef.current && videoRef.current.buffered.length > 0 
+              ? `${(videoRef.current.buffered.end(videoRef.current.buffered.length - 1) - videoRef.current.currentTime).toFixed(1)}s` 
+              : '0s'}
+          </Typography>
+        </Box>
+      )}
     </Box>
     </React.Fragment>
   );
