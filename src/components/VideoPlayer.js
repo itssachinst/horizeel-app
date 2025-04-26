@@ -49,7 +49,7 @@ import { useVideoContext } from "../contexts/VideoContext";
 import Hls from 'hls.js';
 
 // Get the API base URL from environment
-const API_BASE_URL = process.env.REACT_APP_API_URL || "https://api.horizontalreels.com/api/v1";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "https://horizeel.com/api/";
 
 // Add fallback URLs for different formats
 const FALLBACK_VIDEO = '/assets/fallback-video.mp4';

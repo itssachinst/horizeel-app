@@ -34,7 +34,7 @@ const FollowersPage = () => {
   const navigate = useNavigate();
   const API_BASE_URL = process.env.REACT_APP_API_URL ||
     (window.location.hostname === 'localhost' ? 'http://localhost:8000/api' 
-    : 'https://horizontalreels.com/api');
+    : 'https://horizeels.com/api');
   
   // Add pagination state
   const [page, setPage] = useState(1);

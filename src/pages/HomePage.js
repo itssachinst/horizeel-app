@@ -337,7 +337,7 @@ const HomePage = () => {
         fontWeight="bold"
         sx={{
           mb: 4,
-          background: 'linear-gradient(90deg, #FF4081, #FF9100)',
+          background: 'linear-gradient(90deg, #BDFA03, #BEFF03)',
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
@@ -364,12 +364,12 @@ const HomePage = () => {
           component="span" 
           sx={{ 
             fontWeight: 'bold',
-            color: '#2CFF05',
+            color: '#BDFA03',
             textDecoration: 'none'
           }}
-          onClick={() => window.open('https://horizeels.com', '_blank')}
+          onClick={() => window.open('https://horizeel.com', '_blank')}
         >
-          horizeels.com
+          horizeel.com
         </Box>{' '}
         on a laptop or desktop.
       </Typography>
