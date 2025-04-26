@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Use environment variable or fallback to localhost
 export const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  (window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://horizontalreels.com/api');
+  (window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://horizeel.com/api');
 
 // Log API base URL on initialization 
 console.log('API is configured to use:', API_BASE_URL);
@@ -83,7 +83,7 @@ axios.interceptors.response.use(
   }
 );
 
-// Update fetchVideos to use the horizontalreels.com API
+// Update fetchVideos to use the horizeel.com API
 export const fetchVideos = async (skip = 0, limit = 20) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/videos/`, {
@@ -103,7 +103,7 @@ export const fetchVideos = async (skip = 0, limit = 20) => {
   }
 };
 
-// Update fetchVideoById to use the horizontalreels.com API
+// Update fetchVideoById to use the horizeel.com API
 export const fetchVideoById = async (id) => {
   if (!id) return null;
   

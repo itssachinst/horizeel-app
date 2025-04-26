@@ -322,7 +322,7 @@ const HomePage = () => {
       >
         <img 
           src="/logo.png" 
-          alt="Horizontal Reels" 
+          alt="Horizeel" 
           style={{ width: '100%', height: 'auto' }}
           onError={(e) => {
             e.target.style.display = 'none';
@@ -367,9 +367,9 @@ const HomePage = () => {
             color: '#2CFF05',
             textDecoration: 'none'
           }}
-          onClick={() => window.open('https://horizontalreels.com', '_blank')}
+          onClick={() => window.open('https://horizeels.com', '_blank')}
         >
-          horizontalreels.com
+          horizeels.com
         </Box>{' '}
         on a laptop or desktop.
       </Typography>

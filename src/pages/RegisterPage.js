@@ -97,7 +97,7 @@ const RegisterPage = () => {
       if (isNetworkError) {
         setError(
           'Unable to reach the server. Please check that your internet connection ' +
-          'is working and that you can access horizontalreels.com. ' +
+          'is working and that you can access horizeel.com. ' +
           'If the problem persists, the server might be temporarily down.'
         );
         console.log('API URL being used:', process.env.REACT_APP_API_URL || 'default');
