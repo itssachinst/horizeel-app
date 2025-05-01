@@ -26,7 +26,8 @@ import {
   ArrowBack,
   FullscreenExit,
   HighQuality,
-  Settings
+  Settings,
+  Comment
 } from "@mui/icons-material";
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
@@ -200,8 +201,24 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
         if (setAvailableQualities) {
           setAvailableQualities(qualities);
         }
-        if (setCurrentQuality) {
-          setCurrentQuality(hls.currentLevel);
+        
+        // Set to highest quality by default
+        if (data.levels.length > 0 && setCurrentQuality) {
+          // Find the highest quality level
+          let highestLevelIndex = 0;
+          let highestHeight = 0;
+          
+          for (let i = 0; i < data.levels.length; i++) {
+            if (data.levels[i].height > highestHeight) {
+              highestHeight = data.levels[i].height;
+              highestLevelIndex = i;
+            }
+          }
+          
+          // Set to highest quality
+          hls.currentLevel = highestLevelIndex;
+          setCurrentQuality(highestLevelIndex);
+          console.log(`Setting default quality to highest: Level ${highestLevelIndex} (${highestHeight}p)`);
         }
       }
     }
@@ -2366,14 +2383,14 @@ const VideoPlayer = ({ videos, currentIndex, setCurrentIndex, isMobile, isTablet
                   <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
         </IconButton>
 
-                <Tooltip title="Quality Settings">
-                  <IconButton
-                    onClick={() => setShowQualityMenu(!showQualityMenu)}
-                    sx={{ color: 'white' }}
-                  >
-                    <Settings />
-                  </IconButton>
-                </Tooltip>
+                <IconButton
+                  sx={{ 
+                    color: 'white',
+                    p: isMobile ? 0.5 : 1
+                  }}
+                >
+                  <Comment fontSize={isMobile ? 'small' : 'medium'} />
+                </IconButton>
               </Box>
             </Box>
           </Box>
