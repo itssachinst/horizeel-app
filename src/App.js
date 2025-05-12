@@ -10,6 +10,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
 import VideoPage from "./pages/VideoPage";
+import VerticalFeedPage from "./pages/VerticalFeedPage";
 import UploadVideo from "./components/UploadVideo";
 import FollowersPage from "./pages/FollowersPage";
 import SearchPage from "./pages/SearchPage";
@@ -25,12 +26,13 @@ const AppLayout = ({ children }) => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
   const isVideoPage = location.pathname.startsWith('/video/');
+  const isReelsPage = location.pathname.startsWith('/reels');
   const isHomePage = location.pathname === '/' || location.pathname === '/demo/' || location.pathname.startsWith('/demo/');
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
     <>
-      {!isAuthPage && !isVideoPage && (!isHomePage || !isMobile) && <Header />}
+      {!isAuthPage && !isVideoPage && !isReelsPage && (!isHomePage || !isMobile) && <Header />}
       <Box sx={{
         pt: 0, // Remove padding top
         minHeight: '100vh',
@@ -71,6 +73,8 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/video/:id" element={<VideoPage />} />
+              <Route path="/reels" element={<VerticalFeedPage />} />
+              <Route path="/reels/:id" element={<VerticalFeedPage />} />
               <Route path="/demo/" element={
                 <AppLayout>
                   <HomePage />

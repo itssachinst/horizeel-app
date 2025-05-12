@@ -127,8 +127,8 @@ const HomePage = () => {
     // Set the current index in the context
     setCurrentIndex(index);
     
-    // Navigate to the video page
-    navigate(`/video/${videoId}`);
+    // Navigate to the vertical feed page with the selected video ID
+    navigate(`/reels/${videoId}`);
   };
 
   // Format time since upload
@@ -467,9 +467,9 @@ const HomePage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
               <Typography variant="h6" color="text.secondary">
                 {isSearching ? "No results found" : "No videos available"}
-          </Typography>
-        </Box>
-      ) : (
+              </Typography>
+            </Box>
+          ) : (
             <Grid container spacing={3}>
               {displayVideos.map((video, index) => (
                 <Grid item xs={12} sm={6} md={4} key={`${video.video_id}-${index}`}>
@@ -493,8 +493,8 @@ const HomePage = () => {
           {error && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
               <Typography color="error">{error}</Typography>
-              </Box>
-        )}
+            </Box>
+          )}
         </>
       )}
     </Container>
