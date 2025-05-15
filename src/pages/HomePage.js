@@ -415,23 +415,7 @@ const HomePage = () => {
         </Box>
       </Box>
 
-      {/* Continue to website button */}
-      <Button 
-        variant="contained"
-        sx={{
-          mt: 2,
-          backgroundColor: '#2CFF05',
-          color: '#000',
-          fontWeight: 'bold',
-          padding: '12px 24px',
-          '&:hover': {
-            backgroundColor: '#25CC04'
-          }
-        }}
-        onClick={toggleMobilePromo}
-      >
-        Continue to Website Anyway
-      </Button>
+      
     </Box>
   );
 

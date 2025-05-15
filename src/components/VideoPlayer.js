@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { IconButton, Typography, Box, Avatar, Tooltip, Snackbar, Alert, Dialog, DialogContent, DialogTitle, Button, DialogActions, CircularProgress, Slide, useTheme, useMediaQuery } from "@mui/material";
-import { 
-  ThumbUp, 
-  ThumbDown, 
-  Share, 
-  Close, 
-  ArrowUpward, 
+import {
+  ThumbUp,
+  ThumbDown,
+  Share,
+  Close,
+  ArrowUpward,
   ArrowDownward,
   VolumeOff,
   VolumeUp,
@@ -26,8 +26,7 @@ import {
   ArrowBack,
   FullscreenExit,
   HighQuality,
-  Settings,
-  Comment
+  Settings
 } from "@mui/icons-material";
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
@@ -35,10 +34,10 @@ import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { useAuth } from "../contexts/AuthContext";
 import { incrementVideoLike, incrementVideoDislike, saveVideo, checkVideoSaved, deleteVideo, followUser, unfollowUser, checkIsFollowing, updateWatchHistory, incrementVideoView } from "../api";
 import useSwipeNavigate from "../hooks/useSwipeNavigate";
-import { 
-  formatViewCount, 
-  formatDuration, 
-  formatRelativeTime, 
+import {
+  formatViewCount,
+  formatDuration,
+  formatRelativeTime,
   truncateText,
   fixVideoUrl,
   getFileExtension,
@@ -62,8 +61,8 @@ const FALLBACK_VIDEO_SERVER = 'https://player.vimeo.com/external/';
 const isHlsNativelySupported = () => {
   const video = document.createElement('video');
   const mimeType = getVideoMimeType();
-  return video.canPlayType(mimeType) || 
-         video.canPlayType('application/x-mpegURL');
+  return video.canPlayType(mimeType) ||
+    video.canPlayType('application/x-mpegURL');
 };
 
 // Define all browser-specific fullscreen functions at component level
@@ -81,7 +80,7 @@ const fullscreenAPI = {
       return Promise.reject(new Error("No fullscreen API available"));
     }
   },
-  
+
   exitFullscreen: () => {
     if (document.exitFullscreen) {
       return document.exitFullscreen();
@@ -95,18 +94,18 @@ const fullscreenAPI = {
       return Promise.reject(new Error("No fullscreen API available"));
     }
   },
-  
+
   getFullscreenElement: () => {
     return document.fullscreenElement ||
-           document.mozFullScreenElement ||
-           document.webkitFullscreenElement ||
-           document.msFullscreenElement;
+      document.mozFullScreenElement ||
+      document.webkitFullscreenElement ||
+      document.msFullscreenElement;
   },
-  
+
   isFullscreen: () => {
     return !!fullscreenAPI.getFullscreenElement();
   },
-  
+
   fullscreenChangeEventName: () => {
     if ('onfullscreenchange' in document) {
       return 'fullscreenchange';
@@ -148,9 +147,9 @@ const resetSegmentStats = () => {
 // Monitor HLS segment loading
 const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) => {
   if (!hls) return;
-  
+
   resetSegmentStats();
-  
+
   // Log manifest parsing
   hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
     console.log('HLS Manifest parsed:', data);
@@ -159,18 +158,18 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
       const firstLevel = data.levels[0];
       const fragments = firstLevel.details.fragments || [];
       const segmentDuration = firstLevel.details.targetduration || 0;
-      
+
       segmentLoadingStats.totalSegments = fragments.length;
       segmentLoadingStats.averageSegmentDuration = segmentDuration;
-      
+
       console.log(`HLS stream: ${fragments.length} segments, ~${segmentDuration.toFixed(1)}s each`);
       console.log(`Total segments in manifest: ~${segmentLoadingStats.totalSegments}`);
-      
+
       // Calculate optimal buffering based on segment size
       const targetBuffer = Math.min(3 * segmentDuration, 15); // Buffer 3 segments or max 15 seconds
       hls.config.maxBufferLength = targetBuffer;
       console.log(`Set target buffer to ${targetBuffer.toFixed(1)}s based on segment size`);
-      
+
       // Get available quality levels
       if (data.levels && data.levels.length > 0) {
         const qualities = data.levels.map((level, index) => ({
@@ -180,30 +179,30 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
           bitrate: level.bitrate || 0,
           name: level.height ? `${level.height}p` : `Quality ${index + 1}`
         }));
-        
+
         // Add auto quality option
         qualities.unshift({
           index: -1,
           name: 'Auto'
         });
-        
+
         if (setAvailableQualities) {
           setAvailableQualities(qualities);
         }
-        
+
         // Set to highest quality by default
         if (data.levels.length > 0 && setCurrentQuality) {
           // Find the highest quality level
           let highestLevelIndex = 0;
           let highestHeight = 0;
-          
+
           for (let i = 0; i < data.levels.length; i++) {
             if (data.levels[i].height > highestHeight) {
               highestHeight = data.levels[i].height;
               highestLevelIndex = i;
             }
           }
-          
+
           // Set to highest quality
           hls.currentLevel = highestLevelIndex;
           setCurrentQuality(highestLevelIndex);
@@ -212,13 +211,13 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
       }
     }
   });
-  
+
   // Log fragment loading
   hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
     const fragId = data.frag.sn;
     const fragDuration = data.frag.duration;
     const fragLevel = data.frag.level;
-    
+
     segmentLoadingStats.segmentsLoading[fragId] = {
       startTime: Date.now(),
       url: data.frag.url,
@@ -226,47 +225,47 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
       duration: fragDuration,
       level: fragLevel
     };
-    
+
     // Add level info
-    const levelInfo = hls.levels && hls.levels[fragLevel] ? 
+    const levelInfo = hls.levels && hls.levels[fragLevel] ?
       `L${fragLevel}(${hls.levels[fragLevel].width}x${hls.levels[fragLevel].height})` : `L${fragLevel}`;
-    
+
     console.log(`Loading segment ${fragId} (${fragDuration.toFixed(1)}s, ${levelInfo}) from ${data.frag.url.split('/').pop()}`);
   });
-  
+
   // Log fragment loaded
   hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
     const fragId = data.frag.sn;
     segmentLoadingStats.loadedSegments++;
     segmentLoadingStats.totalBytesLoaded += data.stats.total;
-    
+
     if (segmentLoadingStats.segmentsLoading[fragId]) {
       const loadTime = Date.now() - segmentLoadingStats.segmentsLoading[fragId].startTime;
       segmentLoadingStats.segmentsLoading[fragId].loaded = true;
       segmentLoadingStats.segmentsLoading[fragId].loadTime = loadTime;
       segmentLoadingStats.segmentsLoading[fragId].bytes = data.stats.total;
-      
+
       // Calculate segment bitrate
       const durationSec = data.frag.duration;
       const bytesLoaded = data.stats.total;
       const bitrate = (bytesLoaded * 8) / durationSec; // in bits per second
-      
-      console.log(`Segment ${fragId} loaded: ${(bytesLoaded / 1024).toFixed(1)}KB in ${loadTime}ms, bitrate: ${(bitrate/1000).toFixed(0)}kbps`);
+
+      console.log(`Segment ${fragId} loaded: ${(bytesLoaded / 1024).toFixed(1)}KB in ${loadTime}ms, bitrate: ${(bitrate / 1000).toFixed(0)}kbps`);
       console.log(`Progress: ${segmentLoadingStats.loadedSegments}/${segmentLoadingStats.totalSegments} segments loaded`);
     }
   });
-  
+
   // Log buffer status
   hls.on(Hls.Events.BUFFER_APPENDING, (event, data) => {
     console.log(`Appending ${data.type} buffer: ${(data.data.byteLength / 1024).toFixed(1)}KB`);
   });
-  
+
   // Log level switching
   hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
     if (hls.levels && hls.levels[data.level]) {
       const level = hls.levels[data.level];
-      console.log(`HLS quality switched to level ${data.level}: ${level.width}x${level.height}, ${(level.bitrate/1000).toFixed(0)}kbps`);
-      
+      console.log(`HLS quality switched to level ${data.level}: ${level.width}x${level.height}, ${(level.bitrate / 1000).toFixed(0)}kbps`);
+
       // Update current quality state
       if (setCurrentQuality) {
         setCurrentQuality(data.level);
@@ -275,7 +274,7 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
       console.log(`HLS quality level switched to ${data.level}`);
     }
   });
-  
+
   // Monitor for stalls
   let lastCurrentTime = 0;
   let stallCount = 0;
@@ -285,23 +284,23 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
       clearInterval(stallCheckInterval);
       return;
     }
-    
+
     // If video is playing but time isn't advancing, might be stalling
     if (!video.paused && video.currentTime === lastCurrentTime) {
       stallCount++;
       console.log(`Potential stall detected #${stallCount}: Time stuck at ${video.currentTime.toFixed(1)}s`);
-      
+
       // If stalled for several checks, try recovery
       if (stallCount >= 3) {
         console.log('Stall recovery: attempting to resolve playback issue');
-        
+
         // Strategy 1: Skip ahead slightly if we have buffer
-        if (video.buffered.length > 0 && 
-            video.currentTime < video.buffered.end(video.buffered.length - 1)) {
+        if (video.buffered.length > 0 &&
+          video.currentTime < video.buffered.end(video.buffered.length - 1)) {
           const skipAmount = 0.1; // Skip 100ms forward
           console.log(`Trying micro-skip ahead by ${skipAmount}s`);
           video.currentTime += skipAmount;
-        } 
+        }
         // Strategy 2: Reduce buffer and reload segment
         else if (stallCount >= 5) {
           console.log('Advanced stall recovery: reducing buffer and reloading current fragment');
@@ -334,7 +333,7 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
       lastCurrentTime = video.currentTime;
     }
   }, 1000);
-  
+
   // Clean up interval on destroy
   hls.on(Hls.Events.DESTROYING, () => {
     clearInterval(stallCheckInterval);
@@ -344,7 +343,7 @@ const setupHlsEventListeners = (hls, setAvailableQualities, setCurrentQuality) =
 // Add playback monitoring function
 const startPlaybackMonitoring = (videoElement, hls) => {
   if (!videoElement || !hls) return;
-  
+
   // Initialize metrics
   const metrics = {
     startTime: Date.now(),
@@ -357,14 +356,14 @@ const startPlaybackMonitoring = (videoElement, hls) => {
     droppedFrames: 0,
     stallEvents: 0,
   };
-  
+
   // Update metrics periodically
   const metricsInterval = setInterval(() => {
     if (!videoElement || !hls || !hls.media) {
       clearInterval(metricsInterval);
       return;
     }
-    
+
     // Get buffer status
     const buffered = videoElement.buffered;
     metrics.bufferedRanges = [];
@@ -374,12 +373,12 @@ const startPlaybackMonitoring = (videoElement, hls) => {
         end: buffered.end(i)
       });
     }
-    
+
     // Get bandwidth estimates
     if (hls.bandwidthEstimate) {
       metrics.estimatedBandwidth = hls.bandwidthEstimate;
     }
-    
+
     // Get current bitrate
     if (hls.currentLevel >= 0 && hls.levels && hls.levels[hls.currentLevel]) {
       const currentBitrate = hls.levels[hls.currentLevel].bitrate;
@@ -393,30 +392,30 @@ const startPlaybackMonitoring = (videoElement, hls) => {
         metrics.bitrateHistory.shift();
       }
     }
-    
+
     // Check for dropped frames (if available)
     if (videoElement.getVideoPlaybackQuality) {
       const quality = videoElement.getVideoPlaybackQuality();
       metrics.droppedFrames = quality.droppedVideoFrames;
     }
-    
+
     // Debug log every 10 seconds
     if (Date.now() % 10000 < 1000) {
       console.log("Playback Metrics:", {
         currentTime: videoElement.currentTime.toFixed(1),
         buffered: metrics.bufferedRanges.map(r => `${r.start.toFixed(1)}-${r.end.toFixed(1)}`).join(', '),
         bandwidth: `${(metrics.estimatedBandwidth / 1000).toFixed(0)} kbps`,
-        currentBitrate: metrics.bitrateHistory.length > 0 
+        currentBitrate: metrics.bitrateHistory.length > 0
           ? `${(metrics.bitrateHistory[metrics.bitrateHistory.length - 1].bitrate / 1000).toFixed(0)} kbps`
           : 'unknown',
         droppedFrames: metrics.droppedFrames
       });
     }
-    
+
     // Update metrics in component state if needed
     return metrics;
   }, 1000);
-  
+
   // Track video events
   videoElement.addEventListener('playing', () => {
     if (!metrics.playbackStartedAt) {
@@ -424,14 +423,14 @@ const startPlaybackMonitoring = (videoElement, hls) => {
       console.log(`Playback started in ${(metrics.playbackStartedAt - metrics.startTime)}ms`);
     }
   });
-  
+
   // First segment loaded
   hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
     if (!metrics.firstSegmentLoadedAt && data.frag.sn === 0) {
       metrics.firstSegmentLoadedAt = Date.now();
       console.log(`First segment loaded in ${(metrics.firstSegmentLoadedAt - metrics.startTime)}ms`);
     }
-    
+
     // Track actual bandwidth from segment loading
     const loadTime = data.stats.loading.end - data.stats.loading.start;
     const bytes = data.stats.total;
@@ -441,7 +440,7 @@ const startPlaybackMonitoring = (videoElement, hls) => {
       metrics.bandwidth = bandwidthBps;
     }
   });
-  
+
   // Track stalls
   let lastTime = 0;
   let lastTimeUpdate = Date.now();
@@ -450,25 +449,25 @@ const startPlaybackMonitoring = (videoElement, hls) => {
       clearInterval(stallCheckInterval);
       return;
     }
-    
+
     const now = Date.now();
     const timeDiff = now - lastTimeUpdate;
-    
+
     // If more than 200ms has passed and video time hasn't changed (while playing)
     if (timeDiff > 200 && videoElement.currentTime === lastTime && !videoElement.paused) {
       metrics.stallEvents++;
     }
-    
+
     lastTime = videoElement.currentTime;
     lastTimeUpdate = now;
   }, 200);
-  
+
   // Clean up
   const cleanup = () => {
     clearInterval(metricsInterval);
     clearInterval(stallCheckInterval);
   };
-  
+
   return {
     getMetrics: () => ({ ...metrics }),
     cleanup
@@ -481,16 +480,16 @@ const videoCache = new Map();
 // Enhanced video preloader with metadata and source selection
 const preloadVideo = (video, quality = 'auto') => {
   if (!video || !video.video_url) return null;
-  
+
   // Check if this video is already cached
   const cachedVideo = videoCache.get(video.video_id);
   if (cachedVideo) {
     console.log(`Using cached video for ${video.video_id}`);
     return cachedVideo;
   }
-  
+
   console.log(`Preloading video: ${video.video_id}`);
-  
+
   // Create new preload object
   const preloadObj = {
     videoId: video.video_id,
@@ -504,17 +503,17 @@ const preloadVideo = (video, quality = 'auto') => {
     element: null,
     hls: null
   };
-  
+
   // Determine if this is an HLS stream
-  const isHlsStream = video.video_url.toLowerCase().endsWith('.m3u8') || 
-                     video.video_format === 'hls';
-  
+  const isHlsStream = video.video_url.toLowerCase().endsWith('.m3u8') ||
+    video.video_format === 'hls';
+
   // Process the URL based on the video format
   let videoSource;
   if (isHlsStream) {
     videoSource = processVideoUrl(video.video_url, API_BASE_URL);
     preloadObj.isHls = true;
-    
+
     // Preload HLS with optimized settings for TikTok-style feed
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
       try {
@@ -523,28 +522,28 @@ const preloadVideo = (video, quality = 'auto') => {
           // Core settings
           enableWorker: true,
           lowLatencyMode: false,
-          
+
           // Aggressive short-form video settings
           manifestLoadingMaxRetry: 6,
           levelLoadingMaxRetry: 6,
           fragLoadingMaxRetry: 6,
-          
+
           // Buffer optimization for short videos
           maxBufferSize: 12 * 1000 * 1000, // 12MB buffer for high-quality short content
           maxBufferLength: 20,             // 20 seconds buffer for smooth scrolling
-          
+
           // Optimize memory usage
           backBufferLength: 0,             // Don't keep buffer behind playback position
-          
+
           // Performance settings
           startLevel: -1,                  // Auto level selection
           abrBandWidthFactor: 0.95,        // Conservative bandwidth estimation
           abrMaxWithRealBitrate: true,     // Use real bitrate for ABR decisions
-          
+
           // Optimize caching
-          xhrSetup: function(xhr, url) {
+          xhrSetup: function (xhr, url) {
             xhr.responseType = 'arraybuffer';
-            
+
             // Optimized caching based on content type
             if (url.endsWith('.m3u8')) {
               xhr.setRequestHeader('Cache-Control', 'max-age=1');
@@ -553,7 +552,7 @@ const preloadVideo = (video, quality = 'auto') => {
             }
           }
         });
-        
+
         // Create a hidden video element for preloading
         const preloadElement = document.createElement('video');
         preloadElement.muted = true;
@@ -562,28 +561,28 @@ const preloadVideo = (video, quality = 'auto') => {
         preloadElement.style.display = 'none';
         preloadElement.style.width = '0px';
         preloadElement.style.height = '0px';
-        
+
         // Attach to DOM temporarily for better browser handling
         document.body.appendChild(preloadElement);
-        
+
         // Add element reference
         preloadObj.element = preloadElement;
         preloadObj.hls = hls;
-        
+
         // Load the source
         hls.loadSource(videoSource);
         hls.attachMedia(preloadElement);
-        
+
         // Track metadata when ready
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           preloadObj.metadata.loaded = true;
-          
+
           // Preload initial segments
           hls.startLoad();
-          
+
           // Store in global cache
           videoCache.set(video.video_id, preloadObj);
-          
+
           // After loading a portion, pause loading to conserve bandwidth 
           // but keep enough for instant playback
           setTimeout(() => {
@@ -593,7 +592,7 @@ const preloadVideo = (video, quality = 'auto') => {
             }
           }, 2000); // Allow 2s of loading for initial segments
         });
-        
+
         // Handle errors
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
@@ -602,7 +601,7 @@ const preloadVideo = (video, quality = 'auto') => {
             hls.destroy();
           }
         });
-        
+
         return preloadObj;
       } catch (error) {
         console.error(`Failed to preload HLS video ${video.video_id}:`, error);
@@ -612,7 +611,7 @@ const preloadVideo = (video, quality = 'auto') => {
   } else {
     // For non-HLS videos (MP4, etc)
     videoSource = processVideoUrl(video.video_url, API_BASE_URL);
-    
+
     try {
       // Create and configure preload element
       const preloadElement = document.createElement('video');
@@ -623,40 +622,40 @@ const preloadVideo = (video, quality = 'auto') => {
       preloadElement.style.width = '0px';
       preloadElement.style.height = '0px';
       preloadElement.crossOrigin = 'anonymous';
-      
+
       // Set up event listeners
       preloadElement.addEventListener('loadedmetadata', () => {
         preloadObj.metadata.duration = preloadElement.duration;
       });
-      
+
       preloadElement.addEventListener('canplaythrough', () => {
         preloadObj.metadata.loaded = true;
         // Store in global cache
         videoCache.set(video.video_id, preloadObj);
       });
-      
+
       preloadElement.addEventListener('error', (e) => {
         preloadObj.metadata.error = e.error || new Error('Video loading error');
         console.error(`Error preloading video ${video.video_id}:`, e);
       });
-      
+
       // Add source
       preloadElement.src = videoSource;
       document.body.appendChild(preloadElement);
-      
+
       // Store element reference
       preloadObj.element = preloadElement;
-      
+
       // Trigger load
       preloadElement.load();
-      
+
       return preloadObj;
     } catch (error) {
       console.error(`Failed to preload video ${video.video_id}:`, error);
       preloadObj.metadata.error = error;
     }
   }
-  
+
   // Store even in case of error (to prevent retry attempts)
   videoCache.set(video.video_id, preloadObj);
   return preloadObj;
@@ -666,7 +665,7 @@ const preloadVideo = (video, quality = 'auto') => {
 const cleanupVideoCache = (currentVideoId, maxCacheSize = 10) => {
   // Always keep current video and adjacent videos
   if (videoCache.size <= maxCacheSize) return;
-  
+
   // Get list of videos sorted by last access time (oldest first)
   const videoEntries = Array.from(videoCache.entries());
   const videoIdsToRemove = videoEntries
@@ -678,23 +677,23 @@ const cleanupVideoCache = (currentVideoId, maxCacheSize = 10) => {
     .slice(0, videoCache.size - maxCacheSize)
     // Get just the IDs
     .map(([id]) => id);
-  
+
   // Remove excess videos from cache
   videoIdsToRemove.forEach(id => {
     const cachedVideo = videoCache.get(id);
     console.log(`Removing video ${id} from cache`);
-    
+
     // Clean up HLS resources
     if (cachedVideo?.hls) {
       cachedVideo.hls.stopLoad();
       cachedVideo.hls.destroy();
     }
-    
+
     // Remove element from DOM
     if (cachedVideo?.element && cachedVideo.element.parentNode) {
       cachedVideo.element.parentNode.removeChild(cachedVideo.element);
     }
-    
+
     // Remove from cache
     videoCache.delete(id);
   });
@@ -703,13 +702,13 @@ const cleanupVideoCache = (currentVideoId, maxCacheSize = 10) => {
 // Global video cache for faster loading
 // Using VIDEO_CACHE imported from '../utils/videoCache' - removed duplicate declaration
 
-const VideoPlayer = ({ 
-  videos, 
-  currentIndex, 
-  setCurrentIndex, 
-  isMobile, 
-  isTablet, 
-  isPaused, 
+const VideoPlayer = ({
+  videos,
+  currentIndex,
+  setCurrentIndex,
+  isMobile,
+  isTablet,
+  isPaused,
   shouldPreserveFullscreen,
   shouldPreload,
   visibilityState
@@ -719,7 +718,7 @@ const VideoPlayer = ({
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { hasMore, loadMoreVideos } = useVideoContext();
-  
+
   // Important refs
   const hlsRef = useRef(null);
   const lastTimeUpdateRef = useRef(null);
@@ -727,7 +726,7 @@ const VideoPlayer = ({
   const reportedViewRef = useRef(false);
   const preloadedVideosRef = useRef(new Set());
   const metricsRef = useRef(null);
-  
+
   // State variables
   const [likes, setLikes] = useState(0);
   const [dislikes, setDislikes] = useState(0);
@@ -758,39 +757,39 @@ const VideoPlayer = ({
     window.innerHeight > window.innerWidth ? 'portrait' : 'landscape'
   );
   const [error, setError] = useState(''); // Added missing error state
-  
+
   // Quality selection state
   const [availableQualities, setAvailableQualities] = useState([]);
   const [currentQuality, setCurrentQuality] = useState(-1);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
-  
+
   // Metrics state
   const [connectionSpeed, setConnectionSpeed] = useState('');
   const [showDebugInfo, setShowDebugInfo] = useState(false);
-  
+
   // Add this function to handle quality changes
   const handleQualityChange = (level) => {
     if (!hlsRef.current) return;
-    
+
     console.log(`Manually changing quality to level: ${level}`);
     hlsRef.current.currentLevel = level;
     setCurrentQuality(level);
     setShowQualityMenu(false);
   };
-  
+
   // Create reference to current video data
   const videoData = videos[currentIndex];
   const videoId = videoData?.video_id;
-  
+
   // Add effect for video cache integration
   useEffect(() => {
     if (!videos || !videos[currentIndex]) return;
-    
+
     const currentVideo = videos[currentIndex];
     const videoId = currentVideo?.video_id;
-    
+
     if (!videoId) return;
-    
+
     // If this video should be visible and played
     if (visibilityState === 'active') {
       // Mark the current video as active in the cache
@@ -798,18 +797,18 @@ const VideoPlayer = ({
       if (cachedVideo && cachedVideo.hls) {
         cachedVideo.hls.startLoad();
       }
-      
+
       // Also preload adjacent videos for smooth navigation
       if (currentIndex + 1 < videos.length) {
         const nextVideo = videos[currentIndex + 1];
         VIDEO_CACHE.preloadVideo(nextVideo);
       }
-      
+
       if (currentIndex > 0) {
         const prevVideo = videos[currentIndex - 1];
         VIDEO_CACHE.preloadVideo(prevVideo);
       }
-    } 
+    }
     // If this video should be preloaded but not visible
     else if (visibilityState === 'preload' && shouldPreload) {
       // Preload this video if not already in cache
@@ -817,61 +816,61 @@ const VideoPlayer = ({
         VIDEO_CACHE.preloadVideo(currentVideo);
       }
     }
-    
+
     // Clean up cache
     VIDEO_CACHE.cleanup(videoId);
-    
+
   }, [videos, currentIndex, visibilityState, shouldPreload]);
-  
+
   // Replace loadVideo with cached version
   const loadVideo = useCallback(async () => {
     if (!videos || !videos[currentIndex]) {
       setIsLoading(false);
       return;
     }
-    
+
     const videoToLoad = videos[currentIndex];
     const videoId = videoToLoad?.video_id;
-    
+
     if (!videoToLoad || !videoToLoad.video_url || !videoId) {
       setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     setError('');
-    
+
     try {
       // Check for cached video first
       const cachedVideo = VIDEO_CACHE.getVideo(videoId);
-      
+
       // Determine if this is an HLS stream
-      const isHlsStream = videoToLoad.video_url.toLowerCase().endsWith('.m3u8') || 
-                          videoToLoad.video_format === 'hls';
-      
+      const isHlsStream = videoToLoad.video_url.toLowerCase().endsWith('.m3u8') ||
+        videoToLoad.video_format === 'hls';
+
       // Get video source
       const videoSource = processVideoUrl(videoToLoad.video_url, API_BASE_URL);
-      
+
       if (isHlsStream && typeof Hls !== 'undefined' && Hls.isSupported()) {
         console.log("Using HLS.js for playback");
-        
+
         let hls;
-        
+
         // Try to use cached HLS instance first
         if (cachedVideo && cachedVideo.hls && cachedVideo.isHls) {
           console.log(`Using cached HLS for ${videoId}`);
-          
+
           // Use the cached HLS instance
           hls = cachedVideo.hls;
-          
+
           // Detach from preload element
           hls.detachMedia();
-          
+
           // Attach to the player element
           if (videoRef.current) {
             hls.attachMedia(videoRef.current);
             hls.startLoad();
-            
+
             // Set up play when ready
             videoRef.current.addEventListener('canplay', async () => {
               if (videoRef.current && !isPaused) {
@@ -894,21 +893,21 @@ const VideoPlayer = ({
             enableWorker: true,
             maxBufferLength: 30,
             maxBufferSize: 15 * 1000 * 1000, // 15MB buffer for high quality
-            
+
             // Faster startup
             startLevel: -1,
             abrEwmaDefaultEstimate: 3000000, // Higher initial bitrate (3Mbps)
-            
+
             // Immediate start
             autoStartLoad: true,
           });
-          
+
           // Load the source
           hls.loadSource(videoSource);
-          
+
           if (videoRef.current) {
             hls.attachMedia(videoRef.current);
-            
+
             // Add to cache
             VIDEO_CACHE.addVideo(videoId, {
               videoId: videoId,
@@ -921,7 +920,7 @@ const VideoPlayer = ({
                 loadStartTime: Date.now()
               }
             });
-            
+
             // Handle manifest loaded
             hls.on(Hls.Events.MANIFEST_PARSED, async () => {
               if (videoRef.current && !isPaused) {
@@ -938,10 +937,10 @@ const VideoPlayer = ({
             });
           }
         }
-        
+
         // Store the HLS instance for cleanup
         hlsRef.current = hls;  // Fixed: Using hlsRef instead of hlsInstance
-        
+
         // Handle errors
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data.fatal) {
@@ -954,7 +953,7 @@ const VideoPlayer = ({
       } else {
         // Standard HTML5 Video
         console.log("Using standard HTML5 video");
-        
+
         if (videoRef.current) {
           if (cachedVideo && !cachedVideo.isHls) {
             // Use cached video source
@@ -963,7 +962,7 @@ const VideoPlayer = ({
           } else {
             // Use direct source
             videoRef.current.src = videoSource;
-            
+
             // Add to cache
             VIDEO_CACHE.addVideo(videoId, {
               videoId: videoId,
@@ -976,10 +975,10 @@ const VideoPlayer = ({
               }
             });
           }
-          
+
           // Load the video
           videoRef.current.load();
-          
+
           // Set up play when ready
           videoRef.current.addEventListener('canplaythrough', async () => {
             if (videoRef.current && !isPaused) {
@@ -994,7 +993,7 @@ const VideoPlayer = ({
               setIsLoading(false);
             }
           }, { once: true });
-          
+
           // Handle errors
           videoRef.current.addEventListener('error', () => {
             console.error('Video loading error');
@@ -1009,7 +1008,7 @@ const VideoPlayer = ({
       setIsLoading(false);
     }
   }, [videos, currentIndex, isPaused]);
-  
+
   // Add cleanup for cache
   useEffect(() => {
     return () => {
@@ -1018,7 +1017,7 @@ const VideoPlayer = ({
       VIDEO_CACHE.cleanup();
     };
   }, []);
-  
+
   // Simplified handlers for next/previous video
   const handlePrevVideo = useCallback(() => {
     if (currentIndex > 0) {
@@ -1030,14 +1029,14 @@ const VideoPlayer = ({
 
   const handleNextVideo = useCallback(() => {
     if (videos && videos.length > 0) {
-    if (currentIndex < videos.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
+      if (currentIndex < videos.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
         if (hasMore) {
           loadMoreVideos();
         }
-      setCurrentIndex(0);
-    }
+        setCurrentIndex(0);
+      }
     }
   }, [currentIndex, videos, hasMore, loadMoreVideos, setCurrentIndex]);
 
@@ -1055,23 +1054,23 @@ const VideoPlayer = ({
     if (showControls && controlsTimeout) {
       // Just reset the timeout without changing state or generating re-renders
       clearTimeout(controlsTimeout);
-      
+
       const newTimeout = setTimeout(() => {
         setShowControls(false);
       }, 5000);
-      
+
       setControlsTimeout(newTimeout);
       return;
     }
-    
+
     // Only update state if we need to show controls
     if (!showControls) {
       setShowControls(true);
-      
+
       const newTimeout = setTimeout(() => {
         setShowControls(false);
       }, 5000);
-      
+
       setControlsTimeout(newTimeout);
     }
   }, [showControls, controlsTimeout]);
@@ -1080,13 +1079,13 @@ const VideoPlayer = ({
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    
+
     // Only update React state twice per second to reduce rendering
     // This ensures the UI stays responsive without excessive re-renders
     const now = Date.now();
     if (!lastTimeUpdateRef.current || now - lastTimeUpdateRef.current > 500) {
       lastTimeUpdateRef.current = now;
-      
+
       // Round the time values to reduce precision and unnecessary updates
       const currentTimeRounded = Math.floor(video.currentTime);
       if (currentTimeRounded !== lastTimeValueRef.current) {
@@ -1106,9 +1105,9 @@ const VideoPlayer = ({
   // Simplified toggle play/pause
   const togglePlayPause = () => {
     if (!videoRef.current) return;
-    
+
     const video = videoRef.current;
-    
+
     if (video.paused) {
       video.play()
         .then(() => setIsPlaying(true))
@@ -1128,27 +1127,27 @@ const VideoPlayer = ({
       console.log("No videos available or invalid index");
       return;
     }
-    
+
     const currentVideo = videos[currentIndex];
     if (!currentVideo || !currentVideo.video_url) {
       console.log("Current video or URL is missing");
       return;
     }
-    
+
     const videoElement = videoRef.current;
     if (!videoElement) {
       console.log("Video element reference is missing");
       return;
     }
-    
+
     console.log(`Loading video ${currentIndex}:`, currentVideo.video_url);
-    
+
     // Reset the reported view flag for the new video
     reportedViewRef.current = false;
-    
+
     // Track if component is mounted
     let isMounted = true;
-    
+
     const loadVideo = async () => {
       try {
         // Clean up current video with error handling
@@ -1158,14 +1157,14 @@ const VideoPlayer = ({
             hlsRef.current.destroy();
             hlsRef.current = null;
           }
-          
+
           videoElement.pause();
           videoElement.removeAttribute('src');
           videoElement.load();
         } catch (cleanupError) {
           console.warn("Error during video cleanup:", cleanupError);
         }
-        
+
         // Get video source URL - force .m3u8 extension
         let originalUrl = currentVideo.video_url;
         // If the URL doesn't end with .m3u8, assume it's the base URL and append index.m3u8
@@ -1175,10 +1174,10 @@ const VideoPlayer = ({
           // Append index.m3u8 to ensure HLS format
           originalUrl = `${originalUrl}/index.m3u8`;
         }
-        
+
         let videoSource = getVideoSource(originalUrl);
         console.log("Using HLS source:", videoSource);
-        
+
         if (!videoSource) {
           console.error("Failed to get valid video source");
           if (isMounted) {
@@ -1187,25 +1186,25 @@ const VideoPlayer = ({
           }
           return;
         }
-        
+
         // Always treat as HLS stream
         const isHlsStream = true;
         console.log(`Treating as HLS stream: ${isHlsStream}`);
-        
+
         // Check if we have this video preloaded
         const videoId = currentVideo.video_id;
         const preloadedVideo = preloadedVideosRef.current[videoId];
-        
+
         if (isHlsStream && Hls.isSupported()) {
           console.log("Using HLS.js for playback");
-          
+
           let hls;
-          
+
           // Use preloaded HLS instance if available
           if (preloadedVideo && preloadedVideo.loaded) {
             console.log("Using preloaded HLS instance");
             hls = preloadedVideo.hls;
-            
+
             // Detach from preload element
             if (preloadedVideo.element) {
               hls.detachMedia();
@@ -1220,20 +1219,20 @@ const VideoPlayer = ({
               enableWorker: true,
               lowLatencyMode: false,
               debug: false,
-              
+
               // Short-form video optimization - smaller buffers, faster startup
               backBufferLength: 30,        // 30 seconds back buffer for smoother replay
               maxBufferLength: 15,         // 15 seconds ahead - reduced for short videos
               maxBufferSize: 12 * 1000 * 1000, // 12MB buffer (optimized for high-quality short clips)
               maxMaxBufferLength: 30,      // Reduced maximum buffer for short videos
-              
+
               // Aggressive ABR for faster quality switches in short content
               startLevel: -1,               // Auto start level
               abrEwmaDefaultEstimate: 2000000, // Higher initial bitrate estimate (2Mbps)
               abrBandWidthFactor: 0.95,     // More conservative bandwidth estimate for stability
               abrBandWidthUpFactor: 0.85,   // More aggressive upswitch for short videos
               abrMaxWithRealBitrate: true,
-              
+
               // Segment loading optimization for immediate playback
               liveSyncDurationCount: 2,     // Sync to 2 segments for faster start
               fragLoadingTimeOut: 4000,     // Shorter timeout for fragment loading
@@ -1241,16 +1240,16 @@ const VideoPlayer = ({
               fragLoadingRetryDelay: 300,   // Faster retry for fragments
               manifestLoadingMaxRetry: 4,   // More manifest retries
               manifestLoadingTimeOut: 3000, // Faster manifest timeout
-              
+
               // Instant start settings
               autoStartLoad: true,         // Auto-start loading (changed from false)
               startFragPrefetch: true,     // Prefetch first fragment
               testBandwidth: false,        // Skip initial bandwidth test for faster start
-              
+
               // Optimized for S3 hosted content
-              xhrSetup: function(xhr, url) {
+              xhrSetup: function (xhr, url) {
                 xhr.responseType = 'arraybuffer';
-                
+
                 // Apply optimal Cache-Control headers based on content type
                 if (url.endsWith('.m3u8')) {
                   // Minimal caching for playlists - allows for dynamic updates
@@ -1259,45 +1258,45 @@ const VideoPlayer = ({
                   // Aggressive caching for segments - they never change
                   xhr.setRequestHeader('Cache-Control', 'public, max-age=31536000');
                 }
-                
+
                 // Add AWS specific optimizations
                 if (url.includes('amazonaws.com')) {
                   // Add range request capabilities
                   xhr.setRequestHeader('Range', 'bytes=0-');
-                  
+
                   // Ensure connection is kept alive between segment requests
                   xhr.setRequestHeader('Connection', 'keep-alive');
                 }
-                
+
                 // Log requests for debugging
                 console.log(`Loading HLS chunk: ${url.split('/').pop()}`);
               }
             });
-            
+
             // Load source
             hls.loadSource(videoSource);
-            
+
             // Setup event tracking
             setupHlsEventListeners(hls, setAvailableQualities, setCurrentQuality);
           }
-          
+
           hlsRef.current = hls;
-          
+
           // Attach to actual video element
           hls.attachMedia(videoElement);
-          
+
           // Listen for HLS events
           hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
             console.log("HLS manifest parsed, analyzing quality levels:", data.levels.length);
-            
+
             // Log available bitrates to help with debugging
             data.levels.forEach((level, index) => {
               console.log(`Level ${index}: ${level.bitrate / 1000} Kbps, resolution: ${level.width}x${level.height}`);
             });
-            
+
             // Choose optimal level based on device and connection
             let startLevel = -1; // Auto by default
-            
+
             // On mobile devices, prefer lower quality to start playback faster
             if (isMobile) {
               // Find a level with resolution <= 720p for faster initial load
@@ -1307,13 +1306,13 @@ const VideoPlayer = ({
                 console.log(`Selected medium quality level ${startLevel} for faster mobile start`);
               }
             }
-            
+
             // Set the start level
             hls.startLevel = startLevel;
-            
+
             // Start loading fragments from the beginning
             hls.startLoad(-1);
-            
+
             // Only load what we need initially
             setTimeout(() => {
               if (videoRef.current && videoRef.current.currentTime < 5) {
@@ -1322,11 +1321,11 @@ const VideoPlayer = ({
                 hls.config.maxBufferLength = 15; // Increase slightly after initial load
               }
             }, 3000);
-            
+
             if (isMounted) {
               // Set initial play position to beginning
               videoRef.current.currentTime = 0;
-              
+
               // Only attempt playback if this video is current and not paused
               if (!isPaused) {
                 attemptPlayback(videoRef.current, currentVideo);
@@ -1335,12 +1334,12 @@ const VideoPlayer = ({
                 videoRef.current.pause();
                 setIsPlaying(false);
               }
-              
+
               // Start playback monitoring
               startPlaybackMonitoring(videoRef.current, hls);
             }
           });
-          
+
           // Add fragment loaded event for bandwidth monitoring
           hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
             // Calculate bandwidth from segment loading
@@ -1349,23 +1348,23 @@ const VideoPlayer = ({
             if (loadTime > 0 && bytes > 0) {
               // Calculate bandwidth in kbps
               const bandwidthKbps = Math.round((bytes * 8) / (loadTime / 1000) / 1000);
-              
+
               // Get connection speed description
               let speedDescription = 'Unknown';
               if (bandwidthKbps > 5000) speedDescription = 'Excellent';
               else if (bandwidthKbps > 2000) speedDescription = 'Good';
               else if (bandwidthKbps > 800) speedDescription = 'Fair';
               else speedDescription = 'Poor';
-              
+
               setConnectionSpeed(`${speedDescription} (${bandwidthKbps} kbps)`);
             }
           });
-          
+
           hls.on(Hls.Events.ERROR, (event, data) => {
             if (data.fatal) {
               console.error("Fatal HLS error:", data);
-              
-              switch(data.type) {
+
+              switch (data.type) {
                 case Hls.ErrorTypes.NETWORK_ERROR:
                   console.log("Network error occurred, trying to recover");
                   hls.startLoad();
@@ -1387,36 +1386,36 @@ const VideoPlayer = ({
           });
         } else if (isHlsStream && isHlsNativelySupported()) {
           console.log("Using native HLS support");
-          
+
           // For Safari and iOS which support HLS natively
           videoElement.src = videoSource;
-          videoElement.addEventListener('loadedmetadata', function() {
+          videoElement.addEventListener('loadedmetadata', function () {
             if (isMounted) {
               attemptPlayback(videoElement, currentVideo);
             }
           });
-          
+
         } else {
           console.log("HLS is not supported by this browser");
-          
+
           // Show error message to user
           if (isMounted) {
             setSnackbarMessage("Your browser doesn't support HLS streaming. Please try a different browser.");
             setShowSnackbar(true);
           }
         }
-        
+
         // Update UI metadata
         if (isMounted) {
           setLikes(currentVideo.likes || 0);
           setDislikes(currentVideo.dislikes || 0);
           setViews(currentVideo.views || 0);
-          
+
           // Update URL without navigation (only if needed)
           try {
             const currentPath = window.location.pathname;
             const targetPath = `/video/${currentVideo.video_id}`;
-            
+
             // Only update if the path actually changed
             if (!currentPath.includes(currentVideo.video_id)) {
               console.log(`Updating URL from ${currentPath} to ${targetPath}`);
@@ -1429,7 +1428,7 @@ const VideoPlayer = ({
           } catch (error) {
             console.error("Error updating URL:", error);
           }
-          
+
           // Check saved and follow status if user is logged in
           if (currentUser) {
             checkSavedStatus(currentVideo.video_id);
@@ -1444,7 +1443,7 @@ const VideoPlayer = ({
         }
       }
     };
-    
+
     // Helper function to attempt playback with retry logic
     const attemptPlayback = (video, currentVideo) => {
       // If this video should be paused, don't attempt playback
@@ -1454,26 +1453,26 @@ const VideoPlayer = ({
         setIsPlaying(false);
         return;
       }
-      
+
       console.log("Attempting to play video...");
-      
+
       // Set initial muted state to false unless required by browser
       video.muted = false;
       setIsMuted(false);
-      
+
       try {
         const playPromise = video.play();
-        
+
         if (playPromise !== undefined) {
           playPromise
             .then(() => {
               if (!isMounted) return;
               console.log("Video playback started successfully");
               setIsPlaying(true);
-              
+
               // Report view if needed
               if (!reportedViewRef.current) {
-                incrementVideoView(currentVideo.video_id).catch(err => 
+                incrementVideoView(currentVideo.video_id).catch(err =>
                   console.error("Failed to increment view count:", err)
                 );
                 reportedViewRef.current = true;
@@ -1482,13 +1481,13 @@ const VideoPlayer = ({
             .catch(err => {
               if (!isMounted) return;
               console.error("Error playing video:", err);
-              
+
               // Try muted playback for autoplay policy only if required by browser
               if (!video.muted) {
                 console.log("Trying muted autoplay due to browser policy...");
                 video.muted = true;
                 setIsMuted(true);
-                
+
                 video.play().then(() => {
                   console.log("Muted playback started successfully");
                   // Explicitly show message to user about unmuting
@@ -1515,11 +1514,11 @@ const VideoPlayer = ({
         loadVideo();
       }
     }, 100);
-    
+
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
-      
+
       // Safely clean up video element and HLS instance on unmount
       if (videoRef.current) {
         try {
@@ -1530,7 +1529,7 @@ const VideoPlayer = ({
           console.warn("Error cleaning up video on unmount:", cleanupError);
         }
       }
-      
+
       if (hlsRef.current) {
         try {
           hlsRef.current.destroy();
@@ -1558,7 +1557,7 @@ const VideoPlayer = ({
       setIsFollowing(false);
       return;
     }
-    
+
     try {
       const isFollowing = await checkIsFollowing(creatorId);
       setIsFollowing(isFollowing);
@@ -1580,7 +1579,7 @@ const VideoPlayer = ({
     try {
       const videoContainer = videoContainerRef.current;
       if (!videoContainer) return;
-      
+
       // First try using our unified API
       fullscreenAPI.enterFullscreen(videoContainer)
         .then(() => {
@@ -1588,7 +1587,7 @@ const VideoPlayer = ({
         })
         .catch((err) => {
           console.error("Failed to enter fullscreen:", err);
-          
+
           // Fallback: try to simulate fullscreen with CSS
           if (videoContainer) {
             videoContainer.style.position = 'fixed';
@@ -1599,7 +1598,7 @@ const VideoPlayer = ({
             videoContainer.style.zIndex = '9999';
             document.body.style.overflow = 'hidden';
             setIsFullScreen(true);
-            
+
             // Add the fullscreen class to help with CSS targeting
             videoContainer.classList.add('video-fullscreen');
           } else {
@@ -1623,8 +1622,8 @@ const VideoPlayer = ({
           .catch(err => {
             console.error("Error exiting fullscreen:", err);
           });
-      } else if (videoContainerRef.current && 
-                 videoContainerRef.current.style.position === 'fixed') {
+      } else if (videoContainerRef.current &&
+        videoContainerRef.current.style.position === 'fixed') {
         // We're in CSS simulated fullscreen
         const videoContainer = videoContainerRef.current;
         videoContainer.style.position = '';
@@ -1635,9 +1634,9 @@ const VideoPlayer = ({
         videoContainer.style.zIndex = '';
         document.body.style.overflow = '';
       }
-      
+
       setIsFullScreen(false);
-      
+
       // Don't navigate away unnecessarily - we're already in the video player
     } catch (error) {
       console.error("Error exiting fullscreen:", error);
@@ -1646,7 +1645,7 @@ const VideoPlayer = ({
   };
 
   // Define handleKeyDown before using it in useEffect
-    const handleKeyDown = (event) => {
+  const handleKeyDown = (event) => {
     // Prevent default behavior for arrow keys
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
       event.preventDefault();
@@ -1654,10 +1653,10 @@ const VideoPlayer = ({
 
     switch (event.key) {
       case "ArrowUp":
-          handlePrevVideo();
+        handlePrevVideo();
         break;
       case "ArrowDown":
-          handleNextVideo();
+        handleNextVideo();
         break;
       case "ArrowLeft":
         // Fast backward 10 seconds
@@ -1692,21 +1691,21 @@ const VideoPlayer = ({
       default:
         // Do nothing for other keys
         break;
-      }
-    };
+    }
+  };
 
   // Define handleFullscreenChange before using it in useEffect
-    const handleFullscreenChange = () => {
+  const handleFullscreenChange = () => {
     // Check if we should prevent fullscreen exit
     if (shouldPreserveFullscreen) {
       // Keep fullscreen state as is - don't exit fullscreen during swipes
       return;
     }
-    
+
     // Temporarily add transition to make fullscreen changes smoother
     if (videoContainerRef.current) {
       videoContainerRef.current.style.transition = 'all 0.3s ease-out';
-      
+
       // Remove the transition after animation completes
       setTimeout(() => {
         if (videoContainerRef.current) {
@@ -1714,15 +1713,15 @@ const VideoPlayer = ({
         }
       }, 300);
     }
-    
+
     // Use our unified API to check fullscreen state
     setIsFullScreen(fullscreenAPI.isFullscreen());
-    
+
     // If we exited fullscreen through browser controls (not our button)
     // but we're in a CSS simulated fullscreen mode, also exit that
-    if (!fullscreenAPI.isFullscreen() && 
-        videoContainerRef.current && 
-        videoContainerRef.current.style.position === 'fixed') {
+    if (!fullscreenAPI.isFullscreen() &&
+      videoContainerRef.current &&
+      videoContainerRef.current.style.position === 'fixed') {
       const videoContainer = videoContainerRef.current;
       videoContainer.style.position = '';
       videoContainer.style.top = '';
@@ -1738,11 +1737,11 @@ const VideoPlayer = ({
   // Add separate useEffect for document level events without keyboard handling
   useEffect(() => {
     console.log("Adding document level event listeners for fullscreen changes");
-    
+
     // Use our custom fullscreen change event
     const fullscreenChangeEvent = fullscreenAPI.fullscreenChangeEventName();
     document.addEventListener(fullscreenChangeEvent, handleFullscreenChange);
-    
+
     return () => {
       console.log("Removing document level event listeners");
       document.removeEventListener(fullscreenChangeEvent, handleFullscreenChange);
@@ -1759,10 +1758,10 @@ const VideoPlayer = ({
   // Add toggleMute function
   const toggleMute = () => {
     if (!videoRef.current) return;
-    
+
     const video = videoRef.current;
-      video.muted = !video.muted;
-      setIsMuted(video.muted);
+    video.muted = !video.muted;
+    setIsMuted(video.muted);
   };
 
   // Add toggleFullScreen function
@@ -1777,7 +1776,7 @@ const VideoPlayer = ({
   // Add handleVideoError function
   const handleVideoError = (error) => {
     console.error("Video error occurred:", error);
-    
+
     // Show error message to user
     setSnackbarMessage("Error playing video. Please try another video.");
     setShowSnackbar(false);
@@ -1791,13 +1790,13 @@ const VideoPlayer = ({
   // Add handleSeekChange function
   const handleSeekChange = (e) => {
     if (!videoRef.current || duration === 0) return;
-    
+
     const video = videoRef.current;
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
     const relativeX = e.clientX - rect.left;
     const percentage = relativeX / rect.width;
-    
+
     // Set the video's current time based on the percentage
     const newTime = percentage * video.duration;
     video.currentTime = newTime;
@@ -1807,10 +1806,10 @@ const VideoPlayer = ({
   // Add formatTime helper function
   const formatTime = (timeInSeconds) => {
     if (!timeInSeconds || isNaN(timeInSeconds)) return "0:00";
-    
+
     const minutes = Math.floor(timeInSeconds / 60);
     const seconds = Math.floor(timeInSeconds % 60);
-    
+
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
@@ -1821,10 +1820,10 @@ const VideoPlayer = ({
       setShowSnackbar(true);
       return;
     }
-    
+
     try {
       const videoId = videos[currentIndex].video_id;
-      
+
       if (isLiked) {
         // Unlike video (toggle off)
         setIsLiked(false);
@@ -1832,15 +1831,15 @@ const VideoPlayer = ({
         // Like video
         setIsLiked(true);
         // If video was previously disliked, remove dislike
-      if (isDisliked) {
-        setIsDisliked(false);
-      }
-      
+        if (isDisliked) {
+          setIsDisliked(false);
+        }
+
         // Update likes count on server
         const response = await incrementVideoLike(videoId);
-      
-      if (response && typeof response.likes === 'number') {
-        setLikes(response.likes);
+
+        if (response && typeof response.likes === 'number') {
+          setLikes(response.likes);
         }
       }
     } catch (error) {
@@ -1857,10 +1856,10 @@ const VideoPlayer = ({
       setShowSnackbar(true);
       return;
     }
-    
+
     try {
       const videoId = videos[currentIndex].video_id;
-      
+
       if (isDisliked) {
         // Remove dislike (toggle off)
         setIsDisliked(false);
@@ -1868,15 +1867,15 @@ const VideoPlayer = ({
         // Dislike video
         setIsDisliked(true);
         // If video was previously liked, remove like
-      if (isLiked) {
-        setIsLiked(false);
-      }
-      
+        if (isLiked) {
+          setIsLiked(false);
+        }
+
         // Update dislikes count on server
         const response = await incrementVideoDislike(videoId);
-      
-      if (response && typeof response.dislikes === 'number') {
-        setDislikes(response.dislikes);
+
+        if (response && typeof response.dislikes === 'number') {
+          setDislikes(response.dislikes);
         }
       }
     } catch (error) {
@@ -1889,41 +1888,41 @@ const VideoPlayer = ({
   // Add handleShare function
   const handleShare = async () => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) {
-          return;
-      }
+      return;
+    }
 
     try {
       const currentVideo = videos[currentIndex];
       const shareUrl = `${window.location.origin}/video/${currentVideo.video_id}`;
-      
+
       // Set flag that we've shared this video
       setWatchShared(true);
-      
+
       // Update watch history with shared flag if user is logged in
       if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
         const videoElement = videoRef.current;
         const currentTime = videoElement ? videoElement.currentTime : 0;
         const duration = videoElement ? videoElement.duration : 0;
         const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-        
-          const watchData = {
+
+        const watchData = {
           video_id: currentVideo.video_id,
           watch_time: currentTime,
           watch_percentage: watchPercentage,
-            completed: false,
+          completed: false,
           last_position: currentTime,
-            like_flag: isLiked,
-            dislike_flag: isDisliked,
-            saved_flag: isSaved,
-            shared_flag: true,
-            device_type: deviceType
-          };
-        
-          updateWatchHistory(watchData).catch(err => {
+          like_flag: isLiked,
+          dislike_flag: isDisliked,
+          saved_flag: isSaved,
+          shared_flag: true,
+          device_type: deviceType
+        };
+
+        updateWatchHistory(watchData).catch(err => {
           console.error("Failed to update watch history for share:", err);
         });
       }
-      
+
       // Share the URL
       if (navigator.clipboard && window.isSecureContext) {
         // Use clipboard API if available
@@ -1932,23 +1931,23 @@ const VideoPlayer = ({
         setShowSnackbar(true);
       } else {
         // Fallback for older browsers
-      const textArea = document.createElement("textarea");
+        const textArea = document.createElement("textarea");
         textArea.value = shareUrl;
-      textArea.style.position = "fixed";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
 
-      try {
+        try {
           document.execCommand('copy');
           setSnackbarMessage("Link copied to clipboard");
           setShowSnackbar(true);
-      } catch (err) {
+        } catch (err) {
           console.error("Failed to copy link:", err);
           setSnackbarMessage("Failed to copy link");
-      setShowSnackbar(true);
+          setShowSnackbar(true);
         }
-        
+
         document.body.removeChild(textArea);
       }
     } catch (error) {
@@ -1968,14 +1967,14 @@ const VideoPlayer = ({
 
     try {
       const videoId = videos[currentIndex].video_id;
-      
+
       // Toggle saved status
       const newSavedStatus = !isSaved;
       setIsSaved(newSavedStatus);
-      
+
       // Update on server
       await saveVideo(videoId, newSavedStatus);
-      
+
       // Show confirmation to user
       setSnackbarMessage(newSavedStatus ? "Video saved" : "Video removed from saved");
       setShowSnackbar(true);
@@ -1995,19 +1994,19 @@ const VideoPlayer = ({
       setShowSnackbar(true);
       return;
     }
-    
+
     // Get creator ID
     const creatorId = videos[currentIndex].creator_id;
-    
+
     // Prevent following yourself
     if (currentUser.user_id === creatorId) {
       setSnackbarMessage("You cannot follow yourself");
       setShowSnackbar(true);
       return;
     }
-    
+
     setFollowLoading(true);
-    
+
     try {
       if (isFollowing) {
         // Unfollow
@@ -2035,23 +2034,23 @@ const VideoPlayer = ({
     // Only allow creator to delete their own video
     if (!currentUser || currentUser.user_id !== videos[currentIndex].user_id) {
       setSnackbarMessage("You can only delete your own videos");
-          setShowSnackbar(true);
+      setShowSnackbar(true);
       setShowDeleteDialog(false);
       return;
     }
-    
+
     setIsDeleting(true);
-    
+
     try {
       const videoId = videos[currentIndex].video_id;
       await deleteVideo(videoId);
-      
+
       setSnackbarMessage("Video deleted successfully");
-          setShowSnackbar(true);
-      
+      setShowSnackbar(true);
+
       // Close dialog
       setShowDeleteDialog(false);
-      
+
       // Navigate to next video if available
       if (videos.length > 1) {
         if (currentIndex < videos.length - 1) {
@@ -2059,14 +2058,14 @@ const VideoPlayer = ({
         } else if (currentIndex === videos.length - 1) {
           setCurrentIndex(0);
         }
-    } else {
+      } else {
         // If this was the last video, navigate home
-    navigate("/");
+        navigate("/");
       }
     } catch (error) {
       console.error("Error deleting video:", error);
       setSnackbarMessage("Failed to delete video");
-    setShowSnackbar(true);
+      setShowSnackbar(true);
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
@@ -2080,11 +2079,11 @@ const VideoPlayer = ({
       if (metricsRef.current) {
         metricsRef.current.cleanup();
       }
-      
+
       // Start new monitoring
       metricsRef.current = startPlaybackMonitoring(videoRef.current, hlsRef.current);
     }
-    
+
     return () => {
       if (metricsRef.current) {
         metricsRef.current.cleanup();
@@ -2096,7 +2095,7 @@ const VideoPlayer = ({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    
+
     if (isPaused && !video.paused) {
       video.pause();
       setIsPlaying(false);
@@ -2117,13 +2116,13 @@ const VideoPlayer = ({
           e.stopPropagation();
         }
       };
-      
+
       // Add listeners to prevent fullscreen exit
       document.addEventListener('fullscreenchange', preventExitFullscreen, true);
       document.addEventListener('webkitfullscreenchange', preventExitFullscreen, true);
       document.addEventListener('mozfullscreenchange', preventExitFullscreen, true);
       document.addEventListener('MSFullscreenChange', preventExitFullscreen, true);
-      
+
       return () => {
         // Clean up when component unmounts
         document.removeEventListener('fullscreenchange', preventExitFullscreen, true);
@@ -2137,18 +2136,18 @@ const VideoPlayer = ({
   // Add a useEffect to attach event listeners for the video timing
   useEffect(() => {
     if (!videoRef.current) return;
-    
+
     const video = videoRef.current;
-    
+
     // Handler for when metadata is loaded - this sets the duration
     const handleLoadedMetadata = () => {
       setDuration(video.duration || 0);
     };
-    
+
     // Add event listeners
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
-    
+
     // Clean up event listeners when component unmounts
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -2157,16 +2156,16 @@ const VideoPlayer = ({
   }, [handleTimeUpdate]); // Only handleTimeUpdate is a dependency since it's memoized
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
-  return (
-    <Box
-      sx={{
-        width: "100vw",
-        height: "100vh",
-          bgcolor: "black", 
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-          color: "white" 
+    return (
+      <Box
+        sx={{
+          width: "100vw",
+          height: "100vh",
+          bgcolor: "black",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          color: "white"
         }}
       >
         <Typography variant="h5">No videos available</Typography>
@@ -2189,7 +2188,7 @@ const VideoPlayer = ({
       WebkitBackfaceVisibility: 'hidden',
       backfaceVisibility: 'hidden'
     };
-    
+
     // For mobile in portrait mode
     if (isMobile && orientation === 'portrait') {
       return {
@@ -2202,7 +2201,7 @@ const VideoPlayer = ({
         margin: 0
       };
     }
-    
+
     // For fullscreen or landscape
     return {
       ...baseStyles,
@@ -2210,7 +2209,7 @@ const VideoPlayer = ({
       height: '100vh'
     };
   };
-  
+
   // Style for the video element
   const getVideoStyle = () => {
     // Shared styles for all modes
@@ -2222,7 +2221,7 @@ const VideoPlayer = ({
       WebkitBackfaceVisibility: 'hidden',
       backfaceVisibility: 'hidden'
     };
-    
+
     // For mobile in portrait mode
     if (isMobile && orientation === 'portrait') {
       return {
@@ -2233,7 +2232,7 @@ const VideoPlayer = ({
         objectFit: 'contain'
       };
     }
-    
+
     // For fullscreen or landscape
     return {
       ...baseStyles,
@@ -2242,7 +2241,7 @@ const VideoPlayer = ({
       objectFit: 'cover'
     };
   };
-  
+
   // Get page container style
   const getPageContainerStyle = () => {
     // For mobile in portrait mode
@@ -2259,7 +2258,7 @@ const VideoPlayer = ({
         overflow: 'hidden'
       };
     }
-    
+
     // For fullscreen or landscape
     return {
       width: '100%',
@@ -2276,70 +2275,70 @@ const VideoPlayer = ({
         <Box
           ref={videoContainerRef}
           sx={getVideoContainerStyle()}
-      onClick={handleVideoContainerClick}
-      onMouseMove={handleMouseMove}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={handleTouchMove}
-    >
-      {/* Back button that appears/disappears with controls */}
-          <Slide direction="down" in={showControls} timeout={300}>
-        <IconButton
-          onClick={goToHomePage}
-          sx={{ 
-            position: 'absolute',
-            top: 20,
-            left: 20,
-            bgcolor: 'rgba(0, 0, 0, 0.6)',
-            color: 'white',
-                zIndex: 1600,
-            '&:hover': {
-              bgcolor: 'rgba(0, 0, 0, 0.8)',
-            },
-          }}
+          onClick={handleVideoContainerClick}
+          onMouseMove={handleMouseMove}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchMove={handleTouchMove}
         >
-          <ArrowBack />
-        </IconButton>
-      </Slide>
+          {/* Back button that appears/disappears with controls */}
+          <Slide direction="down" in={showControls} timeout={300}>
+            <IconButton
+              onClick={goToHomePage}
+              sx={{
+                position: 'absolute',
+                top: 20,
+                left: 20,
+                bgcolor: 'rgba(0, 0, 0, 0.6)',
+                color: 'white',
+                zIndex: 1600,
+                '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.8)',
+                },
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
+          </Slide>
 
-      {/* Video element */}
-      <video
-        ref={videoRef}
+          {/* Video element */}
+          <video
+            ref={videoRef}
             playsInline={true}
-        muted={isMuted}
+            muted={isMuted}
             autoPlay={true}
             loop={false}
             preload="auto"
             crossOrigin="anonymous"
             style={getVideoStyle()}
             type={getVideoMimeType()}
-        controlsList="nodownload nofullscreen noremoteplayback" 
-        disablePictureInPicture
-        disableRemotePlayback
-        controls={false}
+            controlsList="nodownload nofullscreen noremoteplayback"
+            disablePictureInPicture
+            disableRemotePlayback
+            controls={false}
           >
             {/* Sources will be added dynamically in useEffect */}
             Your browser does not support the video tag.
-      </video>
+          </video>
 
-      {/* Show error message when video source is invalid */}
-      {!getVideoSource(videos[currentIndex]?.video_url) && (
-      <Box
-        sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center',
-            color: 'white',
-            zIndex: 2
-          }}
-        >
-          <Typography variant="h6">
-            Video not available
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
-            Please try another video
+          {/* Show error message when video source is invalid */}
+          {!getVideoSource(videos[currentIndex]?.video_url) && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                textAlign: 'center',
+                color: 'white',
+                zIndex: 2
+              }}
+            >
+              <Typography variant="h6">
+                Video not available
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+                Please try another video
               </Typography>
             </Box>
           )}
@@ -2360,454 +2359,447 @@ const VideoPlayer = ({
               <CircularProgress color="primary" />
               <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
                 Loading video...
-        </Typography>
-      </Box>
-      )}
-
-      {/* Up/Down Navigation arrows - without count indicator */}
-      {videos.length > 1 && (
-        <Box
-          sx={{
-            position: 'absolute',
-            right: 20,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            display: 'flex',
-            flexDirection: 'column',
-            height: '140px',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            zIndex: 15,
-            opacity: showControls ? 1 : 0,
-            transition: 'opacity 300ms ease-in-out',
-          }}
-        >
-          {/* Up Arrow */}
-          {currentIndex > 0 && (
-            <IconButton
-              onClick={() => setCurrentIndex(currentIndex - 1)}
-              sx={{
-                bgcolor: 'rgba(0, 0, 0, 0.6)',
-                color: '#2CFF05', // Using the neon green from theme
-                '&:hover': {
-                  bgcolor: 'rgba(0, 0, 0, 0.8)',
-                  boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                },
-              }}
-            >
-              <ArrowUpward />
-            </IconButton>
+              </Typography>
+            </Box>
           )}
 
-          {/* Down Arrow */}
-          {currentIndex < videos.length - 1 && (
-            <IconButton
-              onClick={() => setCurrentIndex(currentIndex + 1)}
-              sx={{
-                bgcolor: 'rgba(0, 0, 0, 0.6)',
-                color: '#2CFF05', // Using the neon green from theme
-                '&:hover': {
-                  bgcolor: 'rgba(0, 0, 0, 0.8)',
-                  boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
-                },
-              }}
-            >
-              <ArrowDownward />
-            </IconButton>
-          )}
-        </Box>
-      )}
-
-      {/* Mobile-optimized video controls overlay */}
-          <Slide direction="up" in={showControls} timeout={300}>
-      <Box
-        sx={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
-            padding: isMobile ? '8px 12px' : '16px',
-            zIndex: 10,
-            display: 'flex',
-            flexDirection: 'column',
-            transition: 'opacity 0.3s ease',
-            opacity: showControls ? 1 : 0,
-          }}
-        >
-          {/* Progress bar */}
-          <Box
-            sx={{
-              width: '100%',
-              height: isMobile ? '3px' : '4px',
-              bgcolor: 'rgba(255,255,255,0.3)',
-              borderRadius: '2px',
-              mb: isMobile ? 1 : 2,
-              position: 'relative',
-              cursor: 'pointer'
-            }}
-            onClick={handleSeekChange}
-          >
+          {/* Up/Down Navigation arrows - without count indicator */}
+          {videos.length > 1 && (
             <Box
               sx={{
                 position: 'absolute',
-                left: 0,
-                top: 0,
-                height: '100%',
-                width: `${(currentTime / duration) * 100}%`,
-                bgcolor: 'primary.main',
-                borderRadius: '2px'
-              }}
-            />
-      </Box>
-
-          {/* Control buttons */}
-      <Box
-        sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              width: '100%'
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <IconButton
-                onClick={togglePlayPause}
-                sx={{ 
-                  color: 'white',
-                  p: isMobile ? 0.5 : 1 
-                }}
-              >
-                {isPlaying ? <Pause /> : <PlayArrow />}
-        </IconButton>
-
-              <IconButton
-                onClick={toggleMute}
-                sx={{ 
-                  color: 'white',
-                  p: isMobile ? 0.5 : 1,
-                  display: { xs: 'none', sm: 'inline-flex' }
-                }}
-              >
-                {isMuted ? <VolumeOff /> : <VolumeUp />}
-        </IconButton>
-      </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              {!isMobile && (
-                <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
-                  {formatTime(currentTime)} / {formatTime(duration)}
-        </Typography>
-              )}
-
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <IconButton
-                  onClick={handleLike}
-                  sx={{ 
-                    color: isLiked ? 'primary.main' : 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-
-                <IconButton
-                  onClick={handleDislike}
-                  sx={{ 
-                    color: isDisliked ? 'error.main' : 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-
-                <IconButton
-                  onClick={handleShare}
-                  sx={{ 
-                    color: 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <Share fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-
-                <IconButton
-                  onClick={handleSaveVideo}
-                  sx={{ 
-                    color: isSaved ? 'primary.main' : 'white',
-                    p: isMobile ? 0.5 : 1,
-                    display: { xs: 'none', sm: 'inline-flex' }
-                  }}
-                >
-                  {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
-                </IconButton>
-
-                <IconButton
-                  onClick={toggleFullScreen}
-                  sx={{ 
-                    color: 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
-        </IconButton>
-
-                <IconButton
-                  sx={{ 
-                    color: 'white',
-                    p: isMobile ? 0.5 : 1
-                  }}
-                >
-                  <Comment fontSize={isMobile ? 'small' : 'medium'} />
-                </IconButton>
-              </Box>
-            </Box>
-          </Box>
-        </Box>
-      </Slide>
-
-      {/* Video Info Overlay */}
-          <Slide direction="down" in={showControls} timeout={300}>
-      <Box
-        sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
-            padding: isMobile ? '12px' : '16px',
-            paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
-            zIndex: 10,
-            transition: 'opacity 0.3s ease',
-            opacity: showControls ? 1 : 0,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Avatar 
-                src={videos[currentIndex]?.creator_profile_picture} 
-                alt={videos[currentIndex]?.creator_username}
-                sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }} 
-              />
-              <Box>
-                <Typography 
-                  variant={isMobile ? "body1" : "h6"} 
-                  sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
-                >
-          {videos[currentIndex]?.title}
-        </Typography>
-                <Typography 
-                  variant={isMobile ? "caption" : "body2"} 
-                  sx={{ color: 'white', opacity: 0.8 }}
-                >
-                  {videos[currentIndex]?.creator_username}
-        </Typography>
-              </Box>
-      </Box>
-
-            {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
-              <Button
-                variant={isFollowing ? "outlined" : "contained"}
-                size={isMobile ? "small" : "medium"}
-                color="primary"
-                startIcon={isFollowing ? <Check /> : <PersonAdd />}
-                onClick={handleFollowToggle}
-                disabled={followLoading}
-        sx={{
-                  minWidth: 'auto', 
-                  px: isMobile ? 1 : 2,
-                  display: { xs: 'none', sm: 'flex' }
-                }}
-              >
-                {followLoading ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : (
-                  isFollowing ? "Following" : "Follow"
-                )}
-              </Button>
-            )}
-          </Box>
-
-          {/* Below the video title and user profile section */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 2,
-            color: 'white',
-            mt: 1
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <VisibilityIcon sx={{ fontSize: 20 }} />
-              <Typography variant="body2">
-                {videos[currentIndex]?.views || 0}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <ThumbUpIcon sx={{ fontSize: 20 }} />
-              <Typography variant="body2">
-                {videos[currentIndex]?.likes || 0}
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <ThumbDownIcon sx={{ fontSize: 20 }} />
-              <Typography variant="body2">
-                {videos[currentIndex]?.dislikes || 0}
-        </Typography>
-      </Box>
-          </Box>
-        </Box>
-      </Slide>
-        </Box>
-
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={showSnackbar}
-        autoHideDuration={3000}
-        onClose={() => setShowSnackbar(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-
-      {/* Delete confirmation dialog */}
-      <Dialog
-        open={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
-      >
-        <DialogTitle>Delete Video</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this video? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setShowDeleteDialog(false)} 
-            color="primary"
-            disabled={isDeleting}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={confirmDelete} 
-            color="error" 
-            variant="contained"
-            disabled={isDeleting}
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Quality selector menu */}
-      {showQualityMenu && (
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: 60,
-            right: 10,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            borderRadius: 1,
-            padding: 1,
-            zIndex: 1000,
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ color: 'white', mb: 1 }}>
-            Quality
-          </Typography>
-          {availableQualities.map((quality) => (
-            <Box
-              key={quality.index}
-              onClick={() => handleQualityChange(quality.index)}
-              sx={{
-                py: 0.5,
-                px: 2,
-                cursor: 'pointer',
-                backgroundColor: currentQuality === quality.index ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)'
-                },
-                borderRadius: 1,
-                mb: 0.5,
+                right: 20,
+                top: '50%',
+                transform: 'translateY(-50%)',
                 display: 'flex',
+                flexDirection: 'column',
+                height: '140px',
+                justifyContent: 'space-between',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                zIndex: 15,
+                opacity: showControls ? 1 : 0,
+                transition: 'opacity 300ms ease-in-out',
               }}
             >
-              <Typography variant="body2" sx={{ color: 'white' }}>
-                {quality.name}
-              </Typography>
-              {currentQuality === quality.index && (
-                <HighQuality fontSize="small" sx={{ color: 'white', ml: 1 }} />
+              {/* Up Arrow */}
+              {currentIndex > 0 && (
+                <IconButton
+                  onClick={() => setCurrentIndex(currentIndex - 1)}
+                  sx={{
+                    bgcolor: 'rgba(0, 0, 0, 0.6)',
+                    color: '#2CFF05', // Using the neon green from theme
+                    '&:hover': {
+                      bgcolor: 'rgba(0, 0, 0, 0.8)',
+                      boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                    },
+                  }}
+                >
+                  <ArrowUpward />
+                </IconButton>
+              )}
+
+              {/* Down Arrow */}
+              {currentIndex < videos.length - 1 && (
+                <IconButton
+                  onClick={() => setCurrentIndex(currentIndex + 1)}
+                  sx={{
+                    bgcolor: 'rgba(0, 0, 0, 0.6)',
+                    color: '#2CFF05', // Using the neon green from theme
+                    '&:hover': {
+                      bgcolor: 'rgba(0, 0, 0, 0.8)',
+                      boxShadow: '0 0 8px rgba(44, 255, 5, 0.6)', // Neon glow effect
+                    },
+                  }}
+                >
+                  <ArrowDownward />
+                </IconButton>
               )}
             </Box>
-          ))}
+          )}
+
+          {/* Mobile-optimized video controls overlay */}
+          <Slide direction="up" in={showControls} timeout={300}>
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+                padding: isMobile ? '8px 12px' : '16px',
+                zIndex: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'opacity 0.3s ease',
+                opacity: showControls ? 1 : 0,
+              }}
+            >
+              {/* Progress bar */}
+              <Box
+                sx={{
+                  width: '100%',
+                  height: isMobile ? '3px' : '4px',
+                  bgcolor: 'rgba(255,255,255,0.3)',
+                  borderRadius: '2px',
+                  mb: isMobile ? 1 : 2,
+                  position: 'relative',
+                  cursor: 'pointer'
+                }}
+                onClick={handleSeekChange}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    height: '100%',
+                    width: `${(currentTime / duration) * 100}%`,
+                    bgcolor: 'primary.main',
+                    borderRadius: '2px'
+                  }}
+                />
+              </Box>
+
+              {/* Control buttons */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%'
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <IconButton
+                    onClick={togglePlayPause}
+                    sx={{
+                      color: 'white',
+                      p: isMobile ? 0.5 : 1
+                    }}
+                  >
+                    {isPlaying ? <Pause /> : <PlayArrow />}
+                  </IconButton>
+
+                  <IconButton
+                    onClick={toggleMute}
+                    sx={{
+                      color: 'white',
+                      p: isMobile ? 0.5 : 1,
+                      display: { xs: 'none', sm: 'inline-flex' }
+                    }}
+                  >
+                    {isMuted ? <VolumeOff /> : <VolumeUp />}
+                  </IconButton>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  {!isMobile && (
+                    <Typography variant="caption" sx={{ color: 'white', mr: 1 }}>
+                      {formatTime(currentTime)} / {formatTime(duration)}
+                    </Typography>
+                  )}
+
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <IconButton
+                      onClick={handleLike}
+                      sx={{
+                        color: isLiked ? 'primary.main' : 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <ThumbUp fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+                    <IconButton
+                      onClick={handleDislike}
+                      sx={{
+                        color: isDisliked ? 'error.main' : 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <ThumbDown fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+                    <IconButton
+                      onClick={handleShare}
+                      sx={{
+                        color: 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <Share fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+                    <IconButton
+                      onClick={handleSaveVideo}
+                      sx={{
+                        color: isSaved ? 'primary.main' : 'white',
+                        p: isMobile ? 0.5 : 1,
+                        display: { xs: 'none', sm: 'inline-flex' }
+                      }}
+                    >
+                      {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'small' : 'medium'} />}
+                    </IconButton>
+
+                    <IconButton
+                      onClick={toggleFullScreen}
+                      sx={{
+                        color: 'white',
+                        p: isMobile ? 0.5 : 1
+                      }}
+                    >
+                      <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
+                    </IconButton>
+
+
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Slide>
+
+          {/* Video Info Overlay */}
+          <Slide direction="down" in={showControls} timeout={300}>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.6) 50%, transparent)',
+                padding: isMobile ? '12px' : '16px',
+                paddingLeft: isMobile ? '60px' : '80px', // Increased left padding to make room for back button
+                zIndex: 10,
+                transition: 'opacity 0.3s ease',
+                opacity: showControls ? 1 : 0,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Avatar
+                    src={videos[currentIndex]?.creator_profile_picture}
+                    alt={videos[currentIndex]?.creator_username}
+                    sx={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, mr: 1 }}
+                  />
+                  <Box>
+                    <Typography
+                      variant={isMobile ? "body1" : "h6"}
+                      sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.2 }}
+                    >
+                      {videos[currentIndex]?.title}
+                    </Typography>
+                    <Typography
+                      variant={isMobile ? "caption" : "body2"}
+                      sx={{ color: 'white', opacity: 0.8 }}
+                    >
+                      {videos[currentIndex]?.creator_username}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {currentUser && currentUser.user_id !== videos[currentIndex]?.creator_id && (
+                  <Button
+                    variant={isFollowing ? "outlined" : "contained"}
+                    size={isMobile ? "small" : "medium"}
+                    color="primary"
+                    startIcon={isFollowing ? <Check /> : <PersonAdd />}
+                    onClick={handleFollowToggle}
+                    disabled={followLoading}
+                    sx={{
+                      minWidth: 'auto',
+                      px: isMobile ? 1 : 2,
+                      display: { xs: 'none', sm: 'flex' }
+                    }}
+                  >
+                    {followLoading ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : (
+                      isFollowing ? "Following" : "Follow"
+                    )}
+                  </Button>
+                )}
+              </Box>
+
+              {/* Below the video title and user profile section */}
+              <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                color: 'white',
+                mt: 1
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <VisibilityIcon sx={{ fontSize: 20 }} />
+                  <Typography variant="body2">
+                    {videos[currentIndex]?.views || 0}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ThumbUpIcon sx={{ fontSize: 20 }} />
+                  <Typography variant="body2">
+                    {videos[currentIndex]?.likes || 0}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ThumbDownIcon sx={{ fontSize: 20 }} />
+                  <Typography variant="body2">
+                    {videos[currentIndex]?.dislikes || 0}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          </Slide>
         </Box>
-      )}
-      
-      {/* Connection quality indicator (optional) */}
-      {connectionSpeed && (
-        <Tooltip title={`Connection Speed: ${connectionSpeed}`}>
+
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={showSnackbar}
+          autoHideDuration={3000}
+          onClose={() => setShowSnackbar(false)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setShowSnackbar(false)} severity="info" sx={{ width: '100%' }}>
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
+
+        {/* Delete confirmation dialog */}
+        <Dialog
+          open={showDeleteDialog}
+          onClose={() => setShowDeleteDialog(false)}
+        >
+          <DialogTitle>Delete Video</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Are you sure you want to delete this video? This action cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setShowDeleteDialog(false)}
+              color="primary"
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              color="error"
+              variant="contained"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Quality selector menu */}
+        {showQualityMenu && (
           <Box
             sx={{
               position: 'absolute',
-              top: 10,
+              bottom: 60,
               right: 10,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              borderRadius: 1,
+              padding: 1,
+              zIndex: 1000,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ color: 'white', mb: 1 }}>
+              Quality
+            </Typography>
+            {availableQualities.map((quality) => (
+              <Box
+                key={quality.index}
+                onClick={() => handleQualityChange(quality.index)}
+                sx={{
+                  py: 0.5,
+                  px: 2,
+                  cursor: 'pointer',
+                  backgroundColor: currentQuality === quality.index ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                  },
+                  borderRadius: 1,
+                  mb: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <Typography variant="body2" sx={{ color: 'white' }}>
+                  {quality.name}
+                </Typography>
+                {currentQuality === quality.index && (
+                  <HighQuality fontSize="small" sx={{ color: 'white', ml: 1 }} />
+                )}
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        {/* Connection quality indicator (optional) */}
+        {connectionSpeed && (
+          <Tooltip title={`Connection Speed: ${connectionSpeed}`}>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: 1,
+                fontSize: '0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowDebugInfo(!showDebugInfo)}
+            >
+              <HighQuality fontSize="small" />
+              {connectionSpeed.split(' ')[0]} {/* Just show "Excellent", "Good", etc. */}
+            </Box>
+          </Tooltip>
+        )}
+
+        {/* Debug info panel (can be toggled on/off) */}
+        {showDebugInfo && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 40,
+              right: 10,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
               color: 'white',
-              padding: '2px 8px',
+              padding: 1,
               borderRadius: 1,
               fontSize: '0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              cursor: 'pointer'
+              maxWidth: 250,
+              zIndex: 1000
             }}
-            onClick={() => setShowDebugInfo(!showDebugInfo)}
           >
-            <HighQuality fontSize="small" />
-            {connectionSpeed.split(' ')[0]} {/* Just show "Excellent", "Good", etc. */}
+            <Typography variant="caption" component="div" sx={{ mb: 0.5, fontWeight: 'bold' }}>
+              Playback Info
+            </Typography>
+            <Typography variant="caption" component="div">
+              Speed: {connectionSpeed}
+            </Typography>
+            <Typography variant="caption" component="div">
+              Quality: {hlsRef.current && hlsRef.current.currentLevel >= 0 && hlsRef.current.levels
+                ? `${hlsRef.current.levels[hlsRef.current.currentLevel].height}p`
+                : 'Auto'}
+            </Typography>
+            <Typography variant="caption" component="div">
+              Buffer: {videoRef.current && videoRef.current.buffered.length > 0
+                ? `${(videoRef.current.buffered.end(videoRef.current.buffered.length - 1) - videoRef.current.currentTime).toFixed(1)}s`
+                : '0s'}
+            </Typography>
           </Box>
-        </Tooltip>
-      )}
-      
-      {/* Debug info panel (can be toggled on/off) */}
-      {showDebugInfo && (
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 40,
-            right: 10,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            color: 'white',
-            padding: 1,
-            borderRadius: 1,
-            fontSize: '0.75rem',
-            maxWidth: 250,
-            zIndex: 1000
-          }}
-        >
-          <Typography variant="caption" component="div" sx={{ mb: 0.5, fontWeight: 'bold' }}>
-            Playback Info
-          </Typography>
-          <Typography variant="caption" component="div">
-            Speed: {connectionSpeed}
-          </Typography>
-          <Typography variant="caption" component="div">
-            Quality: {hlsRef.current && hlsRef.current.currentLevel >= 0 && hlsRef.current.levels 
-              ? `${hlsRef.current.levels[hlsRef.current.currentLevel].height}p` 
-              : 'Auto'}
-          </Typography>
-          <Typography variant="caption" component="div">
-            Buffer: {videoRef.current && videoRef.current.buffered.length > 0 
-              ? `${(videoRef.current.buffered.end(videoRef.current.buffered.length - 1) - videoRef.current.currentTime).toFixed(1)}s` 
-              : '0s'}
-          </Typography>
-        </Box>
-      )}
-    </Box>
+        )}
+      </Box>
     </React.Fragment>
   );
 };
