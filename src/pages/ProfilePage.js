@@ -345,7 +345,7 @@ const ProfilePage = () => {
   const handleCardClick = (event, videoId) => {
     // Only navigate if the click is not on a button or icon
     if (!event.target.closest('button') && !event.target.closest('svg')) {
-      navigate(`/video/${videoId}`);
+      navigate(`/reels/${videoId}`);
     }
   };
 

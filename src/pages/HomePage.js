@@ -23,6 +23,7 @@ import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 import { useVideoContext } from "../contexts/VideoContext";
 import { formatViewCount, formatDuration } from "../utils/videoUtils";
+import HeroThumbnail from "../components/HeroThumbnail";
 
 const HomePage = () => {
   const { 
@@ -429,6 +430,27 @@ const HomePage = () => {
   return (
     <Container maxWidth="xl" sx={{ pt: 2, pb: 8 }}>
       {showMobilePromo && <MobileAppPromo />}
+      
+      {/* Hero Thumbnail Banner */}
+      {!isSearching && (
+        <Box 
+          sx={{ 
+            mb: 4,
+            mt: isMobile ? 1 : 3,
+            mx: 'auto', // Center alignment
+            maxWidth: '1200px',
+            borderRadius: isMobile ? 0 : '12px',
+            overflow: 'hidden',
+          }}
+        >
+          <HeroThumbnail 
+            thumbnailUrl="https://picsum.photos/id/1079/1200/400" 
+            videoUrl="https://horizeel.s3.ap-south-1.amazonaws.com/hzeel.mp4"
+            title="Start watching horizontal reels"
+            subtitle={isMobile ? "Swipe to discover" : "Discover the new way to watch short-form videos"}
+          />
+        </Box>
+      )}
       
       {isSearching && (
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

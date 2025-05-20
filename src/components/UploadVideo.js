@@ -180,7 +180,7 @@ const UploadVideo = () => {
         
         // Navigate to the video page after successful upload
         setTimeout(() => {
-          navigate(`/video/${response.data.video_id}`);
+          navigate(`/reels/${response.data.video_id}`);
         }, 1500);
       }
     } catch (error) {

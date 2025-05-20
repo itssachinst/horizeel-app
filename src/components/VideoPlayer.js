@@ -1097,8 +1097,15 @@ const VideoPlayer = ({
 
   // Simplified video container click handler
   const handleVideoContainerClick = (e) => {
+    // Prevent click handling if clicked on a control element
+    if (e.target.closest('.video-controls')) {
+      return;
+    }
+    
+    // Only toggle play/pause if directly clicking on the video or container
     if (e.target === videoContainerRef.current || e.target === videoRef.current) {
       togglePlayPause();
+      e.stopPropagation(); // Prevent event from bubbling up
     }
   };
 
@@ -1414,7 +1421,7 @@ const VideoPlayer = ({
           // Update URL without navigation (only if needed)
           try {
             const currentPath = window.location.pathname;
-            const targetPath = `/video/${currentVideo.video_id}`;
+            const targetPath = `/reels/${currentVideo.video_id}`;
 
             // Only update if the path actually changed
             if (!currentPath.includes(currentVideo.video_id)) {
@@ -1764,6 +1771,58 @@ const VideoPlayer = ({
     setIsMuted(video.muted);
   };
 
+  // Add handleVideoEnd function to automatically play the next video when the current one ends
+  const handleVideoEnd = useCallback(() => {
+    console.log("Video ended, automatically playing next video");
+    
+    // Update watch history with completed flag if user is logged in
+    if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
+      const video = videoRef.current;
+      const currentVideo = videos[currentIndex];
+      
+      if (video && currentVideo) {
+        const watchData = {
+          video_id: currentVideo.video_id,
+          watch_time: video.duration || 0,
+          watch_percentage: 100,
+          completed: true,
+          last_position: video.duration || 0,
+          like_flag: isLiked,
+          dislike_flag: isDisliked,
+          saved_flag: isSaved,
+          shared_flag: watchShared,
+          device_type: deviceType
+        };
+        
+        updateWatchHistory(watchData).catch(err => {
+          console.error("Failed to update watch history on video end:", err);
+        });
+      }
+    }
+    
+    // Reset the reportedView flag to ensure next video gets a view count
+    reportedViewRef.current = false;
+    
+    // Check if we're near the end of our current video list and need to fetch more
+    if (videos && videos.length > 0 && currentIndex >= videos.length - 3 && hasMore) {
+      console.log("Near end of video list, triggering load more videos");
+      loadMoreVideos();
+    }
+
+    // Determine the next video index
+    let nextIndex;
+    if (currentIndex >= videos.length - 1) {
+      console.log("Reached end of video list, looping to first video");
+      nextIndex = 0;
+    } else {
+      nextIndex = currentIndex + 1;
+      console.log(`Moving to next video (index ${nextIndex})`);
+    }
+    
+    // Set the next video index
+    setCurrentIndex(nextIndex);
+  }, [currentIndex, videos, setCurrentIndex, hasMore, loadMoreVideos, currentUser, isLiked, isDisliked, isSaved, watchShared, deviceType]);
+
   // Add toggleFullScreen function
   const toggleFullScreen = () => {
     if (isFullScreen) {
@@ -1789,18 +1848,42 @@ const VideoPlayer = ({
 
   // Add handleSeekChange function
   const handleSeekChange = (e) => {
-    if (!videoRef.current || duration === 0) return;
-
-    const video = videoRef.current;
-    const progressBar = e.currentTarget;
-    const rect = progressBar.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
-    const percentage = relativeX / rect.width;
-
-    // Set the video's current time based on the percentage
-    const newTime = percentage * video.duration;
-    video.currentTime = newTime;
-    setCurrentTime(newTime);
+    if (!videoRef.current) return;
+    
+    try {
+      const video = videoRef.current;
+      
+      // Ensure video is loaded and has a valid duration
+      if (isNaN(video.duration) || !isFinite(video.duration) || video.duration <= 0) {
+        console.warn('Video duration invalid:', video.duration);
+        return;
+      }
+      
+      const progressBar = e.currentTarget;
+      const rect = progressBar.getBoundingClientRect();
+      
+      // Check if valid coordinates
+      if (!rect.width) return;
+      
+      const relativeX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const percentage = relativeX / rect.width;
+      
+      // Ensure percentage is between 0 and 1
+      const safePercentage = Math.max(0, Math.min(percentage, 1));
+      
+      // Calculate new time and ensure it's a valid number
+      const newTime = safePercentage * video.duration;
+      
+      // Validate time before setting
+      if (isFinite(newTime) && newTime >= 0 && newTime <= video.duration) {
+        video.currentTime = newTime;
+        setCurrentTime(newTime);
+      } else {
+        console.warn('Invalid seek time calculated:', newTime);
+      }
+    } catch (error) {
+      console.error('Error in handleSeekChange:', error);
+    }
   };
 
   // Add formatTime helper function
@@ -1893,7 +1976,7 @@ const VideoPlayer = ({
 
     try {
       const currentVideo = videos[currentIndex];
-      const shareUrl = `${window.location.origin}/video/${currentVideo.video_id}`;
+      const shareUrl = `${window.location.origin}/reels/${currentVideo.video_id}`;
 
       // Set flag that we've shared this video
       setWatchShared(true);
@@ -2133,7 +2216,7 @@ const VideoPlayer = ({
     }
   }, [shouldPreserveFullscreen, isFullScreen]);
 
-  // Add a useEffect to attach event listeners for the video timing
+  // Add a useEffect to attach event listeners for the video timing and ended event
   useEffect(() => {
     if (!videoRef.current) return;
 
@@ -2147,13 +2230,15 @@ const VideoPlayer = ({
     // Add event listeners
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('ended', handleVideoEnd);
 
     // Clean up event listeners when component unmounts
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('ended', handleVideoEnd);
     };
-  }, [handleTimeUpdate]); // Only handleTimeUpdate is a dependency since it's memoized
+  }, [handleTimeUpdate, handleVideoEnd]); // Added handleVideoEnd as dependency
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
     return (
@@ -2316,6 +2401,7 @@ const VideoPlayer = ({
             disablePictureInPicture
             disableRemotePlayback
             controls={false}
+            onEnded={handleVideoEnd}
           >
             {/* Sources will be added dynamically in useEffect */}
             Your browser does not support the video tag.
@@ -2551,7 +2637,6 @@ const VideoPlayer = ({
                       <Fullscreen fontSize={isMobile ? 'small' : 'medium'} />
                     </IconButton>
 
-
                   </Box>
                 </Box>
               </Box>
@@ -2740,7 +2825,7 @@ const VideoPlayer = ({
         )}
 
         {/* Connection quality indicator (optional) */}
-        {connectionSpeed && (
+        {false && connectionSpeed && (
           <Tooltip title={`Connection Speed: ${connectionSpeed}`}>
             <Box
               sx={{

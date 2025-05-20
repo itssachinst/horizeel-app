@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import { AuthProvider } from "./contexts/AuthContext";
@@ -25,14 +25,13 @@ import { useMediaQuery } from '@mui/material';
 const AppLayout = ({ children }) => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
-  const isVideoPage = location.pathname.startsWith('/video/');
   const isReelsPage = location.pathname.startsWith('/reels');
   const isHomePage = location.pathname === '/' || location.pathname === '/demo/' || location.pathname.startsWith('/demo/');
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
     <>
-      {!isAuthPage && !isVideoPage && !isReelsPage && (!isHomePage || !isMobile) && <Header />}
+      {!isAuthPage && !isReelsPage && (!isHomePage || !isMobile) && <Header />}
       <Box sx={{
         pt: 0, // Remove padding top
         minHeight: '100vh',
@@ -72,7 +71,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/video/:id" element={<VideoPage />} />
+              <Route path="/video/:id" element={<Navigate to={location => `/reels/${location.pathname.split('/').pop()}`} replace />} />
               <Route path="/reels" element={<VerticalFeedPage />} />
               <Route path="/reels/:id" element={<VerticalFeedPage />} />
               <Route path="/demo/" element={

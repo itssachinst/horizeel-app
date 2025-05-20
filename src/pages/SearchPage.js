@@ -114,7 +114,7 @@ const SearchPage = () => {
   
   // Function to handle video click
   const handleVideoClick = (videoId) => {
-    navigate(`/video/${videoId}`);
+    navigate(`/reels/${videoId}`);
   };
   
   // Function to handle hashtag click

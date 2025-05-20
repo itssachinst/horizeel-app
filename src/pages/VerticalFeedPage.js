@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, useTheme, useMediaQuery, CircularProgress, IconButton } from '@mui/material';
-import { Fullscreen, FullscreenExit } from '@mui/icons-material';
+import { Box, useTheme, useMediaQuery, CircularProgress } from '@mui/material';
 import VerticalVideoFeed from '../components/VerticalVideoFeed';
 import { useVideoContext } from '../contexts/VideoContext';
 import VIDEO_CACHE from '../utils/videoCache';
@@ -204,28 +203,7 @@ const VerticalFeedPage = () => {
         position: 'relative'
       }}
     >
-      {/* Fullscreen button - improved for visibility */}
-      <IconButton
-        onClick={toggleFullscreen}
-        sx={{
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          backgroundColor: 'rgba(0, 0, 0, 0.6)',
-          color: 'white',
-          zIndex: 9999,
-          padding: '12px',
-          '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            transform: 'scale(1.1)',
-          },
-          transition: 'transform 0.2s ease, background-color 0.2s ease',
-          // Add a subtle glow effect
-          boxShadow: isFullscreen ? '0 0 10px rgba(255, 255, 255, 0.3)' : 'none'
-        }}
-      >
-        {isFullscreen ? <FullscreenExit fontSize="large" /> : <Fullscreen fontSize="large" />}
-      </IconButton>
+      {/* Fullscreen functionality remains but button is removed */}
       
       <VerticalVideoFeed 
         isMobile={false} // Force desktop mode
