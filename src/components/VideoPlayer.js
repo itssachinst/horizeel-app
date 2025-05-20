@@ -1849,9 +1849,9 @@ const VideoPlayer = ({
   // Add handleSeekChange function
   const handleSeekChange = (e) => {
     if (!videoRef.current) return;
-    
+
     try {
-      const video = videoRef.current;
+    const video = videoRef.current;
       
       // Ensure video is loaded and has a valid duration
       if (isNaN(video.duration) || !isFinite(video.duration) || video.duration <= 0) {
@@ -1859,15 +1859,15 @@ const VideoPlayer = ({
         return;
       }
       
-      const progressBar = e.currentTarget;
-      const rect = progressBar.getBoundingClientRect();
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
       
       // Check if valid coordinates
       if (!rect.width) return;
       
       const relativeX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-      const percentage = relativeX / rect.width;
-      
+    const percentage = relativeX / rect.width;
+
       // Ensure percentage is between 0 and 1
       const safePercentage = Math.max(0, Math.min(percentage, 1));
       
@@ -1876,8 +1876,8 @@ const VideoPlayer = ({
       
       // Validate time before setting
       if (isFinite(newTime) && newTime >= 0 && newTime <= video.duration) {
-        video.currentTime = newTime;
-        setCurrentTime(newTime);
+    video.currentTime = newTime;
+    setCurrentTime(newTime);
       } else {
         console.warn('Invalid seek time calculated:', newTime);
       }

@@ -23,7 +23,7 @@ import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 import { useVideoContext } from "../contexts/VideoContext";
 import { formatViewCount, formatDuration } from "../utils/videoUtils";
-import HeroThumbnail from "../components/HeroThumbnail";
+// import HeroThumbnail from "../components/HeroThumbnail";
 
 const HomePage = () => {
   const { 
@@ -432,6 +432,7 @@ const HomePage = () => {
       {showMobilePromo && <MobileAppPromo />}
       
       {/* Hero Thumbnail Banner */}
+      {/*
       {!isSearching && (
         <Box 
           sx={{ 
@@ -451,6 +452,7 @@ const HomePage = () => {
           />
         </Box>
       )}
+      */}
       
       {isSearching && (
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
