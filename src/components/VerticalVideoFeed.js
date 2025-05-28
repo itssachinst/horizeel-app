@@ -473,6 +473,8 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
                 onPrevVideo={goToPrevVideo}
                 isFullscreen={isFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
+                // CRITICAL: Force mute for non-current videos to prevent audio overlap
+                forceMuted={index !== currentIndex}
               />
             </Box>
           );

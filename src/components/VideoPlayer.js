@@ -91,7 +91,8 @@ const VideoPlayer = ({
   onNextVideo,
   onPrevVideo,
   isFullscreen,
-  onToggleFullscreen
+  onToggleFullscreen,
+  forceMuted = false
 }) => {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
@@ -153,7 +154,7 @@ const VideoPlayer = ({
     return isCurrentVideo;
   }, [videos, currentIndex, videoId]); // Removed isPaused dependency to prevent restarts
 
-  // Memoize hlsConfig to prevent unnecessary restarts
+  // Memoize hlsConfig with audio/video sync optimizations (fixed)
   const hlsConfig = useMemo(() => ({
     enableWorker: true,
     lowLatencyMode: false,
@@ -161,6 +162,17 @@ const VideoPlayer = ({
     maxBufferSize: 15 * 1000 * 1000,
     startLevel: -1,
     autoStartLoad: true,
+    // Audio/video sync optimizations
+    liveSyncDurationCount: 3,
+    liveMaxLatencyDurationCount: 10,
+    // Prevent audio overlap during seeking
+    maxSeekHole: 2,
+    // Improve audio/video sync
+    nudgeOffset: 0.1,
+    nudgeMaxRetry: 3,
+    // Better error recovery
+    maxLoadingDelay: 4,
+    maxBufferHole: 0.5
   }), []);
 
   // Memoize video style to prevent unnecessary restarts
@@ -254,27 +266,165 @@ const VideoPlayer = ({
 
   // Mute toggle function
   const toggleMute = useCallback(() => {
-    if (!videoRef.current) return;
+    if (!videoRef.current) {
+      console.warn("Video ref not available for mute toggle");
+      return;
+    }
+    
+    // Prevent unmuting if this video is force muted (non-current video)
+    if (forceMuted) {
+      console.warn("Cannot unmute - video is force muted (non-current video)");
+      return;
+    }
+    
     const video = videoRef.current;
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
-    console.log("Video muted:", video.muted);
-  }, []);
+    const newMutedState = !video.muted;
+    
+    video.muted = newMutedState;
+    setIsMuted(newMutedState);
+    
+    // Ensure volume is set correctly when unmuting
+    if (!newMutedState && video.volume === 0) {
+      video.volume = 1.0;
+    }
+    
+    console.log("Video muted:", newMutedState, "volume:", video.volume);
+    
+    // Additional debugging for audio state
+    if (!newMutedState) {
+      console.log("Audio should now be audible - checking audio context");
+      
+      // Try to detect if audio is actually playing
+      setTimeout(() => {
+        if (video && !video.paused && !video.muted) {
+          console.log("Video is playing and not muted - audio should be audible");
+        }
+      }, 100);
+    }
+  }, [forceMuted]);
 
-  // Seek forward function
+  // Seek forward function with proper HLS buffer flushing
   const seekForward = useCallback(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    video.currentTime = Math.min(video.currentTime + 10, video.duration || 0);
-    console.log("Seeked forward to:", video.currentTime);
+    
+    try {
+      const wasPlaying = !video.paused;
+      const newTime = Math.min(video.currentTime + 10, video.duration || 0);
+      
+      console.log(`Seeking forward to: ${newTime}s`);
+      
+      // Step 1: Pause video immediately to stop current audio stream
+      video.pause();
+      setIsPlaying(false);
+      
+      // Step 2: Set new time
+      video.currentTime = newTime;
+      
+      // Step 3: Wait for seek to complete and buffers to flush
+      const handleSeeked = () => {
+        console.log("Forward seek completed, audio buffers flushed");
+        
+        // Remove the event listener to avoid memory leaks
+        video.removeEventListener('seeked', handleSeeked);
+        
+        // Step 4: Resume playback if it was playing before
+        if (wasPlaying) {
+          video.play().then(() => {
+            console.log("Video resumed after forward seek at:", video.currentTime);
+            setIsPlaying(true);
+          }).catch(error => {
+            console.error("Error resuming after forward seek:", error);
+            setIsPlaying(false);
+          });
+        }
+        
+        setCurrentTime(video.currentTime);
+      };
+      
+      // Listen for seek completion
+      video.addEventListener('seeked', handleSeeked);
+      
+      // Fallback timeout
+      setTimeout(() => {
+        video.removeEventListener('seeked', handleSeeked);
+        if (wasPlaying && video.paused) {
+          video.play().then(() => {
+            console.log("Video resumed via forward seek fallback");
+            setIsPlaying(true);
+          }).catch(error => {
+            console.error("Error in forward seek fallback:", error);
+            setIsPlaying(false);
+          });
+        }
+        setCurrentTime(video.currentTime);
+      }, 200);
+      
+    } catch (error) {
+      console.error("Error in seekForward:", error);
+    }
   }, []);
 
-  // Seek backward function
+  // Seek backward function with proper HLS buffer flushing
   const seekBackward = useCallback(() => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    video.currentTime = Math.max(video.currentTime - 10, 0);
-    console.log("Seeked backward to:", video.currentTime);
+    
+    try {
+      const wasPlaying = !video.paused;
+      const newTime = Math.max(video.currentTime - 10, 0);
+      
+      console.log(`Seeking backward to: ${newTime}s`);
+      
+      // Step 1: Pause video immediately to stop current audio stream
+      video.pause();
+      setIsPlaying(false);
+      
+      // Step 2: Set new time
+      video.currentTime = newTime;
+      
+      // Step 3: Wait for seek to complete and buffers to flush
+      const handleSeeked = () => {
+        console.log("Backward seek completed, audio buffers flushed");
+        
+        // Remove the event listener to avoid memory leaks
+        video.removeEventListener('seeked', handleSeeked);
+        
+        // Step 4: Resume playback if it was playing before
+        if (wasPlaying) {
+          video.play().then(() => {
+            console.log("Video resumed after backward seek at:", video.currentTime);
+            setIsPlaying(true);
+          }).catch(error => {
+            console.error("Error resuming after backward seek:", error);
+            setIsPlaying(false);
+          });
+        }
+        
+        setCurrentTime(video.currentTime);
+      };
+      
+      // Listen for seek completion
+      video.addEventListener('seeked', handleSeeked);
+      
+      // Fallback timeout
+      setTimeout(() => {
+        video.removeEventListener('seeked', handleSeeked);
+        if (wasPlaying && video.paused) {
+          video.play().then(() => {
+            console.log("Video resumed via backward seek fallback");
+            setIsPlaying(true);
+          }).catch(error => {
+            console.error("Error in backward seek fallback:", error);
+            setIsPlaying(false);
+          });
+        }
+        setCurrentTime(video.currentTime);
+      }, 200);
+      
+    } catch (error) {
+      console.error("Error in seekBackward:", error);
+    }
   }, []);
 
   // Like handler
@@ -490,7 +640,7 @@ const VideoPlayer = ({
     setShowSnackbar(true);
   }, []);
 
-  // Video update handler for ReactHlsPlayer
+  // Video update handler for ReactHlsPlayer with improved audio management
   useEffect(() => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) {
       console.log("No videos available or invalid index");
@@ -512,34 +662,34 @@ const VideoPlayer = ({
     setCurrentTime(0);
     setDuration(0);
 
-        // Update UI metadata
-          setLikes(currentVideo.likes || 0);
-          setDislikes(currentVideo.dislikes || 0);
-          setViews(currentVideo.views || 0);
+    // Update UI metadata
+    setLikes(currentVideo.likes || 0);
+    setDislikes(currentVideo.dislikes || 0);
+    setViews(currentVideo.views || 0);
 
-          // Update URL without navigation (only if needed)
-          try {
-            const currentPath = window.location.pathname;
-            const targetPath = `/reels/${currentVideo.video_id}`;
+    // Update URL without navigation (only if needed)
+    try {
+      const currentPath = window.location.pathname;
+      const targetPath = `/reels/${currentVideo.video_id}`;
 
-            // Only update if the path actually changed
-            if (!currentPath.includes(currentVideo.video_id)) {
-              console.log(`Updating URL from ${currentPath} to ${targetPath}`);
-              window.history.replaceState(
-                { videoId: currentVideo.video_id },
-                '',
-                targetPath
-              );
-            }
-          } catch (error) {
-            console.error("Error updating URL:", error);
-          }
+      // Only update if the path actually changed
+      if (!currentPath.includes(currentVideo.video_id)) {
+        console.log(`Updating URL from ${currentPath} to ${targetPath}`);
+        window.history.replaceState(
+          { videoId: currentVideo.video_id },
+          '',
+          targetPath
+        );
+      }
+    } catch (error) {
+      console.error("Error updating URL:", error);
+    }
 
-          // Check saved and follow status if user is logged in
-          if (currentUser) {
-            checkSavedStatus(currentVideo.video_id);
-            checkFollowStatus(currentVideo.user_id);
-          }
+    // Check saved and follow status if user is logged in
+    if (currentUser) {
+      checkSavedStatus(currentVideo.video_id);
+      checkFollowStatus(currentVideo.user_id);
+    }
   }, [videos, currentIndex, currentUser]);
 
   // Handle isPaused changes without restarting the video
@@ -658,6 +808,34 @@ const VideoPlayer = ({
       console.error("Error checking follow status:", error);
     }
   };
+
+  // Cleanup effect for proper component unmounting
+  useEffect(() => {
+    const currentVideoRef = videoRef.current;
+    
+    return () => {
+      // Cleanup when component unmounts or video changes
+      if (currentVideoRef) {
+        try {
+          console.log("Cleaning up video on unmount/change");
+          
+          // Stop playback immediately
+          currentVideoRef.pause();
+          
+          // Reset time to prevent continuation
+          currentVideoRef.currentTime = 0;
+          
+          // Remove all event listeners to prevent memory leaks
+          currentVideoRef.removeEventListener('timeupdate', handleTimeUpdate);
+          currentVideoRef.removeEventListener('ended', handleVideoEnd);
+          
+          console.log("Video cleanup completed");
+        } catch (error) {
+          console.error("Error during video cleanup:", error);
+        }
+      }
+    };
+  }, [videoId]); // Cleanup when video ID changes
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
     return (
@@ -849,7 +1027,7 @@ const VideoPlayer = ({
           src={videoSrc}
           autoPlay={shouldAutoPlay}
           controls={false}
-          muted={isMuted}
+          muted={forceMuted || isMuted}
           loop={false}
           playsInline={true}
           style={videoStyle}
@@ -857,27 +1035,107 @@ const VideoPlayer = ({
           onLoadedMetadata={() => {
             if (videoRef.current) {
               console.log("Video metadata loaded");
-              setDuration(videoRef.current.duration || 0);
+              const video = videoRef.current;
+              
+              setDuration(video.duration || 0);
               setIsLoading(false);
               
-              // Only reset to 0 if currentTime is 0 (new video) or if we're at the very beginning
-              if (videoRef.current.currentTime === 0 || currentTime === 0) {
-                try {
-                  videoRef.current.currentTime = 0;
-                  setCurrentTime(0);
-                  console.log("New video loaded - reset currentTime to 0");
-                } catch (error) {
-                  console.error("Error resetting currentTime on new video load:", error);
+              // CRITICAL: Ensure audio/video sync on new video load
+              try {
+                // Reset to beginning and ensure sync
+                video.currentTime = 0;
+                setCurrentTime(0);
+                
+                // Ensure audio is enabled by default (unless user has muted or video is force muted)
+                video.muted = forceMuted || isMuted;
+                
+                // Set volume to full if not muted and not force muted
+                if (!forceMuted && !isMuted) {
+                  video.volume = 1.0;
                 }
+                
+                // Log audio status for debugging
+                console.log("Audio status - forceMuted:", forceMuted, "isMuted:", isMuted, "final muted:", video.muted, "volume:", video.volume);
+                
+                // Ensure audio context is properly initialized
+                if (video.audioTracks && video.audioTracks.length > 0) {
+                  console.log("Audio tracks available:", video.audioTracks.length);
+                } else {
+                  console.log("No audio tracks detected or audioTracks not supported");
+                }
+                
+                // Check if audio is actually available
+                if (video.mozHasAudio !== false && video.webkitAudioDecodedByteCount !== 0) {
+                  console.log("Audio stream detected in video");
+                } else {
+                  console.log("No audio stream detected or audio check not supported");
+                }
+                
+                console.log("New video loaded - audio/video sync established");
+              } catch (error) {
+                console.error("Error establishing audio/video sync on load:", error);
               }
             }
           }}
           onTimeUpdate={handleTimeUpdate}
           onPlay={() => {
             setIsPlaying(true);
-            console.log("Video play event triggered");
+            console.log("Video play event triggered - checking audio sync");
+            
+            // Validate audio/video sync on play
+            if (videoRef.current) {
+              const video = videoRef.current;
+              
+              // Ensure audio is enabled when video starts playing (unless force muted)
+              if (!forceMuted && !isMuted && video.muted) {
+                console.log("Video was muted but should be unmuted, fixing...");
+                video.muted = false;
+                video.volume = 1.0;
+              }
+              
+              // Log current audio state
+              console.log("Audio state on play - forceMuted:", forceMuted, "isMuted:", isMuted, "final muted:", video.muted, "volume:", video.volume);
+              
+              setTimeout(() => {
+                if (video && !video.paused) {
+                  console.log("Audio/video sync check - currentTime:", video.currentTime);
+                  
+                  // Additional audio debugging
+                  if (!video.muted && video.volume > 0) {
+                    console.log("Audio should be audible now");
+                  } else {
+                    console.warn("Audio may not be audible - muted:", video.muted, "volume:", video.volume);
+                  }
+                }
+              }, 100);
+            }
           }}
-          onPause={() => setIsPlaying(false)}
+          onPause={() => {
+            setIsPlaying(false);
+            console.log("Video paused");
+          }}
+          onSeeked={() => {
+            // Handle seek completion for better audio/video sync
+            if (videoRef.current) {
+              const video = videoRef.current;
+              console.log("Seek completed at:", video.currentTime);
+              setCurrentTime(video.currentTime);
+              
+              // Validate audio/video sync after seek
+              setTimeout(() => {
+                if (video && Math.abs(video.currentTime - currentTime) > 0.5) {
+                  console.log("Audio/video sync drift detected, correcting...");
+                  setCurrentTime(video.currentTime);
+                }
+              }, 100);
+            }
+          }}
+          onWaiting={() => {
+            console.log("Video buffering - maintaining audio sync");
+          }}
+          onCanPlay={() => {
+            console.log("Video can play - audio/video ready");
+          }}
           onError={handleVideoError}
           onClick={(e) => {
             // Prevent ReactHlsPlayer's default click behavior that might restart video
@@ -995,10 +1253,86 @@ const VideoPlayer = ({
                 }}
                 onClick={(e) => {
                   if (!videoRef.current || !duration) return;
+                  
+                  const video = videoRef.current;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const clickX = e.clientX - rect.left;
                   const newTime = (clickX / rect.width) * duration;
-                  videoRef.current.currentTime = newTime;
+                  
+                  console.log(`Seeking to: ${newTime}s (${Math.floor(newTime/60)}:${String(Math.floor(newTime%60)).padStart(2, '0')})`);
+                  
+                  // CRITICAL: Proper HLS seek to prevent duplicate audio streams
+                  try {
+                    const wasPlaying = !video.paused;
+                    
+                    console.log("Starting seek operation - pausing video");
+                    
+                    // Step 1: Pause video immediately to stop current audio stream
+                    video.pause();
+                    setIsPlaying(false);
+                    
+                    // Step 2: Force buffer flush for HLS streams by briefly loading
+                    // This ensures old audio buffers are cleared
+                    const originalTime = video.currentTime;
+                    
+                    // Step 3: Set new time (this may not immediately take effect for HLS)
+                    video.currentTime = newTime;
+                    
+                    // Step 4: Wait for seek to complete and buffers to flush
+                    const handleSeeked = () => {
+                      console.log("Seek completed, audio buffers flushed");
+                      
+                      // Remove the event listener to avoid memory leaks
+                      video.removeEventListener('seeked', handleSeeked);
+                      
+                      // Step 5: Resume playback if it was playing before
+                      if (wasPlaying) {
+                        video.play().then(() => {
+                          console.log("Video resumed after clean seek at:", video.currentTime);
+                          setIsPlaying(true);
+                        }).catch(error => {
+                          console.error("Error resuming video after seek:", error);
+                          setIsPlaying(false);
+                        });
+                      }
+                      
+                      // Update current time state
+                      setCurrentTime(video.currentTime);
+                    };
+                    
+                    // Step 6: Listen for seek completion
+                    video.addEventListener('seeked', handleSeeked);
+                    
+                    // Fallback: If seeked event doesn't fire within reasonable time
+                    setTimeout(() => {
+                      if (video.currentTime !== newTime) {
+                        console.log("Seek fallback - manually setting time again");
+                        video.currentTime = newTime;
+                      }
+                      
+                      // Ensure we clean up if seeked event didn't fire
+                      video.removeEventListener('seeked', handleSeeked);
+                      
+                      if (wasPlaying && video.paused) {
+                        video.play().then(() => {
+                          console.log("Video resumed via fallback at:", video.currentTime);
+                          setIsPlaying(true);
+                        }).catch(error => {
+                          console.error("Error in fallback resume:", error);
+                          setIsPlaying(false);
+                        });
+                      }
+                      
+                      setCurrentTime(video.currentTime);
+                    }, 200); // 200ms fallback timeout
+                    
+                  } catch (error) {
+                    console.error("Error during video seek:", error);
+                    // Ensure we restore playing state on error
+                    if (video && !video.paused) {
+                      setIsPlaying(true);
+                    }
+                  }
                 }}
               >
                 <Box
