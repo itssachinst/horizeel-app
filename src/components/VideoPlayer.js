@@ -956,67 +956,7 @@ const VideoPlayer = ({
             </Box>
               </Box>
 
-              {/* Right side - Stats */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <VisibilityIcon sx={{ fontSize: 20, color: 'white' }} />
-                  <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold' }}>
-                    {views || 213}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton
-                    onClick={handleLike}
-                    sx={{
-                      color: isLiked ? '#00ff00' : 'white',
-                      p: 0.5,
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                    }}
-                  >
-                    <ThumbUp fontSize="small" />
-                  </IconButton>
-                  <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold', minWidth: '20px' }}>
-                    {likes || 2}
-                  </Typography>
-                  
-                  <IconButton
-                    onClick={async () => {
-                      if (!currentUser) {
-                        setSnackbarMessage("Please log in to dislike videos");
-                        setShowSnackbar(true);
-                        return;
-                      }
-                      try {
-                        await incrementVideoDislike(currentVideo.video_id);
-                        setIsDisliked(!isDisliked);
-                        setDislikes(prev => isDisliked ? prev - 1 : prev + 1);
-                        if (isLiked) {
-                          setIsLiked(false);
-                          setLikes(prev => prev - 1);
-                        }
-                      } catch (error) {
-                        console.error("Error disliking video:", error);
-                      }
-                    }}
-                    sx={{
-                      color: isDisliked ? '#ff0000' : 'white',
-                      p: 0.5,
-                      ml: 1,
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                    }}
-                  >
-                    <ThumbDown fontSize="small" />
-                  </IconButton>
-                  <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold', minWidth: '20px' }}>
-                    {dislikes || 0}
-                  </Typography>
-                </Box>
-              </Box>
+              
             </Box>
           </Slide>
 
