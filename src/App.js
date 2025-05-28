@@ -34,7 +34,7 @@ const AppLayout = ({ children }) => {
     <>
       {!isAuthPage && !isReelsPage && (!isHomePage || !isMobile) && <Header />}
       <Box sx={{
-        pt: 0, // Remove padding top
+          pt: 0, // Remove padding top
         minHeight: '100vh',
         bgcolor: theme.palette.background.default
       }}>
@@ -76,52 +76,52 @@ function App() {
               <Route path="/reels" element={<VerticalFeedPage />} />
               <Route path="/reels/:id" element={<VerticalFeedPage />} />
               <Route path="/demo/" element={
-                <AppLayout>
-                  <HomePage />
-                </AppLayout>
+                  <AppLayout>
+                    <HomePage />
+                  </AppLayout>
               } />
               <Route path="/demo/*" element={
-                <AppLayout>
-                  <HomePage />
-                </AppLayout>
+                  <AppLayout>
+                    <HomePage />
+                  </AppLayout>
               } />
               <Route path="/profile" element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <ProfilePage />
-                  </AppLayout>
-                </ProtectedRoute>
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <ProfilePage />
+                    </AppLayout>
+                  </ProtectedRoute>
               } />
               <Route path="/upload" element={
-                <ProtectedRoute>
+                  <ProtectedRoute>
                   <UploadProtectedRoute>
                     <AppLayout>
                       <UploadVideo />
                     </AppLayout>
                   </UploadProtectedRoute>
-                </ProtectedRoute>
+                  </ProtectedRoute>
               } />
               <Route path="/followers" element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <FollowersPage />
-                  </AppLayout>
-                </ProtectedRoute>
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <FollowersPage />
+                    </AppLayout>
+                  </ProtectedRoute>
               } />
               <Route path="/search" element={
-                <AppLayout>
-                  <SearchPage />
-                </AppLayout>
+                  <AppLayout>
+                    <SearchPage />
+                  </AppLayout>
               } />
               <Route path="/settings" element={
-                <AppLayout>
-                  <SettingsPage />
-                </AppLayout>
+                  <AppLayout>
+                    <SettingsPage />
+                  </AppLayout>
               } />
               <Route path="/feedback" element={
-                <AppLayout>
-                  <FeedbackPage />
-                </AppLayout>
+                  <AppLayout>
+                    <FeedbackPage />
+                  </AppLayout>
               } />
             </Routes>
           </Router>

@@ -22,32 +22,92 @@ const VerticalFeedPage = () => {
     resetVideos
   } = useVideoContext();
   
-  // Handle toggling fullscreen mode - moved earlier to avoid using before definition
+  // Handle toggling fullscreen mode with improved error handling and state validation
   const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      console.warn("Container ref not available for fullscreen toggle");
+      return;
+    }
+    
+    // Check current browser fullscreen state
+    const isCurrentlyFullscreen = !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+    
+    // Check if our container is the fullscreen element
+    const isOurContainerFullscreen = (
+      document.fullscreenElement === containerRef.current ||
+      document.webkitFullscreenElement === containerRef.current ||
+      document.mozFullScreenElement === containerRef.current ||
+      document.msFullscreenElement === containerRef.current
+    );
+    
+    console.log("Toggle fullscreen:", {
+      reactState: isFullscreen,
+      browserState: isCurrentlyFullscreen,
+      isOurContainer: isOurContainerFullscreen,
+      action: !isFullscreen ? 'enter' : 'exit'
+    });
     
     if (!isFullscreen) {
       // Enter fullscreen
-      if (containerRef.current.requestFullscreen) {
-        containerRef.current.requestFullscreen();
-      } else if (containerRef.current.webkitRequestFullscreen) {
-        containerRef.current.webkitRequestFullscreen();
-      } else if (containerRef.current.mozRequestFullScreen) {
-        containerRef.current.mozRequestFullScreen();
-      } else if (containerRef.current.msRequestFullscreen) {
-        containerRef.current.msRequestFullscreen();
+      // If another element is already fullscreen, exit it first
+      if (isCurrentlyFullscreen && !isOurContainerFullscreen) {
+        console.log("Another element is fullscreen, exiting first");
+        if (document.exitFullscreen) {
+          document.exitFullscreen().then(() => {
+            // Try again after a short delay
+            setTimeout(() => toggleFullscreen(), 100);
+          });
+        }
+        return;
+      }
+      
+      // Enter fullscreen on our container
+      const enterPromise = containerRef.current.requestFullscreen?.() ||
+        containerRef.current.webkitRequestFullscreen?.() ||
+        containerRef.current.mozRequestFullScreen?.() ||
+        containerRef.current.msRequestFullscreen?.();
+        
+      if (enterPromise) {
+        enterPromise
+          .then(() => {
+            console.log("Successfully entered fullscreen");
+          })
+          .catch(error => {
+            console.error("Error entering fullscreen:", error);
+            // Reset state if failed
+            setIsFullscreen(false);
+          });
+      } else {
+        console.error("No fullscreen API available");
       }
     } else {
       // Exit fullscreen - mark that user manually exited
       userExitedFullscreenRef.current = true;
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen();
-      } else if (document.mozCancelFullScreen) {
-        document.mozCancelFullScreen();
-      } else if (document.msExitFullscreen) {
-        document.msExitFullscreen();
+      
+      const exitPromise = document.exitFullscreen?.() ||
+        document.webkitExitFullscreen?.() ||
+        document.mozCancelFullScreen?.() ||
+        document.msExitFullscreen?.();
+        
+      if (exitPromise) {
+        exitPromise
+          .then(() => {
+            console.log("Successfully exited fullscreen");
+          })
+          .catch(error => {
+            console.error("Error exiting fullscreen:", error);
+            // Force state update if failed
+            setIsFullscreen(false);
+          });
+      } else {
+        console.error("No fullscreen exit API available");
+        // Force state update
+        setIsFullscreen(false);
       }
     }
   }, [isFullscreen]);
@@ -129,7 +189,7 @@ const VerticalFeedPage = () => {
     }
   }, [videos, currentIndex]);
   
-  // Monitor fullscreen changes
+  // Monitor fullscreen changes with improved synchronization
   useEffect(() => {
     const checkFullscreen = () => {
       const isDocumentFullscreen = !!(
@@ -139,12 +199,39 @@ const VerticalFeedPage = () => {
         document.msFullscreenElement
       );
       
+      // Validate that the fullscreen element is our container
+      const isOurContainerFullscreen = (
+        document.fullscreenElement === containerRef.current ||
+        document.webkitFullscreenElement === containerRef.current ||
+        document.mozFullScreenElement === containerRef.current ||
+        document.msFullscreenElement === containerRef.current
+      );
+      
+      console.log("Fullscreen state check:", {
+        isDocumentFullscreen,
+        isOurContainerFullscreen,
+        currentState: isFullscreen,
+        fullscreenElement: document.fullscreenElement?.tagName || 'none'
+      });
+      
+      // Only update state if the fullscreen element is our container or no element is fullscreen
+      if (isDocumentFullscreen && !isOurContainerFullscreen) {
+        // Another element is fullscreen, not our container
+        console.warn("Another element is fullscreen, not our container");
+        return;
+      }
+      
       // If we were in fullscreen and now we're not, user exited fullscreen
       if (isFullscreen && !isDocumentFullscreen) {
+        console.log("User exited fullscreen");
         userExitedFullscreenRef.current = true;
       }
       
-      setIsFullscreen(isDocumentFullscreen);
+      // Update state only if it actually changed
+      if (isFullscreen !== isDocumentFullscreen) {
+        console.log(`Updating fullscreen state: ${isFullscreen} -> ${isDocumentFullscreen}`);
+        setIsFullscreen(isDocumentFullscreen);
+      }
     };
     
     // Add event listeners for fullscreen changes
@@ -153,6 +240,9 @@ const VerticalFeedPage = () => {
     document.addEventListener('mozfullscreenchange', checkFullscreen);
     document.addEventListener('MSFullscreenChange', checkFullscreen);
     
+    // Initial check to sync state
+    checkFullscreen();
+    
     return () => {
       // Clean up event listeners
       document.removeEventListener('fullscreenchange', checkFullscreen);
@@ -160,7 +250,46 @@ const VerticalFeedPage = () => {
       document.removeEventListener('mozfullscreenchange', checkFullscreen);
       document.removeEventListener('MSFullscreenChange', checkFullscreen);
     };
-  }, []);
+  }, [isFullscreen]); // Add isFullscreen as dependency for proper comparison
+  
+  // Monitor video navigation to ensure fullscreen state is preserved
+  useEffect(() => {
+    // When video changes, verify fullscreen state is still correct
+    if (videos.length > 0) {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      
+      const isOurContainerFullscreen = (
+        document.fullscreenElement === containerRef.current ||
+        document.webkitFullscreenElement === containerRef.current ||
+        document.mozFullScreenElement === containerRef.current ||
+        document.msFullscreenElement === containerRef.current
+      );
+      
+      // If there's a mismatch, log it for debugging
+      if (isFullscreen !== isCurrentlyFullscreen) {
+        console.log("Fullscreen state mismatch after navigation:", {
+          reactState: isFullscreen,
+          browserState: isCurrentlyFullscreen,
+          isOurContainer: isOurContainerFullscreen,
+          currentVideoIndex: currentIndex
+        });
+        
+        // Sync state if needed
+        if (isCurrentlyFullscreen && isOurContainerFullscreen && !isFullscreen) {
+          console.log("Syncing React state to match browser state");
+          setIsFullscreen(true);
+        } else if (!isCurrentlyFullscreen && isFullscreen) {
+          console.log("Syncing React state - browser exited fullscreen");
+          setIsFullscreen(false);
+        }
+      }
+    }
+  }, [currentIndex, isFullscreen]); // Monitor both video changes and fullscreen state
   
   // Enhanced keyboard support with proper navigation
   useEffect(() => {
@@ -218,6 +347,7 @@ const VerticalFeedPage = () => {
         isMobile={false} // Force desktop mode
         isTablet={false} // Force desktop mode
         isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
       />
     </Box>
   );

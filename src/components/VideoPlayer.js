@@ -89,7 +89,9 @@ const VideoPlayer = ({
   shouldPreload,
   visibilityState,
   onNextVideo,
-  onPrevVideo
+  onPrevVideo,
+  isFullscreen,
+  onToggleFullscreen
 }) => {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
@@ -104,7 +106,6 @@ const VideoPlayer = ({
   const [likes, setLikes] = useState(0);
   const [dislikes, setDislikes] = useState(0);
   const [views, setViews] = useState(0);
-  const [isFullScreen, setIsFullScreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
@@ -242,34 +243,14 @@ const VideoPlayer = ({
     }
   }, [togglePlayPause]);
 
-  // Fullscreen toggle function
+  // Fullscreen toggle function - now uses parent's function
   const toggleFullscreen = useCallback(() => {
-    if (!videoContainerRef.current) return;
-
-    try {
-      if (fullscreenAPI.isFullscreen()) {
-        fullscreenAPI.exitFullscreen()
-          .then(() => {
-            setIsFullScreen(false);
-            console.log("Exited fullscreen");
-          })
-          .catch(error => {
-            console.error("Error exiting fullscreen:", error);
-          });
-              } else {
-        fullscreenAPI.enterFullscreen(videoContainerRef.current)
-          .then(() => {
-            setIsFullScreen(true);
-            console.log("Entered fullscreen");
-          })
-          .catch(error => {
-            console.error("Error entering fullscreen:", error);
-          });
-      }
-    } catch (error) {
-      console.error("Error in toggleFullscreen:", error);
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
+    } else {
+      console.warn("No fullscreen toggle function provided by parent");
     }
-  }, []);
+  }, [onToggleFullscreen]);
 
   // Mute toggle function
   const toggleMute = useCallback(() => {
@@ -470,7 +451,7 @@ const VideoPlayer = ({
     
     // Update watch history with completed flag if user is logged in
     if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-      const video = videoRef.current;
+    const video = videoRef.current;
       const currentVideo = videos[currentIndex];
       
       if (video && currentVideo) {
@@ -513,9 +494,9 @@ const VideoPlayer = ({
   useEffect(() => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) {
       console.log("No videos available or invalid index");
-        return;
-      }
-      
+      return;
+    }
+
     const currentVideo = videos[currentIndex];
     if (!currentVideo || !currentVideo.video_url) {
       console.log("Current video or URL is missing");
@@ -531,34 +512,34 @@ const VideoPlayer = ({
     setCurrentTime(0);
     setDuration(0);
 
-    // Update UI metadata
-    setLikes(currentVideo.likes || 0);
-    setDislikes(currentVideo.dislikes || 0);
-    setViews(currentVideo.views || 0);
+        // Update UI metadata
+          setLikes(currentVideo.likes || 0);
+          setDislikes(currentVideo.dislikes || 0);
+          setViews(currentVideo.views || 0);
 
-    // Update URL without navigation (only if needed)
-    try {
-      const currentPath = window.location.pathname;
-      const targetPath = `/reels/${currentVideo.video_id}`;
+          // Update URL without navigation (only if needed)
+          try {
+            const currentPath = window.location.pathname;
+            const targetPath = `/reels/${currentVideo.video_id}`;
 
-      // Only update if the path actually changed
-      if (!currentPath.includes(currentVideo.video_id)) {
-        console.log(`Updating URL from ${currentPath} to ${targetPath}`);
-        window.history.replaceState(
-          { videoId: currentVideo.video_id },
-          '',
-          targetPath
-        );
-      }
-    } catch (error) {
-      console.error("Error updating URL:", error);
-    }
+            // Only update if the path actually changed
+            if (!currentPath.includes(currentVideo.video_id)) {
+              console.log(`Updating URL from ${currentPath} to ${targetPath}`);
+              window.history.replaceState(
+                { videoId: currentVideo.video_id },
+                '',
+                targetPath
+              );
+            }
+          } catch (error) {
+            console.error("Error updating URL:", error);
+          }
 
-    // Check saved and follow status if user is logged in
-    if (currentUser) {
-      checkSavedStatus(currentVideo.video_id);
-      checkFollowStatus(currentVideo.user_id);
-    }
+          // Check saved and follow status if user is logged in
+          if (currentUser) {
+            checkSavedStatus(currentVideo.video_id);
+            checkFollowStatus(currentVideo.user_id);
+          }
   }, [videos, currentIndex, currentUser]);
 
   // Handle isPaused changes without restarting the video
@@ -574,7 +555,7 @@ const VideoPlayer = ({
     if (isPaused && !video.paused) {
       console.log("Pausing video due to isPaused prop change");
       video.pause();
-      setIsPlaying(false);
+                  setIsPlaying(false);
     } else if (!isPaused && video.paused) {
       console.log("Resuming video due to isPaused prop change");
       video.play().then(() => {
@@ -645,27 +626,13 @@ const VideoPlayer = ({
     if (isCurrentVideo) {
       console.log("Adding keyboard listener for current video:", videoId);
       document.addEventListener('keydown', handleKeyPress);
-      
-      return () => {
+
+    return () => {
         console.log("Removing keyboard listener for video:", videoId);
         document.removeEventListener('keydown', handleKeyPress);
       };
     }
   }, [handleKeyPress, videos, currentIndex, videoId]);
-
-  // Add fullscreen change event listener
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullScreen(fullscreenAPI.isFullscreen());
-    };
-
-    const eventName = fullscreenAPI.fullscreenChangeEventName();
-    document.addEventListener(eventName, handleFullscreenChange);
-    
-    return () => {
-      document.removeEventListener(eventName, handleFullscreenChange);
-    };
-  }, []);
 
   // Check if a video is saved by the current user
   const checkSavedStatus = async (videoId) => {
@@ -680,7 +647,7 @@ const VideoPlayer = ({
   // Check if creator is followed by current user
   const checkFollowStatus = async (creatorId) => {
     if (!currentUser || currentUser.user_id === creatorId) {
-      setIsFollowing(false);
+        setIsFollowing(false);
       return;
     }
 
@@ -1195,7 +1162,7 @@ const VideoPlayer = ({
                       },
                       }}
                     >
-                    {isFullScreen ? <FullscreenExit /> : <Fullscreen />}
+                    {isFullscreen ? <FullscreenExit /> : <Fullscreen />}
                     </IconButton>
                 </Box>
               </Box>

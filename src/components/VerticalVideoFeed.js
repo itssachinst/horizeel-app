@@ -105,7 +105,7 @@ const usePreloader = (videos, currentIndex) => {
  * VerticalVideoFeed - A TikTok-style vertical scrolling video player
  * Uses custom snap behavior and transitions for a smooth experience
  */
-const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen }) => {
+const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscreen }) => {
   const {
     videos,
     currentIndex,
@@ -471,6 +471,8 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen }) => {
                 }
                 onNextVideo={goToNextVideo}
                 onPrevVideo={goToPrevVideo}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={onToggleFullscreen}
               />
             </Box>
           );

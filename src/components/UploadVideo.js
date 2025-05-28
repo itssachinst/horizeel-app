@@ -191,18 +191,38 @@ const UploadVideo = () => {
 
   const handleHashtagChange = (e) => {
     let value = e.target.value;
+    
+    // Remove # if user types it
     if (value.startsWith('#')) {
       value = value.substring(1);
     }
+    
+    // Remove spaces and special characters except letters, numbers, and underscores
+    value = value.replace(/[^a-zA-Z0-9_]/g, '');
+    
     setHashtag(value);
   };
 
   const addHashtag = () => {
     if (hashtag.trim()) {
-      const formattedHashtag = `#${hashtag.trim().replace(/\s+/g, '')}`;
+      const formattedHashtag = `#${hashtag.trim().replace(/\s+/g, '').toLowerCase()}`;
       
-      if (!hashtags.includes(formattedHashtag)) {
+      // Check for duplicates using case-insensitive comparison
+      const isDuplicate = hashtags.some(existingTag => 
+        existingTag.toLowerCase() === formattedHashtag.toLowerCase()
+      );
+      
+      if (!isDuplicate) {
         setHashtags([...hashtags, formattedHashtag]);
+        console.log("Added hashtag:", formattedHashtag);
+        console.log("Current hashtags:", [...hashtags, formattedHashtag]);
+      } else {
+        console.log("Duplicate hashtag prevented:", formattedHashtag);
+        setSnackbar({
+          open: true,
+          message: `Hashtag "${formattedHashtag}" already exists`,
+          severity: "warning"
+        });
       }
       setHashtag("");
     }
@@ -358,9 +378,14 @@ const UploadVideo = () => {
       return;
     }
 
+    // Prepare description with hashtags
     const descriptionWithHashtags = hashtags.length > 0
-      ? `${videoDetails.description}\n\n${hashtags.join(' ')}`
-      : videoDetails.description;
+      ? `${videoDetails.description.trim()}\n\n${hashtags.join(' ')}`
+      : videoDetails.description.trim();
+
+    console.log("Original description:", videoDetails.description);
+    console.log("Hashtags to append:", hashtags);
+    console.log("Final description with hashtags:", descriptionWithHashtags);
 
     const formData = new FormData();
     formData.append("title", videoDetails.title.trim());
@@ -610,9 +635,12 @@ const UploadVideo = () => {
               <Typography variant="subtitle1" sx={{ mb: 1, color: 'white' }}>
                 Add Hashtags
               </Typography>
+              <Typography variant="caption" color="gray" sx={{ mb: 2, display: 'block' }}>
+                Hashtags will be automatically appended to your description. Use letters, numbers, and underscores only.
+              </Typography>
               
               <TextField
-                placeholder="Enter hashtag..."
+                placeholder="Enter hashtag (without #)..."
                 value={hashtag}
                 onChange={handleHashtagChange}
                 onKeyDown={handleHashtagKeyDown}
@@ -635,7 +663,16 @@ const UploadVideo = () => {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ mb: 2 }}
+                InputLabelProps={{ style: { color: 'gray' } }}
+                sx={{ 
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: 'gray' },
+                    '&:hover fieldset': { borderColor: 'white' },
+                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                  },
+                  '& .MuiInputBase-input': { color: 'white' }
+                }}
               />
               
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
@@ -646,10 +683,22 @@ const UploadVideo = () => {
                     onDelete={() => setHashtags(hashtags.filter((_, i) => i !== index))}
                     color="primary"
                     variant="outlined"
-                    icon={<TagIcon />}
+                    // icon={<TagIcon />}
                   />
                 ))}
               </Box>
+              
+              {/* Preview of final description with hashtags */}
+              {hashtags.length > 0 && videoDetails.description.trim() && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#1a1a1a', borderRadius: 1, border: '1px solid #333' }}>
+                  <Typography variant="caption" color="gray" gutterBottom>
+                    Preview - Final Description:
+                  </Typography>
+                  <Typography variant="body2" color="white" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {`${videoDetails.description.trim()}\n\n${hashtags.join(' ')}`}
+                  </Typography>
+                </Box>
+              )}
             </Box>
             
             {uploading ? (
