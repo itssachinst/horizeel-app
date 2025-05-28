@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Box, useTheme, useMediaQuery, CircularProgress } from '@mui/material';
 import VerticalVideoFeed from '../components/VerticalVideoFeed';
 import { useVideoContext } from '../contexts/VideoContext';
@@ -7,12 +7,12 @@ import VIDEO_CACHE from '../utils/videoCache';
 
 const VerticalFeedPage = () => {
   const { id } = useParams(); // Optional video ID to start with
-  const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const containerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Track if user has manually exited fullscreen to prevent auto re-entry
+  const userExitedFullscreenRef = useRef(false);
+  const hasAutoEnteredFullscreenRef = useRef(false);
   
   const { 
     videos, 
@@ -38,7 +38,8 @@ const VerticalFeedPage = () => {
         containerRef.current.msRequestFullscreen();
       }
     } else {
-      // Exit fullscreen
+      // Exit fullscreen - mark that user manually exited
+      userExitedFullscreenRef.current = true;
       if (document.exitFullscreen) {
         document.exitFullscreen();
       } else if (document.webkitExitFullscreen) {
@@ -54,6 +55,10 @@ const VerticalFeedPage = () => {
   // Reset videos on mount to clear any previous feeds
   useEffect(() => {
     resetVideos();
+    
+    // Reset fullscreen tracking on fresh page load
+    userExitedFullscreenRef.current = false;
+    hasAutoEnteredFullscreenRef.current = false;
   }, [resetVideos]);
   
   // Improve handling of video ID
@@ -73,13 +78,23 @@ const VerticalFeedPage = () => {
     }
   }, [id, videos, setCurrentIndex]);
   
-  // Add auto-fullscreen for better experience on direct access
+  // Add auto-fullscreen for better experience on direct access - but respect user choice
   useEffect(() => {
-    // If coming directly to reels with a video ID, enter fullscreen automatically
-    // after a short delay to allow the video to load first
-    if (id && videos.length > 0 && !isFullscreen && containerRef.current) {
+    // Only auto-enter fullscreen if:
+    // 1. Coming directly to reels with a video ID
+    // 2. Haven't already auto-entered fullscreen
+    // 3. User hasn't manually exited fullscreen
+    // 4. Not currently in fullscreen
+    if (id && 
+        videos.length > 0 && 
+        !hasAutoEnteredFullscreenRef.current && 
+        !userExitedFullscreenRef.current && 
+        !isFullscreen && 
+        containerRef.current) {
+      
       const timer = setTimeout(() => {
         toggleFullscreen();
+        hasAutoEnteredFullscreenRef.current = true; // Mark that we've auto-entered
       }, 500);
       
       return () => clearTimeout(timer);
@@ -123,6 +138,12 @@ const VerticalFeedPage = () => {
         document.mozFullScreenElement ||
         document.msFullscreenElement
       );
+      
+      // If we were in fullscreen and now we're not, user exited fullscreen
+      if (isFullscreen && !isDocumentFullscreen) {
+        userExitedFullscreenRef.current = true;
+      }
+      
       setIsFullscreen(isDocumentFullscreen);
     };
     
@@ -151,20 +172,8 @@ const VerticalFeedPage = () => {
       
       // Use Escape key to exit fullscreen
       if (e.key === 'Escape' && isFullscreen) {
+        userExitedFullscreenRef.current = true; // Mark user intent to exit
         toggleFullscreen();
-      }
-      
-      // Proper navigation with arrow keys
-      if (e.key === 'ArrowUp') {
-        // Navigate to previous video
-        if (currentIndex > 0) {
-          setCurrentIndex(currentIndex - 1);
-        }
-      } else if (e.key === 'ArrowDown') {
-        // Navigate to next video
-        if (currentIndex < videos.length - 1) {
-          setCurrentIndex(currentIndex + 1);
-        }
       }
     };
     
@@ -172,7 +181,7 @@ const VerticalFeedPage = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isFullscreen, toggleFullscreen, videos, currentIndex, setCurrentIndex]);
+  }, [isFullscreen, toggleFullscreen]);
   
   // Show loading state if no videos are loaded yet
   if (loading && videos.length === 0) {

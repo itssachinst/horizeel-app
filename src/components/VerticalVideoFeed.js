@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, IconButton, Typography, CircularProgress } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import VideoPlayer from './VideoPlayer';
 import { useVideoContext } from '../contexts/VideoContext';
 import VIDEO_CACHE from '../utils/videoCache';
@@ -457,7 +457,7 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen }) => {
             >
               <VideoPlayer
                 videos={videos}
-                currentIndex={index}
+                currentIndex={currentIndex}
                 setCurrentIndex={setCurrentIndex}
                 isMobile={isMobile}
                 isTablet={isTablet}
@@ -469,6 +469,8 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen }) => {
                     ? (index === currentIndex ? 'active' : 'adjacent') 
                     : 'preload'
                 }
+                onNextVideo={goToNextVideo}
+                onPrevVideo={goToPrevVideo}
               />
             </Box>
           );

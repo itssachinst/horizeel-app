@@ -1,17 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
-import { TextField, Button, Card, CardContent, Typography, Box, CircularProgress, Chip, InputAdornment, IconButton } from "@mui/material";
+import { 
+  TextField, Button, Card, CardContent, Typography, Box, CircularProgress, 
+  Chip, InputAdornment, IconButton, Alert, Snackbar, Dialog, DialogTitle, 
+  DialogContent, DialogActions, LinearProgress, Stepper, Step, StepLabel 
+} from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { Add as AddIcon, Tag as TagIcon } from "@mui/icons-material";
-import { API_BASE_URL, uploadVideo } from "../api";
+import { 
+  Add as AddIcon, Tag as TagIcon, CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon, Schedule as ScheduleIcon, PlayArrow as PlayArrowIcon
+} from "@mui/icons-material";
+import { API_BASE_URL } from "../api";
 
 const UploadVideo = () => {
   const [videoDetails, setVideoDetails] = useState({
     title: "",
     description: "",
-    category: "",
-    privacy: "public",
   });
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
@@ -21,12 +26,88 @@ const UploadVideo = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [hashtag, setHashtag] = useState("");
   const [hashtags, setHashtags] = useState([]);
+  
+  // New state for async processing
+  const [uploadedVideoId, setUploadedVideoId] = useState(null);
+  const [videoStatus, setVideoStatus] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [validationErrors, setValidationErrors] = useState([]);
+  
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, canUpload } = useAuth();
+  const videoRef = useRef(null);
+  const pollingIntervalRef = useRef(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Check upload permission
+  useEffect(() => {
+    if (!canUpload) {
+      setSnackbar({
+        open: true,
+        message: "You don't have permission to upload videos",
+        severity: "error"
+      });
+    }
+  }, [canUpload]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setVideoDetails({ ...videoDetails, [name]: value });
+  };
+
+  // Video validation function
+  const validateVideo = (file) => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      video.src = URL.createObjectURL(file);
+      
+      video.onloadedmetadata = () => {
+        const errors = [];
+        
+        // Check duration (≤ 180 seconds)
+        if (video.duration > 180) {
+          errors.push(`Video duration is ${Math.round(video.duration)}s. Maximum allowed is 180s (3 minutes).`);
+        }
+        
+        // Check if horizontal (width > height)
+        if (video.videoWidth <= video.videoHeight) {
+          errors.push(`Video must be horizontal (width > height). Current: ${video.videoWidth}x${video.videoHeight}`);
+        }
+        
+        // Check file size (max 100MB)
+        if (file.size > 100 * 1024 * 1024) {
+          errors.push("File size exceeds 100MB limit.");
+        }
+        
+        URL.revokeObjectURL(video.src);
+        
+        if (errors.length > 0) {
+          reject(errors);
+        } else {
+          resolve({
+            duration: video.duration,
+            width: video.videoWidth,
+            height: video.videoHeight,
+            size: file.size
+          });
+        }
+      };
+      
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(["Invalid video file or unsupported format."]);
+      };
+    });
   };
 
   const generateThumbnail = (file, videoFileName) => {
@@ -67,25 +148,44 @@ const UploadVideo = () => {
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
-    
-    // Validate file size (max 100MB for 1-minute videos)
-    if (selectedFile.size > 100 * 1024 * 1024) {
-      setMessage("File too large. Please upload a video smaller than 100MB.");
-      return;
-    }
+    if (!selectedFile) return;
 
-    setVideoFile(selectedFile);
-
-    // Extract video filename without extension
-    const videoFileName = selectedFile.name.split('.').slice(0, -1).join('.');
+    setValidationErrors([]);
+    setMessage("");
 
     try {
-        const thumbnail = await generateThumbnail(selectedFile, videoFileName);
-        setThumbnailFile(thumbnail);
-        setThumbnailURL(URL.createObjectURL(thumbnail));
-    } catch (error) {
-        console.error("Error generating thumbnail:", error);
-        setMessage("Failed to generate thumbnail. Please try again.");
+      // Validate video requirements
+      const videoInfo = await validateVideo(selectedFile);
+      console.log("Video validation passed:", videoInfo);
+
+      setVideoFile(selectedFile);
+
+      // Extract video filename without extension
+      const videoFileName = selectedFile.name.split('.').slice(0, -1).join('.');
+
+      // Generate thumbnail
+      const thumbnail = await generateThumbnail(selectedFile, videoFileName);
+      setThumbnailFile(thumbnail);
+      setThumbnailURL(URL.createObjectURL(thumbnail));
+
+      setSnackbar({
+        open: true,
+        message: "Video validated successfully!",
+        severity: "success"
+      });
+
+    } catch (errors) {
+      console.error("Video validation failed:", errors);
+      setValidationErrors(Array.isArray(errors) ? errors : [errors]);
+      setVideoFile(null);
+      setThumbnailFile(null);
+      setThumbnailURL(null);
+      
+      setSnackbar({
+        open: true,
+        message: "Video validation failed. Please check the requirements.",
+        severity: "error"
+      });
     }
   };
 
@@ -115,14 +215,145 @@ const UploadVideo = () => {
     }
   };
 
+  // Status polling function
+  const pollVideoStatus = async (videoId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/videos/${videoId}/status`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      const status = response.data.status;
+      setVideoStatus(status);
+
+      console.log(`Video ${videoId} status: ${status}`);
+
+      switch (status) {
+        case 'ready':
+        case 'published':
+          setIsProcessing(false);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+          }
+          setSnackbar({
+            open: true,
+            message: "Video is ready! Redirecting to player...",
+            severity: "success"
+          });
+          setTimeout(() => {
+            navigate(`/reels/${videoId}`);
+          }, 2000);
+          break;
+          
+        case 'failed':
+          setIsProcessing(false);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+          }
+          setSnackbar({
+            open: true,
+            message: "Video processing failed. Please try uploading again.",
+            severity: "error"
+          });
+          break;
+          
+        case 'draft':
+        case 'private':
+          setIsProcessing(false);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+          }
+          setSnackbar({
+            open: true,
+            message: `Video is in ${status} mode. Check your profile to manage it.`,
+            severity: "info"
+          });
+          break;
+          
+        case 'processing':
+        default:
+          // Continue polling
+          break;
+      }
+    } catch (error) {
+      console.error("Error checking video status:", error);
+      if (error.response?.status === 404) {
+        // Video not found, stop polling
+        setIsProcessing(false);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+        }
+        setSnackbar({
+          open: true,
+          message: "Video not found. It may have been deleted.",
+          severity: "error"
+        });
+      }
+    }
+  };
+
+  // Start status polling
+  const startStatusPolling = (videoId) => {
+    setIsProcessing(true);
+    setShowStatusDialog(true);
+    setUploadedVideoId(videoId);
+    
+    // Poll immediately
+    pollVideoStatus(videoId);
+    
+    // Then poll every 3 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      pollVideoStatus(videoId);
+    }, 3000);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check upload permission
+    if (!canUpload) {
+      setSnackbar({
+        open: true,
+        message: "You don't have permission to upload videos",
+        severity: "error"
+      });
+      return;
+    }
+
     setUploading(true);
     setUploadProgress(0);
     setMessage("");
+    setValidationErrors([]);
 
-    if (!videoDetails.title || !videoDetails.description || !videoFile || !thumbnailFile) {
-      setMessage("Please fill all the fields and select a video file.");
+    // Validate form fields
+    if (!videoDetails.title.trim()) {
+      setSnackbar({
+        open: true,
+        message: "Please enter a video title",
+        severity: "error"
+      });
+      setUploading(false);
+      return;
+    }
+
+    if (!videoDetails.description.trim()) {
+      setSnackbar({
+        open: true,
+        message: "Please enter a video description",
+        severity: "error"
+      });
+      setUploading(false);
+      return;
+    }
+
+    if (!videoFile || !thumbnailFile) {
+      setSnackbar({
+        open: true,
+        message: "Please select a video file",
+        severity: "error"
+      });
       setUploading(false);
       return;
     }
@@ -132,7 +363,7 @@ const UploadVideo = () => {
       : videoDetails.description;
 
     const formData = new FormData();
-    formData.append("title", videoDetails.title);
+    formData.append("title", videoDetails.title.trim());
     formData.append("description", descriptionWithHashtags);
     formData.append("vfile", videoFile);
     formData.append("tfile", thumbnailFile);
@@ -141,16 +372,15 @@ const UploadVideo = () => {
       // Get the token
       const token = localStorage.getItem('token');
       if (!token) {
-        setMessage("You must be logged in to upload videos.");
+        setSnackbar({
+          open: true,
+          message: "You must be logged in to upload videos",
+          severity: "error"
+        });
         setUploading(false);
         return;
       }
       
-      // Log the authorization header for debugging
-      const authHeader = `Bearer ${token}`;
-      console.log("Authorization header:", authHeader.substring(0, 15) + "...");
-      
-      // Log form data for debugging
       console.log("Uploading video with FormData containing:", 
         Array.from(formData.entries()).map(([key, value]) => 
           key === 'vfile' || key === 'tfile' 
@@ -162,7 +392,7 @@ const UploadVideo = () => {
       const response = await axios.post(`${API_BASE_URL}/videos/`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
-          "Authorization": authHeader
+          "Authorization": `Bearer ${token}`
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -171,35 +401,59 @@ const UploadVideo = () => {
       });
 
       if (response.status === 201) {
-        setMessage("Video uploaded successfully!");
-        setVideoDetails({ title: "", description: "", category: "", privacy: "public" });
+        const { video_id, status } = response.data;
+        
+        setMessage("Video uploaded successfully! Processing...");
+        setVideoDetails({ title: "", description: "" });
         setVideoFile(null);
         setThumbnailFile(null);
         setThumbnailURL(null);
         setHashtags([]);
         
-        // Navigate to the video page after successful upload
-        setTimeout(() => {
-          navigate(`/reels/${response.data.video_id}`);
-        }, 1500);
+        setSnackbar({
+          open: true,
+          message: "Upload complete! Processing video...",
+          severity: "success"
+        });
+        
+        // Start status polling
+        startStatusPolling(video_id);
       }
     } catch (error) {
       console.error("Error uploading video:", error);
       
-      // Log detailed error info
+      let errorMessage = "Failed to upload video. Please try again.";
+      
       if (error.response) {
-        console.error("Response status:", error.response.status);
-        console.error("Response headers:", error.response.headers);
-        console.error("Response data:", error.response.data);
+        const { status, data } = error.response;
+        
+        switch (status) {
+          case 400:
+            errorMessage = data?.detail || "Missing required fields or invalid data";
+            break;
+          case 401:
+            errorMessage = "Not authenticated. Please log in again.";
+            break;
+          case 403:
+            errorMessage = "You don't have permission to upload videos";
+            break;
+          case 413:
+            errorMessage = "File too large. Please reduce file size.";
+            break;
+          default:
+            errorMessage = data?.detail || `Server error (${status})`;
+        }
+      } else if (error.request) {
+        errorMessage = "Network error. Please check your connection.";
       }
       
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        setMessage("Authentication failed. Please log in again.");
-      } else if (error.response?.data?.detail) {
-        setMessage(`Upload failed: ${error.response.data.detail}`);
-      } else {
-        setMessage("Failed to upload video. Please try again.");
-      }
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: "error"
+      });
+      
+      setMessage(errorMessage);
     } finally {
       setUploading(false);
     }
@@ -235,6 +489,27 @@ const UploadVideo = () => {
             >
               {message}
             </Typography>
+          )}
+
+          {/* Validation Errors */}
+          {validationErrors.length > 0 && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Video Requirements Not Met:
+              </Typography>
+              <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                {validationErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+
+          {/* Upload Permission Check */}
+          {!canUpload && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              You don't have permission to upload videos. Please contact support if you believe this is an error.
+            </Alert>
           )}
           
           <form onSubmit={handleSubmit}>
@@ -281,7 +556,7 @@ const UploadVideo = () => {
             
             <Box 
               sx={{ 
-                border: '2px dashed gray', 
+                border: validationErrors.length > 0 ? '2px dashed red' : '2px dashed gray', 
                 borderRadius: 2, 
                 p: 3, 
                 textAlign: 'center',
@@ -289,7 +564,7 @@ const UploadVideo = () => {
                 cursor: 'pointer',
                 transition: 'all 0.3s',
                 '&:hover': {
-                  borderColor: 'primary.main',
+                  borderColor: validationErrors.length > 0 ? 'red' : 'primary.main',
                 }
               }}
               onClick={() => document.getElementById('video-upload').click()}
@@ -305,8 +580,11 @@ const UploadVideo = () => {
               <Typography variant="body1" color="white" gutterBottom>
                 {videoFile ? videoFile.name : 'Click to select a video file'}
               </Typography>
+              <Typography variant="caption" color="gray" sx={{ display: 'block', mb: 1 }}>
+                Requirements: Horizontal video, max 180 seconds, max 100MB
+              </Typography>
               <Typography variant="caption" color="gray">
-                Maximum size: 100MB (ideal for 1-minute videos)
+                Supported formats: MP4, MOV, AVI, WebM
               </Typography>
             </Box>
             
@@ -394,15 +672,142 @@ const UploadVideo = () => {
                 color="primary" 
                 fullWidth
                 size="large"
-                disabled={!videoFile || !thumbnailFile}
+                disabled={
+                  !canUpload || 
+                  !videoFile || 
+                  !thumbnailFile || 
+                  validationErrors.length > 0 ||
+                  !videoDetails.title.trim() ||
+                  !videoDetails.description.trim()
+                }
                 sx={{ py: 1.5 }}
               >
-                Upload Video
+                {!canUpload ? 'Upload Restricted' : 'Upload Video'}
               </Button>
             )}
           </form>
         </CardContent>
       </Card>
+
+      {/* Status Dialog */}
+      <Dialog 
+        open={showStatusDialog} 
+        onClose={() => {}} 
+        disableEscapeKeyDown
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
+          Video Processing Status
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', py: 3 }}>
+          <Stepper activeStep={videoStatus === 'processing' ? 0 : 1} alternativeLabel>
+            <Step>
+              <StepLabel 
+                icon={videoStatus === 'processing' ? <ScheduleIcon color="primary" /> : <CheckCircleIcon color="success" />}
+              >
+                Processing
+              </StepLabel>
+            </Step>
+            <Step>
+              <StepLabel 
+                icon={
+                  videoStatus === 'ready' || videoStatus === 'published' ? <CheckCircleIcon color="success" /> :
+                  videoStatus === 'failed' ? <ErrorIcon color="error" /> :
+                  <ScheduleIcon color="disabled" />
+                }
+              >
+                {videoStatus === 'failed' ? 'Failed' : 'Ready'}
+              </StepLabel>
+            </Step>
+          </Stepper>
+
+          <Box sx={{ mt: 3 }}>
+            {isProcessing ? (
+              <>
+                <CircularProgress size={40} sx={{ mb: 2 }} />
+                <Typography variant="body1" gutterBottom>
+                  Processing your video...
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  This may take a few minutes. Please don't close this window.
+                </Typography>
+              </>
+            ) : (
+              <>
+                {videoStatus === 'ready' || videoStatus === 'published' ? (
+                  <>
+                    <CheckCircleIcon color="success" sx={{ fontSize: 48, mb: 2 }} />
+                    <Typography variant="h6" gutterBottom>
+                      Video is Ready!
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Redirecting to video player...
+                    </Typography>
+                  </>
+                ) : videoStatus === 'failed' ? (
+                  <>
+                    <ErrorIcon color="error" sx={{ fontSize: 48, mb: 2 }} />
+                    <Typography variant="h6" gutterBottom>
+                      Processing Failed
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Please try uploading your video again.
+                    </Typography>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircleIcon color="info" sx={{ fontSize: 48, mb: 2 }} />
+                    <Typography variant="h6" gutterBottom>
+                      Video Status: {videoStatus}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Check your profile to manage this video.
+                    </Typography>
+                  </>
+                )}
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+          {!isProcessing && (
+            <>
+              <Button 
+                onClick={() => setShowStatusDialog(false)}
+                variant="outlined"
+              >
+                Close
+              </Button>
+              {(videoStatus === 'ready' || videoStatus === 'published') && uploadedVideoId && (
+                <Button 
+                  onClick={() => navigate(`/reels/${uploadedVideoId}`)}
+                  variant="contained"
+                  startIcon={<PlayArrowIcon />}
+                >
+                  Watch Video
+                </Button>
+              )}
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

@@ -197,6 +197,31 @@ const VideoPage = () => {
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
   };
+
+  // Navigation functions for VideoPlayer
+  const goToNextVideo = useCallback(() => {
+    if (videos && videos.length > 0) {
+      if (currentIndex < videos.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        // Load more videos if available, otherwise loop to beginning
+        if (videos.length > 0) {
+          loadMoreVideos();
+        }
+        setCurrentIndex(0);
+      }
+    }
+  }, [currentIndex, videos, setCurrentIndex, loadMoreVideos]);
+
+  const goToPrevVideo = useCallback(() => {
+    if (videos && videos.length > 0) {
+      if (currentIndex > 0) {
+        setCurrentIndex(currentIndex - 1);
+      } else {
+        setCurrentIndex(videos.length - 1);
+      }
+    }
+  }, [currentIndex, videos, setCurrentIndex]);
   
   // Simplified loading state - only show loading indicator initially
   if (videos.length === 0 && (loading || isLoading)) {
@@ -282,6 +307,8 @@ const VideoPage = () => {
         setCurrentIndex={setCurrentIndex}
           isMobile={isMobile}
           isTablet={isTablet}
+          onNextVideo={goToNextVideo}
+          onPrevVideo={goToPrevVideo}
         />
       
       {/* Only show snackbar for critical messages */}

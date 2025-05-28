@@ -103,7 +103,8 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    isAuthenticated: !!currentUser
+    isAuthenticated: !!currentUser,
+    canUpload: currentUser?.uploadFlag ?? false
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -17,6 +17,7 @@ import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
 import FeedbackPage from "./pages/FeedbackPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import UploadProtectedRoute from "./components/UploadProtectedRoute";
 import theme from './theme';
 import './App.css';
 import { useMediaQuery } from '@mui/material';
@@ -93,9 +94,11 @@ function App() {
               } />
               <Route path="/upload" element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <UploadVideo />
-                  </AppLayout>
+                  <UploadProtectedRoute>
+                    <AppLayout>
+                      <UploadVideo />
+                    </AppLayout>
+                  </UploadProtectedRoute>
                 </ProtectedRoute>
               } />
               <Route path="/followers" element={

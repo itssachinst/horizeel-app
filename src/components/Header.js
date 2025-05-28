@@ -76,14 +76,94 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
+// Styled component for rotating suggestions
+const RotatingSuggestions = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  left: `calc(1em + ${theme.spacing(4)})`,
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: alpha(theme.palette.common.white, 0.5),
+  fontSize: '1rem',
+  overflow: 'hidden',
+  height: '1.2em',
+  display: 'flex',
+  alignItems: 'center',
+  zIndex: 1,
+  userSelect: 'none',
+}));
+
+const SuggestionText = styled(Typography)(({ theme }) => ({
+  position: 'absolute',
+  whiteSpace: 'nowrap',
+  transition: 'transform 0.5s ease-in-out, opacity 0.5s ease-in-out',
+  fontSize: 'inherit',
+  color: 'inherit',
+}));
+
 // Styled right side icon buttons
 const ActionIconButton = styled(IconButton)(({ theme }) => ({
   color: theme.palette.common.white,
   marginLeft: theme.spacing(1),
 }));
 
+// Predefined search suggestions
+const SEARCH_SUGGESTIONS = [
+  'Cars',
+  'Music',
+  'Places',
+  'Food',
+  'Travel',
+  'Technology',
+  'Sports',
+  'Fashion',
+  'Gaming',
+  'Art',
+  'Nature',
+  'Comedy'
+];
+
+// Rotating Suggestions Component
+const RotatingSuggestionsComponent = ({ isVisible }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const interval = setInterval(() => {
+      setIsAnimating(true);
+      
+      setTimeout(() => {
+        setCurrentIndex((prevIndex) => 
+          (prevIndex + 1) % SEARCH_SUGGESTIONS.length
+        );
+        setIsAnimating(false);
+      }, 300); // Half of the transition duration
+    }, 2500); // Change every 2.5 seconds
+
+    return () => clearInterval(interval);
+  }, [isVisible]);
+
+  if (!isVisible) return null;
+
+  return (
+    <RotatingSuggestions>
+      <SuggestionText
+        sx={{
+          transform: isAnimating ? 'translateY(-20px)' : 'translateY(0)',
+          opacity: isAnimating ? 0 : 0.7,
+          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        Search for {SEARCH_SUGGESTIONS[currentIndex]}...
+      </SuggestionText>
+    </RotatingSuggestions>
+  );
+};
+
 const Header = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, canUpload } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -151,7 +231,12 @@ const Header = () => {
   };
 
   const handleGoToUpload = () => {
-    navigate('/upload');
+    if (canUpload) {
+      navigate('/upload');
+    } else {
+      // Still navigate to upload route, but the UploadProtectedRoute will handle the restriction
+      navigate('/upload');
+    }
     handleMenuClose();
   };
 
@@ -251,11 +336,19 @@ const Header = () => {
       open={isMobileMenuOpen}
       onClose={handleMenuClose}
     >
-      <MenuItem onClick={handleGoToUpload}>
+      <MenuItem 
+        onClick={handleGoToUpload}
+        sx={{
+          opacity: canUpload ? 1 : 0.5,
+          '&:hover': {
+            backgroundColor: canUpload ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 0, 0, 0.04)',
+          }
+        }}
+      >
         <IconButton size="large" color="inherit">
           <VideoCallIcon />
         </IconButton>
-        <p>Upload</p>
+        <p>{canUpload ? 'Upload' : 'Upload (Restricted)'}</p>
       </MenuItem>
       <MenuItem onClick={handleGoToFeedback}>
         <IconButton size="large" color="inherit">
@@ -275,20 +368,27 @@ const Header = () => {
     </Menu>
   );
 
-  // Replace the existing Search component in the return statement with this new search component
+  // Enhanced Search component with rotating suggestions
   const renderSearchBox = () => (
     <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', position: 'relative' }}>
       <Search>
-        <form onSubmit={handleSearch} style={{ width: '100%' }}>
+        <form onSubmit={handleSearch} style={{ width: '100%', position: 'relative' }}>
           <SearchIconWrapper>
             <SearchIcon />
           </SearchIconWrapper>
           <StyledInputBase
-            placeholder="Search videos or #hashtags..."
+            placeholder={searchQuery ? "" : "Search videos or #hashtags..."}
             inputProps={{ 'aria-label': 'search' }}
             value={searchQuery}
             onChange={handleSearchInputChange}
+            sx={{
+              '& .MuiInputBase-input': {
+                backgroundColor: 'transparent',
+              }
+            }}
           />
+          {/* Rotating suggestions - only show when search is empty */}
+          <RotatingSuggestionsComponent isVisible={!searchQuery} />
           {searchQuery && (
             <IconButton 
               type="submit" 
@@ -340,6 +440,13 @@ const Header = () => {
               size="large"
               color="inherit"
               onClick={handleGoToUpload}
+              title={canUpload ? "Upload Video" : "Upload Restricted"}
+              sx={{
+                opacity: canUpload ? 1 : 0.5,
+                '&:hover': {
+                  backgroundColor: canUpload ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)',
+                }
+              }}
             >
               <VideoCallIcon />
             </ActionIconButton>
