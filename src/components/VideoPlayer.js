@@ -583,7 +583,10 @@ const VideoPlayer = ({
     console.log("Navigating to next video");
     
     if (onNextVideo) {
+      console.log("Calling onNextVideo for automatic progression");
       onNextVideo();
+    } else {
+      console.log("onNextVideo is not available - cannot auto-advance");
     }
   }, [onNextVideo]);
 
@@ -647,23 +650,29 @@ const VideoPlayer = ({
       return;
     }
     
+    // CRITICAL: Check if user manually paused the video
+    // If isPaused is true, the user paused it, so don't auto-advance
+    if (isPaused) {
+      console.log("Video ended but user has paused - not auto-advancing");
+      return;
+    }
+    
     // CRITICAL: Only proceed if video actually ended naturally
-    // Check if video is at the end and not paused
+    // Check if video is at the end (don't check video.paused since videos auto-pause when they end)
     if (videoRef.current) {
       const video = videoRef.current;
       const isAtEnd = video.currentTime >= video.duration - 0.5; // Allow small tolerance
-      const isNotPaused = !video.paused;
       
-      console.log("Video end check - currentTime:", video.currentTime, "duration:", video.duration, "isAtEnd:", isAtEnd, "isNotPaused:", isNotPaused);
+      console.log("Video end check - currentTime:", video.currentTime, "duration:", video.duration, "isAtEnd:", isAtEnd, "isPaused prop:", isPaused);
       
-      // Only proceed if video actually reached the end and is not paused
-      if (!isAtEnd || !isNotPaused) {
-        console.log("Video end event triggered but video is not at natural end or is paused - ignoring");
+      // Only proceed if video actually reached the end
+      if (!isAtEnd) {
+        console.log("Video end event triggered but video is not at natural end - ignoring");
         return;
       }
     }
     
-    console.log("Video ended naturally, automatically playing next video");
+    console.log("Video ended naturally and user has not paused - automatically playing next video");
     
     // Update watch history with completed flag if user is logged in
     if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
@@ -695,9 +704,12 @@ const VideoPlayer = ({
     
     // Use parent's navigation function to go to next video
     if (onNextVideo) {
+      console.log("Calling onNextVideo for automatic progression");
       onNextVideo();
+    } else {
+      console.log("onNextVideo is not available - cannot auto-advance");
     }
-  }, [currentIndex, videos, currentUser, isLiked, isDisliked, isSaved, watchShared, deviceType, onNextVideo, videoId]);
+  }, [currentIndex, videos, currentUser, isLiked, isDisliked, isSaved, watchShared, deviceType, onNextVideo, videoId, isPaused]);
 
   // Video error handler
   const handleVideoError = useCallback((error) => {

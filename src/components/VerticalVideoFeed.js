@@ -126,6 +126,13 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
   const [dragOffset, setDragOffset] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   
+  // Track when we're trying to load next video after current last
+  const [pendingNextAfterLoad, setPendingNextAfterLoad] = useState(false);
+  
+  // Track when we're trying to loop to last video
+  const [pendingLoopToLast, setPendingLoopToLast] = useState(false);
+  const previousVideosLengthRef = useRef(videos.length);
+  
   // Track preloaded videos to avoid redundant preloading
   const preloadedVideosRef = useRef(new Set());
   
@@ -239,20 +246,54 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     
   }, [videos, currentIndex, videoRenderStates]);
   
-  // Handle manual navigation
+  // Handle manual navigation with seamless looping
   const goToNextVideo = useCallback(() => {
+    console.log("goToNextVideo called - currentIndex:", currentIndex, "videos.length:", videos.length, "hasMore:", hasMore, "loading:", loading);
+    
     if (currentIndex < videos.length - 1) {
+      // Normal forward navigation
+      console.log("Normal forward navigation to index:", currentIndex + 1);
       setCurrentIndex(currentIndex + 1);
-    } else if (hasMore) {
-      loadMoreVideos();
+    } else {
+      // At the last video - implement looping behavior
+      if (hasMore && !loading) {
+        // Load more videos and wait for them to load before navigating
+        console.log("At last video with more available - loading more videos");
+        setPendingNextAfterLoad(true);
+        loadMoreVideos();
+      } else {
+        // No more videos available - loop back to first video
+        console.log("At last video with no more available - looping to first video");
+        setCurrentIndex(0);
+      }
     }
-  }, [currentIndex, videos.length, hasMore, loadMoreVideos, setCurrentIndex]);
+  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex]);
   
   const goToPrevVideo = useCallback(() => {
     if (currentIndex > 0) {
+      // Normal backward navigation
       setCurrentIndex(currentIndex - 1);
+    } else {
+      // At the first video - loop to last video
+      console.log("At first video - implementing loop to last video");
+      
+      if (hasMore && !loading) {
+        // There are more videos available - load more and then go to last
+        console.log("More videos available - loading more to find true last video");
+        setPendingLoopToLast(true);
+        loadMoreVideos();
+      } else {
+        // No more videos available or already loading - go to current last video
+        if (videos.length > 1) {
+          console.log("Going to current last video:", videos.length - 1);
+          setCurrentIndex(videos.length - 1);
+        } else {
+          // Edge case: only one video, stay at current
+          console.log("Only one video available - staying at current");
+        }
+      }
     }
-  }, [currentIndex, setCurrentIndex]);
+  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex, setPendingLoopToLast]);
   
   // Touch handling for swipe navigation
   const handleTouchStart = (e) => {
@@ -349,6 +390,24 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     
     return 0.85; // Default scale for non-active videos
   };
+  
+  // Handle pending navigation operations when videos are loaded
+  useEffect(() => {
+    if (!loading && videos.length > previousVideosLengthRef.current) {
+      if (pendingLoopToLast) {
+        // New videos have been loaded, now go to the last video
+        console.log("New videos loaded, navigating to last video for loop");
+        setCurrentIndex(videos.length - 1);
+        setPendingLoopToLast(false);
+      } else if (pendingNextAfterLoad) {
+        // New videos have been loaded, now go to the next video
+        console.log("New videos loaded, navigating to next video");
+        setCurrentIndex(currentIndex + 1);
+        setPendingNextAfterLoad(false);
+      }
+    }
+    previousVideosLengthRef.current = videos.length;
+  }, [videos.length, loading, pendingLoopToLast, pendingNextAfterLoad, currentIndex, setCurrentIndex]);
   
   return (
     <Box 
