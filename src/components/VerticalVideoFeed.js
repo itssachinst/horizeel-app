@@ -1,7 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import VideoPlayer from './VideoPlayer';
+import SwipeTutorial from './SwipeTutorial';
 import { useVideoContext } from '../contexts/VideoContext';
+import { useSwipeTutorial } from '../hooks/useSwipeTutorial';
+import useTrackpadGestures from '../hooks/useTrackpadGestures';
 import VIDEO_CACHE from '../utils/videoCache';
 
 // Styles for the container and animations
@@ -114,6 +117,14 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     loadMoreVideos,
     loading
   } = useVideoContext();
+  
+  // Use the swipe tutorial hook
+  const {
+    showTutorial,
+    isFirstTime,
+    dismissTutorial,
+    handleFirstSwipe,
+  } = useSwipeTutorial();
   
   // Use the preloader to cache videos
   usePreloader(videos, currentIndex);
@@ -250,6 +261,11 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
   const goToNextVideo = useCallback(() => {
     console.log("goToNextVideo called - currentIndex:", currentIndex, "videos.length:", videos.length, "hasMore:", hasMore, "loading:", loading);
     
+    // Handle first swipe for tutorial
+    if (isFirstTime && showTutorial) {
+      handleFirstSwipe();
+    }
+    
     if (currentIndex < videos.length - 1) {
       // Normal forward navigation
       console.log("Normal forward navigation to index:", currentIndex + 1);
@@ -267,9 +283,14 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
         setCurrentIndex(0);
       }
     }
-  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex]);
+  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex, isFirstTime, showTutorial, handleFirstSwipe]);
   
   const goToPrevVideo = useCallback(() => {
+    // Handle first swipe for tutorial
+    if (isFirstTime && showTutorial) {
+      handleFirstSwipe();
+    }
+    
     if (currentIndex > 0) {
       // Normal backward navigation
       setCurrentIndex(currentIndex - 1);
@@ -293,7 +314,15 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
         }
       }
     }
-  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex, setPendingLoopToLast]);
+  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex, setPendingLoopToLast, isFirstTime, showTutorial, handleFirstSwipe]);
+  
+  // Use trackpad gestures for desktop navigation
+  const { resetGesture } = useTrackpadGestures(
+    goToNextVideo, // onSwipeUp (next video)
+    goToPrevVideo, // onSwipeDown (previous video)
+    80, // sensitivity (lower = more sensitive)
+    !isDragging && !showTutorial // enabled when not dragging and tutorial is not showing
+  );
   
   // Touch handling for swipe navigation
   const handleTouchStart = (e) => {
@@ -544,6 +573,14 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
         <Box sx={styles.loadingOverlay}>
           <CircularProgress color="primary" size={30} />
         </Box>
+      )}
+      
+      {/* Swipe Tutorial for first-time users */}
+      {showTutorial && isFirstTime && (
+        <SwipeTutorial
+          onDismiss={dismissTutorial}
+          onFirstSwipe={handleFirstSwipe}
+        />
       )}
     </Box>
   );

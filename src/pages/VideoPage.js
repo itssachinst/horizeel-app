@@ -16,6 +16,7 @@ import { ArrowBack, Refresh, Home } from "@mui/icons-material";
 import VideoPlayer from "../components/VideoPlayer";
 import { fetchVideos, incrementVideoView, fetchVideoById } from "../api";
 import { useVideoContext } from "../contexts/VideoContext";
+import { navigateToHomeWithRefresh } from '../utils/navigation';
 
 // Configuration constants
 const ITEMS_PER_PAGE = 20;  // Number of videos to fetch per page
@@ -264,7 +265,7 @@ const VideoPage = () => {
           <Button
             variant="contained"
             color="primary"
-            onClick={() => navigate('/demo/')}
+            onClick={navigateToHomeWithRefresh}
             sx={{ mt: 2 }}
           >
             Go back to Home

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -18,7 +18,8 @@ import {
   Autocomplete,
   Paper,
   Typography,
-  Button
+  Button,
+  Fade
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -34,6 +35,7 @@ import {
 import { styled, alpha } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { navigateToHomeWithRefresh, isVideoPage } from '../utils/navigation';
 import Logo from './Logo';
 
 // Styled search bar
@@ -425,7 +427,14 @@ const Header = () => {
                 alignItems: 'center',
                 cursor: 'pointer'
               }}
-              onClick={() => navigate('/demo/')}
+              onClick={() => {
+                // Force refresh if coming from video/reels page
+                if (isVideoPage(location.pathname)) {
+                  navigateToHomeWithRefresh();
+                } else {
+                  navigate('/demo/');
+                }
+              }}
             >
               <Logo />
             </Box>

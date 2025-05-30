@@ -20,7 +20,9 @@ import {
   updateWatchHistory, incrementVideoView 
 } from "../api";
 import useSwipeNavigate from "../hooks/useSwipeNavigate";
+import useTrackpadGestures from "../hooks/useTrackpadGestures";
 import { processVideoUrl } from "../utils/videoUtils";
+import { navigateToHomeWithRefresh } from "../utils/navigation";
 import { useVideoContext } from "../contexts/VideoContext";
 import ReactHlsPlayer from 'react-hls-player';
 
@@ -187,6 +189,56 @@ const VideoPlayer = ({
     backfaceVisibility: 'hidden'
   }), []);
 
+  // Enhanced mouse move handler with comprehensive user activity detection
+  const showControlsAndResetTimer = useCallback(() => {
+    // Clear any existing timeout
+    if (controlsTimeout) {
+      clearTimeout(controlsTimeout);
+    }
+    
+    // Show controls if they're hidden
+    if (!showControls) {
+      setShowControls(true);
+    }
+    
+    // Set new timeout to hide controls after 5 seconds
+    const newTimeout = setTimeout(() => {
+      setShowControls(false);
+    }, 5000);
+    
+    setControlsTimeout(newTimeout);
+  }, [controlsTimeout, showControls]);
+
+  // Mouse move handler
+  const handleMouseMove = useCallback((e) => {
+    // Only respond to actual mouse movement, not programmatic events
+    if (e.isTrusted) {
+      showControlsAndResetTimer();
+    }
+  }, [showControlsAndResetTimer]);
+
+  // Enhanced user interaction handlers
+  const handleUserInteraction = useCallback((e) => {
+    // Only respond to trusted user events
+    if (e.isTrusted) {
+      showControlsAndResetTimer();
+    }
+  }, [showControlsAndResetTimer]);
+
+  // Touch interaction handlers
+  const handleTouchInteraction = useCallback((e) => {
+    if (e.isTrusted) {
+      showControlsAndResetTimer();
+    }
+  }, [showControlsAndResetTimer]);
+
+  // Keyboard interaction handler
+  const handleKeyboardInteraction = useCallback((e) => {
+    if (e.isTrusted) {
+      showControlsAndResetTimer();
+    }
+  }, [showControlsAndResetTimer]);
+
   // Fixed toggle play/pause to prevent video restarts
   const togglePlayPause = useCallback(() => {
     if (!videoRef.current) {
@@ -233,6 +285,9 @@ const VideoPlayer = ({
   const handleVideoContainerClick = useCallback((e) => {
     console.log("Video container clicked, target:", e.target.tagName, e.target.className);
     
+    // Show controls and reset timer on click
+    showControlsAndResetTimer();
+    
     // Prevent click handling if clicked on a control element or button
     if (e.target.closest('button') || 
         e.target.closest('.video-controls') || 
@@ -253,7 +308,7 @@ const VideoPlayer = ({
           if (videoRef.current) {
       togglePlayPause();
     }
-  }, [togglePlayPause]);
+  }, [togglePlayPause, showControlsAndResetTimer]);
 
   // Fullscreen toggle function - now uses parent's function
   const toggleFullscreen = useCallback(() => {
@@ -378,7 +433,7 @@ const VideoPlayer = ({
       
       // Step 1: Pause video immediately to stop current audio stream
         video.pause();
-        setIsPlaying(false);
+                setIsPlaying(false);
       
       // Step 2: Set new time
       video.currentTime = newTime;
@@ -431,7 +486,7 @@ const VideoPlayer = ({
   const handleLike = useCallback(async () => {
     if (!currentUser) {
       setSnackbarMessage("Please log in to like videos");
-      setShowSnackbar(true);
+            setShowSnackbar(true);
       return;
     }
 
@@ -448,7 +503,7 @@ const VideoPlayer = ({
       }
       setSnackbarMessage(isLiked ? "Like removed" : "Video liked!");
       setShowSnackbar(true);
-    } catch (error) {
+          } catch (error) {
       console.error("Error liking video:", error);
       setSnackbarMessage("Error liking video");
       setShowSnackbar(true);
@@ -460,8 +515,8 @@ const VideoPlayer = ({
     if (!currentUser) {
       setSnackbarMessage("Please log in to save videos");
       setShowSnackbar(true);
-      return;
-    }
+        return;
+      }
 
     const currentVideo = videos[currentIndex];
     if (!currentVideo?.video_id) return;
@@ -493,7 +548,7 @@ const VideoPlayer = ({
           url: shareUrl,
         });
         setWatchShared(true);
-          } else {
+              } else {
         // Fallback to clipboard
         await navigator.clipboard.writeText(shareUrl);
         setSnackbarMessage("Video link copied to clipboard!");
@@ -585,7 +640,7 @@ const VideoPlayer = ({
     if (onNextVideo) {
       console.log("Calling onNextVideo for automatic progression");
       onNextVideo();
-    } else {
+          } else {
       console.log("onNextVideo is not available - cannot auto-advance");
     }
   }, [onNextVideo]);
@@ -598,29 +653,17 @@ const VideoPlayer = ({
     true
   );
 
-  // Mouse move handler with debouncing
-  const handleMouseMove = useCallback(() => {
-    if (showControls && controlsTimeout) {
-      clearTimeout(controlsTimeout);
-      const newTimeout = setTimeout(() => {
-        setShowControls(false);
-      }, 5000);
-      setControlsTimeout(newTimeout);
-      return;
-    }
-
-    if (!showControls) {
-      setShowControls(true);
-      const newTimeout = setTimeout(() => {
-        setShowControls(false);
-      }, 5000);
-      setControlsTimeout(newTimeout);
-    }
-  }, [showControls, controlsTimeout]);
+  // Add trackpad gesture support for desktop users
+  const { resetGesture } = useTrackpadGestures(
+    handleNextVideo, // onSwipeUp (next video)
+    handlePrevVideo, // onSwipeDown (previous video)
+    100, // sensitivity (slightly less sensitive than VerticalVideoFeed)
+    true // always enabled for video player
+  );
 
   // CRITICAL: Time update handler with aggressive validation
   const handleTimeUpdate = useCallback(() => {
-    const video = videoRef.current;
+        const video = videoRef.current;
     if (!video) return;
 
     // Ensure we're tracking the correct video's time
@@ -796,13 +839,16 @@ const VideoPlayer = ({
 
   // Keyboard shortcuts handler - defined after all functions it depends on
   const handleKeyPress = useCallback((e) => {
+    // Show controls and reset timer on any keyboard interaction
+    handleKeyboardInteraction(e);
+    
     // Prevent keyboard shortcuts when typing in input fields
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
       return;
     }
 
     // Prevent default for all handled keys to avoid browser behavior
-    const handledKeys = [' ', 'f', 'm', 'arrowright', 'arrowleft', 'arrowup', 'arrowdown', 'l', 's', '/'];
+    const handledKeys = [' ', 'f', 'm', 'arrowright', 'arrowleft', 'arrowup', 'arrowdown', 'l', 's', '/', 't'];
     if (handledKeys.includes(e.key.toLowerCase())) {
       e.preventDefault();
     }
@@ -841,10 +887,18 @@ const VideoPlayer = ({
         // Focus search bar if available - this would need to be implemented in parent component
         console.log('Search shortcut pressed');
         break;
+      case 't':
+        // Development shortcut to reset swipe tutorial
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Resetting swipe tutorial (dev mode)');
+          localStorage.removeItem('horizeel_swipe_tutorial_completed');
+          window.location.reload();
+        }
+        break;
       default:
         break;
     }
-  }, [togglePlayPause, toggleFullscreen, toggleMute, seekForward, seekBackward, handlePrevVideo, handleNextVideo, handleLike, handleSave]);
+  }, [handleKeyboardInteraction, togglePlayPause, toggleFullscreen, toggleMute, seekForward, seekBackward, handlePrevVideo, handleNextVideo, handleLike, handleSave]);
 
   // Add keyboard event listener only for the current/active video
   useEffect(() => {
@@ -886,6 +940,26 @@ const VideoPlayer = ({
       console.error("Error checking follow status:", error);
     }
   };
+
+  // Initialize control visibility timer on mount and handle cleanup
+  useEffect(() => {
+    // Start with controls visible and set initial timer
+    setShowControls(true);
+    
+    // Set initial timeout without using showControlsAndResetTimer to avoid circular dependency
+    const initialTimeout = setTimeout(() => {
+      setShowControls(false);
+    }, 5000);
+    
+    setControlsTimeout(initialTimeout);
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (initialTimeout) {
+        clearTimeout(initialTimeout);
+      }
+    };
+  }, [videoId]); // Reset timer when video changes
 
   // Cleanup effect for proper component unmounting
   useEffect(() => {
@@ -960,17 +1034,27 @@ const VideoPlayer = ({
           }}
           onClick={handleVideoContainerClick}
           onMouseMove={handleMouseMove}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onTouchMove={handleTouchMove}
-          onMouseDown={(e) => {
-            // CRITICAL: Prevent parent's mouse events from triggering isPaused changes
-            e.stopPropagation();
+          onMouseEnter={handleUserInteraction}
+          onMouseLeave={handleUserInteraction}
+          onMouseDown={handleUserInteraction}
+          onMouseUp={handleUserInteraction}
+          onTouchStart={(e) => {
+            handleTouchStart(e);
+            handleTouchInteraction(e);
           }}
-          onMouseUp={(e) => {
-            // CRITICAL: Prevent parent's mouse events from triggering isPaused changes
-            e.stopPropagation();
+          onTouchEnd={(e) => {
+            handleTouchEnd(e);
+            handleTouchInteraction(e);
           }}
+          onTouchMove={(e) => {
+            handleTouchMove(e);
+            handleTouchInteraction(e);
+          }}
+          onTouchCancel={handleTouchInteraction}
+          onWheel={handleUserInteraction}
+          onScroll={handleUserInteraction}
+          onFocus={handleUserInteraction}
+          onBlur={handleUserInteraction}
         >
                 {/* Top overlay with video info */}
           <Slide direction="down" in={showControls} timeout={300}>
@@ -991,7 +1075,10 @@ const VideoPlayer = ({
               {/* Left side - Back button and video info */}
               <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                 <IconButton
-                  onClick={() => navigate("/demo/")}
+                  onClick={(e) => {
+                    handleUserInteraction(e);
+                    navigateToHomeWithRefresh();
+                  }}
                   sx={{
                     color: 'white',
                     mr: 2,
@@ -1036,7 +1123,10 @@ const VideoPlayer = ({
                     {/* Follow button - only show if not own video */}
                     {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
                       <Button
-                        onClick={handleFollow}
+                        onClick={(e) => {
+                          handleUserInteraction(e);
+                          handleFollow();
+                        }}
                         disabled={followLoading}
                         size="small"
                         variant={isFollowing ? "outlined" : "contained"}
@@ -1153,6 +1243,24 @@ const VideoPlayer = ({
             setIsPlaying(true);
             console.log("Video play event triggered - checking audio sync");
             
+            // Report view if needed
+            if (!reportedViewRef.current) {
+              const currentVideo = videos[currentIndex];
+              if (currentVideo && currentVideo.video_id) {
+                console.log("Incrementing view count for video:", currentVideo.video_id);
+                incrementVideoView(currentVideo.video_id)
+                  .then(() => {
+                    // Update local view count to reflect the increment
+                    setViews(prev => prev + 1);
+                    console.log("View count incremented successfully");
+                  })
+                  .catch(err => 
+                    console.error("Failed to increment view count:", err)
+                  );
+                reportedViewRef.current = true;
+              }
+            }
+            
             // Validate audio/video sync on play
             if (videoRef.current) {
               const video = videoRef.current;
@@ -1260,7 +1368,10 @@ const VideoPlayer = ({
               }}
             >
                 <IconButton
-                onClick={handlePrevVideo}
+                onClick={(e) => {
+                  handleUserInteraction(e);
+                  handlePrevVideo();
+                }}
                   sx={{
                   bgcolor: 'rgba(0, 0, 0, 0.7)',
                   color: 'white',
@@ -1279,7 +1390,10 @@ const VideoPlayer = ({
                 </IconButton>
 
                 <IconButton
-                onClick={handleNextVideo}
+                onClick={(e) => {
+                  handleUserInteraction(e);
+                  handleNextVideo();
+                }}
                   sx={{
                   bgcolor: 'rgba(0, 0, 0, 0.7)',
                   color: 'white',
@@ -1330,6 +1444,9 @@ const VideoPlayer = ({
                   transition: 'height 0.2s ease',
                 }}
                 onClick={(e) => {
+                  // Reset control visibility timer on progress bar interaction
+                  handleUserInteraction(e);
+                  
                   if (!videoRef.current || !duration) return;
                   
                   const video = videoRef.current;
@@ -1454,7 +1571,10 @@ const VideoPlayer = ({
                 {/* Left controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <IconButton
-                    onClick={togglePlayPause}
+                    onClick={(e) => {
+                      handleUserInteraction(e);
+                      togglePlayPause();
+                    }}
                     sx={{
                       color: 'white',
                       p: 1,
@@ -1467,7 +1587,10 @@ const VideoPlayer = ({
                   </IconButton>
 
                   <IconButton
-                    onClick={toggleMute}
+                    onClick={(e) => {
+                      handleUserInteraction(e);
+                      toggleMute();
+                    }}
                     sx={{
                       color: 'white',
                       p: 1,
@@ -1496,7 +1619,10 @@ const VideoPlayer = ({
                 {/* Right controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <IconButton
-                      onClick={handleLike}
+                      onClick={(e) => {
+                        handleUserInteraction(e);
+                        handleLike();
+                      }}
                       sx={{
                       color: isLiked ? '#00ff00' : 'white',
                       p: 1,
@@ -1509,7 +1635,8 @@ const VideoPlayer = ({
                     </IconButton>
 
                     <IconButton
-                    onClick={async () => {
+                    onClick={async (e) => {
+                      handleUserInteraction(e);
                       if (!currentUser) {
                         setSnackbarMessage("Please log in to dislike videos");
                         setShowSnackbar(true);
@@ -1539,7 +1666,10 @@ const VideoPlayer = ({
                     </IconButton>
 
                     <IconButton
-                      onClick={handleShare}
+                      onClick={(e) => {
+                        handleUserInteraction(e);
+                        handleShare();
+                      }}
                       sx={{
                         color: 'white',
                       p: 1,
@@ -1552,7 +1682,10 @@ const VideoPlayer = ({
                     </IconButton>
 
                     <IconButton
-                    onClick={handleSave}
+                    onClick={(e) => {
+                      handleUserInteraction(e);
+                      handleSave();
+                    }}
                       sx={{
                       color: isSaved ? '#ffeb3b' : 'white',
                       p: 1,
@@ -1565,7 +1698,10 @@ const VideoPlayer = ({
                     </IconButton>
 
                     <IconButton
-                    onClick={toggleFullscreen}
+                    onClick={(e) => {
+                      handleUserInteraction(e);
+                      toggleFullscreen();
+                    }}
                       sx={{
                         color: 'white',
                       p: 1,
