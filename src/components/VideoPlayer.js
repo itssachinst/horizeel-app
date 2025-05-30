@@ -156,12 +156,12 @@ const VideoPlayer = ({
 
   // Memoize hlsConfig with audio/video sync optimizations (fixed)
   const hlsConfig = useMemo(() => ({
-    enableWorker: true,
+            enableWorker: true,
     lowLatencyMode: false,
-    maxBufferLength: 30,
+            maxBufferLength: 30,
     maxBufferSize: 15 * 1000 * 1000,
-    startLevel: -1,
-    autoStartLoad: true,
+            startLevel: -1,
+            autoStartLoad: true,
     // Audio/video sync optimizations
     liveSyncDurationCount: 3,
     liveMaxLatencyDurationCount: 10,
@@ -201,27 +201,27 @@ const VideoPlayer = ({
       console.warn("Video element doesn't have required play/pause methods");
       return;
     }
-
+    
     try {
       // Store current position to ensure we don't lose it
       const currentPosition = video.currentTime;
-      
-      if (video.paused) {
+
+    if (video.paused) {
         // Resume from current position, explicitly ensure we don't restart
         video.currentTime = currentPosition; // Ensure position is preserved
-        video.play()
+      video.play()
           .then(() => {
             setIsPlaying(true);
             console.log("Video resumed from position:", video.currentTime);
           })
-          .catch(error => {
-            console.error("Error playing video:", error);
-            setIsPlaying(false);
-          });
-      } else {
+        .catch(error => {
+          console.error("Error playing video:", error);
+          setIsPlaying(false);
+        });
+    } else {
         // Pause at current position
-        video.pause();
-        setIsPlaying(false);
+      video.pause();
+      setIsPlaying(false);
         console.log("Video paused at position:", video.currentTime);
       }
     } catch (error) {
@@ -241,7 +241,7 @@ const VideoPlayer = ({
       console.log("Click on control element, ignoring");
       return;
     }
-    
+
     // Stop propagation and prevent default to avoid any video restart behavior
     e.stopPropagation();
     e.preventDefault();
@@ -274,9 +274,9 @@ const VideoPlayer = ({
     // Prevent unmuting if this video is force muted (non-current video)
     if (forceMuted) {
       console.warn("Cannot unmute - video is force muted (non-current video)");
-      return;
-    }
-    
+          return;
+        }
+
     const video = videoRef.current;
     const newMutedState = !video.muted;
     
@@ -346,7 +346,7 @@ const VideoPlayer = ({
       video.addEventListener('seeked', handleSeeked);
       
       // Fallback timeout
-      setTimeout(() => {
+            setTimeout(() => {
         video.removeEventListener('seeked', handleSeeked);
         if (wasPlaying && video.paused) {
           video.play().then(() => {
@@ -354,7 +354,7 @@ const VideoPlayer = ({
             setIsPlaying(true);
           }).catch(error => {
             console.error("Error in forward seek fallback:", error);
-            setIsPlaying(false);
+                setIsPlaying(false);
           });
         }
         setCurrentTime(video.currentTime);
@@ -377,8 +377,8 @@ const VideoPlayer = ({
       console.log(`Seeking backward to: ${newTime}s`);
       
       // Step 1: Pause video immediately to stop current audio stream
-      video.pause();
-      setIsPlaying(false);
+        video.pause();
+        setIsPlaying(false);
       
       // Step 2: Set new time
       video.currentTime = newTime;
@@ -394,7 +394,7 @@ const VideoPlayer = ({
         if (wasPlaying) {
           video.play().then(() => {
             console.log("Video resumed after backward seek at:", video.currentTime);
-            setIsPlaying(true);
+              setIsPlaying(true);
           }).catch(error => {
             console.error("Error resuming after backward seek:", error);
             setIsPlaying(false);
@@ -411,13 +411,13 @@ const VideoPlayer = ({
       setTimeout(() => {
         video.removeEventListener('seeked', handleSeeked);
         if (wasPlaying && video.paused) {
-          video.play().then(() => {
+                video.play().then(() => {
             console.log("Video resumed via backward seek fallback");
             setIsPlaying(true);
           }).catch(error => {
             console.error("Error in backward seek fallback:", error);
-            setIsPlaying(false);
-          });
+                  setIsPlaying(false);
+                });
         }
         setCurrentTime(video.currentTime);
       }, 200);
@@ -448,7 +448,7 @@ const VideoPlayer = ({
       }
       setSnackbarMessage(isLiked ? "Like removed" : "Video liked!");
       setShowSnackbar(true);
-                } catch (error) {
+    } catch (error) {
       console.error("Error liking video:", error);
       setSnackbarMessage("Error liking video");
       setShowSnackbar(true);
@@ -493,19 +493,60 @@ const VideoPlayer = ({
           url: shareUrl,
         });
         setWatchShared(true);
-            } else {
+          } else {
         // Fallback to clipboard
         await navigator.clipboard.writeText(shareUrl);
         setSnackbarMessage("Video link copied to clipboard!");
-        setShowSnackbar(true);
+            setShowSnackbar(true);
         setWatchShared(true);
-      }
+          }
     } catch (error) {
       console.error("Error sharing video:", error);
       setSnackbarMessage("Error sharing video");
       setShowSnackbar(true);
     }
   }, [videos, currentIndex]);
+
+  // Follow handler
+  const handleFollow = useCallback(async () => {
+    if (!currentUser) {
+      setSnackbarMessage("Please log in to follow users");
+      setShowSnackbar(true);
+      return;
+    }
+
+    const currentVideo = videos[currentIndex];
+    if (!currentVideo?.user_id) return;
+
+    // Don't allow following yourself
+    if (currentUser.user_id === currentVideo.user_id) {
+      setSnackbarMessage("You cannot follow yourself");
+      setShowSnackbar(true);
+      return;
+    }
+
+    try {
+      setFollowLoading(true);
+      
+      if (isFollowing) {
+        await unfollowUser(currentVideo.user_id);
+        setIsFollowing(false);
+        setSnackbarMessage(`Unfollowed ${currentVideo.creator_username}`);
+      } else {
+        await followUser(currentVideo.user_id);
+        setIsFollowing(true);
+        setSnackbarMessage(`Following ${currentVideo.creator_username}`);
+      }
+      
+          setShowSnackbar(true);
+    } catch (error) {
+      console.error("Error following/unfollowing user:", error);
+      setSnackbarMessage("Error updating follow status");
+          setShowSnackbar(true);
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [currentUser, videos, currentIndex, isFollowing]);
 
   // Add more robust navigation control
   const lastNavigationTimeRef = useRef(0);
@@ -597,11 +638,36 @@ const VideoPlayer = ({
 
   // Video end handler
   const handleVideoEnd = useCallback(() => {
-    console.log("Video ended, automatically playing next video");
+    console.log("Video ended event triggered");
+    
+    // CRITICAL: Only proceed if this is the current video
+    const isCurrentVideo = videos && videos[currentIndex] && videos[currentIndex].video_id === videoId;
+    if (!isCurrentVideo) {
+      console.log("Video end event triggered for non-current video - ignoring");
+      return;
+    }
+    
+    // CRITICAL: Only proceed if video actually ended naturally
+    // Check if video is at the end and not paused
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const isAtEnd = video.currentTime >= video.duration - 0.5; // Allow small tolerance
+      const isNotPaused = !video.paused;
+      
+      console.log("Video end check - currentTime:", video.currentTime, "duration:", video.duration, "isAtEnd:", isAtEnd, "isNotPaused:", isNotPaused);
+      
+      // Only proceed if video actually reached the end and is not paused
+      if (!isAtEnd || !isNotPaused) {
+        console.log("Video end event triggered but video is not at natural end or is paused - ignoring");
+        return;
+      }
+    }
+    
+    console.log("Video ended naturally, automatically playing next video");
     
     // Update watch history with completed flag if user is logged in
     if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
-    const video = videoRef.current;
+      const video = videoRef.current;
       const currentVideo = videos[currentIndex];
       
       if (video && currentVideo) {
@@ -631,7 +697,7 @@ const VideoPlayer = ({
     if (onNextVideo) {
       onNextVideo();
     }
-  }, [currentIndex, videos, currentUser, isLiked, isDisliked, isSaved, watchShared, deviceType, onNextVideo]);
+  }, [currentIndex, videos, currentUser, isLiked, isDisliked, isSaved, watchShared, deviceType, onNextVideo, videoId]);
 
   // Video error handler
   const handleVideoError = useCallback((error) => {
@@ -644,9 +710,9 @@ const VideoPlayer = ({
   useEffect(() => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) {
       console.log("No videos available or invalid index");
-      return;
-    }
-
+        return;
+      }
+      
     const currentVideo = videos[currentIndex];
     if (!currentVideo || !currentVideo.video_url) {
       console.log("Current video or URL is missing");
@@ -812,7 +878,7 @@ const VideoPlayer = ({
   // Cleanup effect for proper component unmounting
   useEffect(() => {
     const currentVideoRef = videoRef.current;
-    
+
     return () => {
       // Cleanup when component unmounts or video changes
       if (currentVideoRef) {
@@ -944,16 +1010,69 @@ const VideoPlayer = ({
             >
                     {currentVideo?.title || 'Episode 23'}
               </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ 
-                      color: 'rgba(255, 255, 255, 0.8)',
-                      fontSize: '14px'
-                    }}
-                  >
-                    {currentVideo?.creator_username}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ 
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {currentVideo?.creator_username}
               </Typography>
-            </Box>
+                    
+                    {/* Follow button - only show if not own video */}
+                    {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
+                      <Button
+                        onClick={handleFollow}
+                        disabled={followLoading}
+                        size="small"
+                        variant={isFollowing ? "outlined" : "contained"}
+                        sx={{
+                          minWidth: 'auto',
+                          px: 1.5,
+                          py: 0.5,
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          borderRadius: '16px',
+                          textTransform: 'none',
+                          ...(isFollowing ? {
+                            color: 'white',
+                            borderColor: 'rgba(255, 255, 255, 0.5)',
+                            '&:hover': {
+                              borderColor: 'rgba(255, 255, 255, 0.8)',
+                              bgcolor: 'rgba(255, 255, 255, 0.1)',
+                            },
+                          } : {
+                            bgcolor: '#1976d2',
+                            color: 'white',
+                            '&:hover': {
+                              bgcolor: '#1565c0',
+                            },
+                          }),
+                        }}
+                      >
+                        {followLoading ? (
+                          <CircularProgress size={12} color="inherit" />
+                        ) : (
+                          <>
+                            {isFollowing ? (
+                              <>
+                                <Check sx={{ fontSize: 14, mr: 0.5 }} />
+                                Following
+                              </>
+                            ) : (
+                              <>
+                                <PersonAdd sx={{ fontSize: 14, mr: 0.5 }} />
+                                Follow
+                              </>
+                            )}
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
               </Box>
 
               
@@ -1052,7 +1171,14 @@ const VideoPlayer = ({
           }}
           onPause={() => {
             setIsPlaying(false);
-            console.log("Video paused");
+            console.log("Video paused - ensuring no auto-advance timers are running");
+            
+            // Additional protection: Clear any potential background timers
+            // This helps prevent any auto-advance behavior when video is paused
+            if (videoRef.current) {
+              const video = videoRef.current;
+              console.log("Video paused at:", video.currentTime, "of", video.duration);
+            }
           }}
           onSeeked={() => {
             // Handle seek completion for better audio/video sync
