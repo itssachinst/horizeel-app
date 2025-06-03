@@ -38,13 +38,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { navigateToHomeWithRefresh, isVideoPage } from '../utils/navigation';
 import Logo from './Logo';
 
-// Styled search bar
+// Enhanced styled search bar with glassy effect
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',
   borderRadius: 20,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
+  background: 'rgba(255, 255, 255, 0.1)',
+  backdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
   '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
+    background: 'rgba(255, 255, 255, 0.15)',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+  },
+  '&:focus-within': {
+    background: 'rgba(255, 255, 255, 0.15)',
+    border: '1px solid rgba(189, 250, 3, 0.5)',
+    boxShadow: '0 0 20px rgba(189, 250, 3, 0.2)',
   },
   width: '100%',
   maxWidth: 600,
@@ -53,6 +61,7 @@ const Search = styled('div')(({ theme }) => ({
   },
   display: 'flex',
   alignItems: 'center',
+  transition: 'all 0.3s ease',
 }));
 
 const SearchIconWrapper = styled('div')(({ theme }) => ({
@@ -237,7 +246,7 @@ const Header = () => {
       navigate('/upload');
     } else {
       // Still navigate to upload route, but the UploadProtectedRoute will handle the restriction
-      navigate('/upload');
+    navigate('/upload');
     }
     handleMenuClose();
   };
@@ -407,7 +416,16 @@ const Header = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="sticky" color="default" sx={{ boxShadow: 'none', backgroundColor: 'black'}}>
+      <AppBar 
+        position="sticky" 
+        color="default" 
+        sx={{ 
+          boxShadow: 'none', 
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        }}
+      >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <IconButton
@@ -415,7 +433,14 @@ const Header = () => {
               edge="start"
               color="inherit"
               aria-label="menu"
-              sx={{ display: { xs: 'flex', md: 'none' }, mr: 1 }}
+              sx={{ 
+                display: { xs: 'flex', md: 'none' }, 
+                mr: 1,
+                '&:hover': {
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(10px)',
+                }
+              }}
               onClick={handleMobileMenuOpen}
             >
               <MenuIcon />
@@ -454,6 +479,7 @@ const Header = () => {
                 opacity: canUpload ? 1 : 0.5,
                 '&:hover': {
                   backgroundColor: canUpload ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)',
+                  backdropFilter: 'blur(10px)',
                 }
               }}
             >
@@ -464,6 +490,12 @@ const Header = () => {
               size="large"
               color="inherit"
               onClick={handleGoToFeedback}
+              sx={{
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(10px)',
+                }
+              }}
             >
               <FeedbackIcon />
             </ActionIconButton>
@@ -474,12 +506,22 @@ const Header = () => {
               aria-label="account"
               aria-haspopup="true"
               onClick={handleProfileMenuOpen}
+              sx={{
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(10px)',
+                }
+              }}
             >
               {currentUser?.profile_picture ? (
                 <Avatar 
                   src={currentUser.profile_picture} 
                   alt={currentUser.username}
-                  sx={{ width: 32, height: 32 }}
+                  sx={{ 
+                    width: 32, 
+                    height: 32,
+                    border: '2px solid rgba(189, 250, 3, 0.5)',
+                  }}
                 />
               ) : (
                 <AccountCircleIcon />

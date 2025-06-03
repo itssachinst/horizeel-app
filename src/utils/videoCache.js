@@ -1,5 +1,5 @@
 import Hls from 'hls.js';
-import { processVideoUrl, getVideoMimeType } from './videoUtils';
+import { processVideoUrl } from './videoUtils';
 
 // Get the API base URL from environment
 const API_BASE_URL = process.env.REACT_APP_API_URL || "https://horizeel.com/api/";
@@ -13,7 +13,6 @@ const VIDEO_CACHE = {
   addVideo: function(videoId, cacheObj) {
     if (!videoId) return;
     
-    console.log(`Adding video ${videoId} to cache`);
     this.cachedVideos.set(videoId, {
       ...cacheObj,
       lastAccessed: Date.now()
@@ -47,12 +46,14 @@ const VIDEO_CACHE = {
     if (!this.cachedVideos.has(videoId)) return;
     
     const cacheObj = this.cachedVideos.get(videoId);
-    console.log(`Removing video ${videoId} from cache`);
     
     // Clean up HLS resources
     if (cacheObj.hls) {
-      cacheObj.hls.stopLoad();
-      cacheObj.hls.destroy();
+      try {
+        cacheObj.hls.destroy();
+      } catch (error) {
+        // Ignore cleanup errors
+      }
     }
     
     // Remove element from DOM
@@ -86,11 +87,8 @@ const VIDEO_CACHE = {
     
     // Skip if already cached
     if (this.hasVideo(video.video_id)) {
-      console.log(`Video ${video.video_id} already in cache`);
       return this.getVideo(video.video_id);
     }
-    
-    console.log(`Preloading video: ${video.video_id}`);
     
     // Check if this is an HLS stream
     const isHlsStream = video.video_url.toLowerCase().endsWith('.m3u8') || 
@@ -177,16 +175,18 @@ const VIDEO_CACHE = {
         });
         
         // Handle errors
-        hls.on(Hls.Events.ERROR, (_, data) => {
+        hls.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
-            console.error(`Error preloading HLS video ${video.video_id}:`, data);
-            cacheObj.metadata.error = data;
-            this.addVideo(video.video_id, cacheObj);
-            
-            // Clean up on fatal errors
-            hls.destroy();
-            if (preloadElement.parentNode) {
-              preloadElement.parentNode.removeChild(preloadElement);
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.error(`Error preloading HLS video ${video.video_id}:`, data);
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.error(`Error preloading HLS video ${video.video_id}:`, data);
+                break;
+              default:
+                console.error(`Failed to preload HLS video ${video.video_id}:`, data);
+                break;
             }
           }
         });

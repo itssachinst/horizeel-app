@@ -33,7 +33,7 @@ const Logo = ({ onClick }) => {
   return (
     <LogoWrapper onClick={onClick}>
       <LogoImage src="/logo512.png" alt="Horizeel Logo" />
-      <LogoText variant="h6">
+      <LogoText variant="h6" fontFamily="Roboto-bold">
         Horizeel
       </LogoText>
     </LogoWrapper>

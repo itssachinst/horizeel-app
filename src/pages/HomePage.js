@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { 
   Card, 
   CardMedia, 
@@ -14,16 +14,220 @@ import {
   Button,
   CardContent,
   CardActionArea,
-  Link
+  Link,
+  IconButton,
+  AppBar,
+  Toolbar,
+  InputBase,
+  Drawer,
+  List,
+  ListItem,
+  ListItemText,
+  Fade,
+  Grow
 } from "@mui/material";
+import { 
+  Search as SearchIcon,
+  PlayArrow,
+  Upload as UploadIcon,
+  Feedback as FeedbackIcon,
+  AccountCircle as ProfileIcon,
+  Visibility,
+  PlayCircleOutline,
+  TrendingUp,
+  MusicNote,
+  Flight,
+  Restaurant,
+  SportsEsports,
+  Movie,
+  Palette,
+  Nature,
+  DirectionsCar,
+  School
+} from "@mui/icons-material";
+import { styled, alpha } from '@mui/material/styles';
 import { useNavigate, useLocation } from "react-router-dom";
 import { searchVideos } from "../api";
-import { Visibility, Person, PlayArrow, ArrowBack } from "@mui/icons-material";
-import { alpha } from '@mui/material/styles';
 import { formatDistanceToNow } from 'date-fns';
 import { useVideoContext } from "../contexts/VideoContext";
 import { formatViewCount, formatDuration } from "../utils/videoUtils";
-// import HeroThumbnail from "../components/HeroThumbnail";
+import { useAuth } from '../contexts/AuthContext';
+import Logo from '../components/Logo';
+
+// Styled components for the modern layout
+const StyledAppBar = styled(AppBar)(({ theme }) => ({
+  background: 'rgba(0, 0, 0, 0.9)',
+  backdropFilter: 'blur(20px)',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+}));
+
+const SearchContainer = styled('div')(({ theme }) => ({
+  position: 'relative',
+  borderRadius: 25,
+  background: 'rgba(255, 255, 255, 0.1)',
+  backdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  '&:hover': {
+    background: 'rgba(255, 255, 255, 0.15)',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+  },
+  '&:focus-within': {
+    background: 'rgba(255, 255, 255, 0.15)',
+    border: '1px solid rgba(189, 250, 3, 0.5)',
+    boxShadow: '0 0 20px rgba(189, 250, 3, 0.2)',
+  },
+  width: '100%',
+  maxWidth: 500,
+  display: 'flex',
+  alignItems: 'center',
+  transition: 'all 0.3s ease',
+}));
+
+const SearchInput = styled(InputBase)(({ theme }) => ({
+  color: 'white',
+  width: '100%',
+  '& .MuiInputBase-input': {
+    padding: theme.spacing(1.5, 1, 1.5, 0),
+    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
+    paddingRight: `calc(1em + ${theme.spacing(4)})`,
+    transition: theme.transitions.create('width'),
+    width: '100%',
+  },
+}));
+
+const GlassCard = styled(Card)(({ theme }) => ({
+  background: 'rgba(255, 255, 255, 0.05)',
+  backdropFilter: 'blur(15px)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRadius: '16px',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  '&:hover': {
+    transform: 'translateY(-4px)',
+    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(189, 250, 3, 0.2)',
+    border: '1px solid rgba(189, 250, 3, 0.3)',
+  },
+}));
+
+const TopTenSidebar = styled(Box)(({ theme }) => ({
+  position: 'fixed',
+  left: 0,
+  top: 80,
+  width: 280,
+  height: 'calc(100vh - 80px)',
+  background: 'rgba(0, 0, 0, 0.8)',
+  backdropFilter: 'blur(20px)',
+  borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+  padding: theme.spacing(3),
+  overflowY: 'auto',
+  zIndex: 1000,
+  [theme.breakpoints.down('lg')]: {
+    display: 'none',
+  },
+  // Custom scrollbar styling for WebKit browsers (Chrome, Safari, Edge)
+  '&::-webkit-scrollbar': {
+    width: '6px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: 'transparent',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    background: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: '3px',
+    transition: 'background 0.3s ease',
+  },
+  '&::-webkit-scrollbar-thumb:hover': {
+    background: 'rgba(255, 255, 255, 0.2)',
+  },
+  '&::-webkit-scrollbar-thumb:active': {
+    background: 'rgba(189, 250, 3, 0.3)',
+  },
+  // Firefox scrollbar styling
+  scrollbarWidth: 'thin',
+  scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent',
+  '&:hover': {
+    scrollbarColor: 'rgba(255, 255, 255, 0.2) transparent',
+  },
+}));
+
+const MainContent = styled(Box)(({ theme }) => ({
+  marginLeft: 280,
+  paddingTop: theme.spacing(2),
+  paddingLeft: theme.spacing(2),
+  paddingRight: theme.spacing(2),
+  paddingBottom: theme.spacing(2),
+  minHeight: '100vh',
+  background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+  overflowY: 'auto',
+  [theme.breakpoints.down('lg')]: {
+    marginLeft: 0,
+  },
+  // Custom scrollbar styling for WebKit browsers (Chrome, Safari, Edge)
+  '&::-webkit-scrollbar': {
+    width: '8px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: 'transparent',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '4px',
+    transition: 'background 0.3s ease',
+  },
+  '&::-webkit-scrollbar-thumb:hover': {
+    background: 'rgba(255, 255, 255, 0.15)',
+  },
+  '&::-webkit-scrollbar-thumb:active': {
+    background: 'rgba(189, 250, 3, 0.2)',
+  },
+  // Firefox scrollbar styling
+  scrollbarWidth: 'thin',
+  scrollbarColor: 'rgba(255, 255, 255, 0.05) transparent',
+  '&:hover': {
+    scrollbarColor: 'rgba(255, 255, 255, 0.15) transparent',
+  },
+}));
+
+// Category data with icons
+const CATEGORIES = [
+  { name: 'Trending', icon: TrendingUp },
+  { name: 'Music', icon: MusicNote },
+  { name: 'Travel', icon: Flight },
+  { name: 'Food', icon: Restaurant },
+  { name: 'Gaming', icon: SportsEsports },
+  { name: 'Movies', icon: Movie },
+  { name: 'Art', icon: Palette },
+  { name: 'Nature', icon: Nature },
+  { name: 'Cars', icon: DirectionsCar },
+  { name: 'Education', icon: School },
+];
+
+// Memoized SearchBar component to prevent unnecessary re-renders
+const SearchBar = React.memo(({ currentCategoryName, searchQuery, onSearchChange, onSearch }) => (
+  <SearchContainer>
+    <Box sx={{ position: 'absolute', left: 16, display: 'flex', alignItems: 'center' }}>
+      <SearchIcon sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
+    </Box>
+    <SearchInput
+      placeholder={`Search ${currentCategoryName}...`}
+      value={searchQuery}
+      onChange={(e) => onSearchChange(e.target.value)}
+      onKeyPress={(e) => {
+        if (e.key === 'Enter') {
+          onSearch(searchQuery);
+        }
+      }}
+    />
+    {searchQuery && (
+      <IconButton 
+        onClick={() => onSearch(searchQuery)}
+        sx={{ position: 'absolute', right: 8, color: 'white' }}
+      >
+        <SearchIcon />
+      </IconButton>
+    )}
+  </SearchContainer>
+));
 
 const HomePage = () => {
   const { 
@@ -36,477 +240,546 @@ const HomePage = () => {
     setCurrentIndex
   } = useVideoContext();
   
+  const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [showMobilePromo, setShowMobilePromo] = useState(false);
-  const [isDemo, setIsDemo] = useState(false);
-  
+  const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
+
   const observer = useRef();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-  const ITEMS_PER_PAGE = 20;
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
 
-  // Check if we're in demo mode
+  // Auto-scrolling categories effect - optimized to prevent unnecessary re-renders
   useEffect(() => {
-    setIsDemo(location.pathname.startsWith('/demo'));
-  }, [location.pathname]);
+    const interval = setInterval(() => {
+      setCurrentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // Effect to check if user is on mobile browser
-  useEffect(() => {
-    // Check if user is on mobile device
-    const isMobileBrowser = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    setShowMobilePromo(isMobileBrowser && isMobile);
-  }, [isMobile]);
-
-  // Effect to handle URL search parameters
-  useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const query = queryParams.get('q');
-
-    if (query) {
-      setSearchQuery(query);
-      setIsSearching(true);
-      handleSearch(query);
-    } else {
-      setSearchQuery('');
-      setIsSearching(false);
-      setSearchResults([]);
+  // Generate top 10 videos from current videos - memoized
+  const topVideos = useMemo(() => {
+    if (videos.length > 0) {
+      return [...videos]
+        .sort((a, b) => (b.views || 0) - (a.views || 0))
+        .slice(0, 10);
     }
-  }, [location.search]);
+    return [];
+  }, [videos]);
 
-  const handleSearch = async (query) => {
+  // Memoized handlers to prevent unnecessary re-renders
+  const handleVideoClick = useCallback((videoId, index) => {
+    setCurrentIndex(index);
+    navigate(`/reels/${videoId}`);
+  }, [setCurrentIndex, navigate]);
+
+  const handleSearch = useCallback(async (query) => {
+    if (!query.trim()) return;
     setSearchLoading(true);
     try {
-      const results = await searchVideos(query, 0, ITEMS_PER_PAGE);
+      const results = await searchVideos(query, 0, 20);
       setSearchResults(results || []);
+      setIsSearching(true);
     } catch (error) {
       console.error("Error searching videos:", error);
     } finally {
       setSearchLoading(false);
     }
-  };
-
-  // Set up the intersection observer for infinite scrolling
-  const lastVideoElementRef = useCallback(node => {
-    if (loading || searchLoading) return;
-    
-    // Always disconnect previous observer before creating new one
-    if (observer.current) {
-      observer.current.disconnect();
-    }
-    
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore && !isSearching) {
-        console.log("Last video element is visible, loading more videos");
-        loadMoreVideos();
-      }
-    }, {
-      rootMargin: '200px', // Load videos before user reaches the end
-      threshold: 0.1 // Trigger when at least 10% of the element is visible
-    });
-    
-    if (node) {
-      observer.current.observe(node);
-    }
-  }, [loading, searchLoading, hasMore, isSearching, loadMoreVideos]);
-
-  // Cleanup observer on component unmount
-  useEffect(() => {
-    return () => {
-      if (observer.current) {
-        observer.current.disconnect();
-      }
-    };
   }, []);
 
-  const handleVideoClick = (videoId, index) => {
-    // Set the current index in the context
-    setCurrentIndex(index);
-    
-    // Navigate to the vertical feed page with the selected video ID
-    navigate(`/reels/${videoId}`);
-  };
+  // Memoized current category name to prevent re-renders
+  const currentCategoryName = useMemo(() => CATEGORIES[currentCategoryIndex].name, [currentCategoryIndex]);
 
-  // Format time since upload
-  const formatTimeAgo = (timestamp) => {
-    if (!timestamp) return 'Recently';
-    try {
-    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
-    } catch (error) {
-      return 'Recently';
-    }
-  };
+  // Top Navigation Bar Component - memoized to prevent unnecessary re-renders
+  const TopNavigationBar = useCallback(() => (
+    <StyledAppBar position="fixed">
+      <Toolbar sx={{ justifyContent: 'space-between', px: 3 }}>
+        {/* Logo */}
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Logo />
+        </Box>
 
-  // Toggle mobile promo for testing
-  const toggleMobilePromo = () => {
-    setShowMobilePromo(!showMobilePromo);
-  };
+        {/* Search Bar with Auto-scrolling Categories */}
+        <SearchBar
+          currentCategoryName={currentCategoryName}
+          searchQuery={searchQuery}
+          onSearchChange={(value) => setSearchQuery(value)}
+          onSearch={handleSearch}
+        />
 
-  // Video Thumbnail Component with placeholder
-  const VideoThumbnail = ({ video, index, isLastElement = false }) => {
-    const cardRef = isLastElement ? lastVideoElementRef : null;
-    
-    return (
-      <Card 
-        ref={cardRef}
+        {/* Right Side Icons */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <IconButton 
+            sx={{ 
+              color: 'white',
+              '&:hover': { 
+                background: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)' 
+              }
+            }}
+            onClick={() => navigate('/upload')}
+          >
+            <UploadIcon />
+          </IconButton>
+          <IconButton 
+            sx={{ 
+              color: 'white',
+              '&:hover': { 
+                background: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)' 
+              }
+            }}
+            onClick={() => navigate('/feedback')}
+          >
+            <FeedbackIcon />
+          </IconButton>
+          <IconButton 
+            sx={{ 
+              color: 'white',
+              '&:hover': { 
+                background: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)' 
+              }
+            }}
+            onClick={() => navigate('/profile')}
+          >
+            {currentUser?.profile_picture ? (
+              <Avatar 
+                src={currentUser.profile_picture} 
+                sx={{ width: 32, height: 32, border: '2px solid rgba(189, 250, 3, 0.5)' }}
+              />
+            ) : (
+              <ProfileIcon />
+            )}
+          </IconButton>
+        </Box>
+      </Toolbar>
+    </StyledAppBar>
+  ), [currentCategoryName, searchQuery, handleSearch, navigate, currentUser]);
+
+  // Top 10 Sidebar Component - memoized to prevent unnecessary re-renders
+  const TopTenSidebarComponent = useCallback(() => (
+    <TopTenSidebar>
+      
+      {topVideos.map((video, index) => (
+        <Grow key={video.video_id} in timeout={300 + index * 100}>
+          <Box 
+            sx={{ 
+              mb: 2, 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+              '&:hover .thumbnail-card': {
+                transform: 'translateX(8px)',
+                background: 'rgba(255, 255, 255, 0.12)',
+              }
+            }}
+            onClick={() => handleVideoClick(video.video_id, index)}
+          >
+            {/* Netflix-Style Ranking Number - Left-Center Positioned */}
+            <Box
+              sx={{
+                position: 'absolute',
+                left: -15, // Offset to stick out beyond thumbnail
+                top: '50%',
+                transform: 'translateY(-50%)', // Center vertically
+                zIndex: 10,
+                width: 50,
+                height: 50,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Typography
+                variant="h1"
+                sx={{
+                  color: '#BDFA03',
+                  fontFamily: 'Roboto',
+                  fontWeight: 'bold', // Bold weight as requested
+                  fontSize: '8rem',
+                  lineHeight: 1,
+                  textShadow: `
+                    -3px -3px 0 #000,
+                    3px -3px 0 #000,
+                    -3px 3px 0 #000,
+                    3px 3px 0 #000,
+                    0 0 10px rgba(0, 0, 0, 0.9),
+                    0 0 20px rgba(189, 250, 3, 0.4)
+                  `,
+                  WebkitTextStroke: '2px #000',
+                  filter: 'drop-shadow(0 6px 12px rgba(0, 0, 0, 0.8))',
+                }}
+              >
+                {index + 1}
+              </Typography>
+            </Box>
+
+            {/* Thumbnail Card Container */}
+            <GlassCard 
+              className="thumbnail-card"
+              sx={{ 
+                flex: 1,
+                ml: 2, // Margin to accommodate the ranking number
+                background: 'rgba(255, 255, 255, 0.08)',
+                transition: 'all 0.3s ease',
+                borderRadius: '12px',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5 }}>
+                {/* Video Thumbnail */}
+                <Box sx={{ position: 'relative', width: 200, height: 110, borderRadius: '8px', overflow: 'hidden' }}>
+                  <CardMedia
+                    component="img"
+                    image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/240/135`}
+                    sx={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      transition: 'transform 0.3s ease',
+                      '&:hover': {
+                        transform: 'scale(1.05)',
+                      }
+                    }}
+                  />
+                  
+                  {/* Play Icon Overlay */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      opacity: 0,
+                      transition: 'opacity 0.3s ease',
+                      '&:hover': {
+                        opacity: 1,
+                      },
+                    }}
+                  >
+                    <PlayCircleOutline 
+                      sx={{ 
+                        color: 'white',
+                        fontSize: 32,
+                        filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8))',
+                      }}
+                    />
+                  </Box>
+                  
+                  {/* View Count Badge */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      background: 'rgba(0, 0, 0, 0.8)',
+                      backdropFilter: 'blur(10px)',
+                      borderRadius: '12px',
+                      padding: '2px 6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                    }}
+                  >
+                    <Visibility sx={{ fontSize: 10, color: 'white' }} />
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        color: 'white',
+                        fontFamily: 'Roboto, sans-serif',
+                        fontSize: '10px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {formatViewCount(video.views || 0)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </GlassCard>
+          </Box>
+        </Grow>
+      ))}
+    </TopTenSidebar>
+  ), [topVideos, handleVideoClick]);
+
+  // Featured Video Component
+  const FeaturedVideo = () => (
+    <GlassCard 
+      sx={{ 
+        mb: 4, 
+        height: 550,
+        position: 'relative',
+        overflow: 'hidden',
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)',
+      }}
+    >
+      <CardMedia
+        component="img"
+        image="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
         sx={{ 
+          width: '100%', 
           height: '100%', 
-          display: 'flex', 
+          objectFit: 'cover',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        }}
+      />
+      
+      {/* Overlay */}
+      <Box
+        sx={{
+          position: 'absolute',
+          left: 0,
+          bottom: 0,
+          // background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.7) 100%)',
+          display: 'flex',
           flexDirection: 'column',
-          transition: 'transform 0.2s',
-          '&:hover': {
-            transform: 'scale(1.02)',
-            boxShadow: (theme) => theme.shadows[4]
-          },
-          backgroundColor: '#121212',
-          borderRadius: 2,
-          overflow: 'hidden'
+          // justifyContent: 'center',
+          // alignItems: 'center',
+          textAlign: 'left',
+          p: 4,
         }}
       >
-        <CardActionArea 
-          onClick={() => handleVideoClick(video.video_id, index)}
-          sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
+        <Typography 
+          variant="h3" 
+          sx={{ 
+            color: 'white', 
+            fontWeight: 'bold',
+            fontFamily: 'Roboto, sans-serif',
+            mb: 2,
+            textShadow: '0 4px 20px rgba(0, 0, 0, 0.8)',
+            background: 'linear-gradient(90deg, #BDFA03, #BEFF03)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
         >
-          <Box sx={{ position: 'relative', width: '100%', paddingTop: '56.25%' /* 16:9 aspect ratio */ }}>
-            <CardMedia
-              component="img"
-              image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/640/360`} // Fallback to placeholder
-              alt={video.title}
+          Experience the world's first horizontal reels
+        </Typography>
+        
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            color: 'rgba(255, 255, 255, 0.9)', 
+            mb: 4,
+            fontFamily: 'Roboto, sans-serif',
+            textShadow: '0 2px 10px rgba(0, 0, 0, 0.8)',
+          }}
+        >
+          Discover a new way to watch and create content
+        </Typography>
+        
+        <Button
+          variant="contained"
+          size="large"
+          startIcon={<PlayArrow />}
+          onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
+          sx={{
+            background: 'rgba(189, 250, 3, 0.9)',
+            backdropFilter: 'blur(10px)',
+            color: 'black',
+            fontWeight: 'bold',
+            fontFamily: 'Roboto, sans-serif',
+            px: 4,
+            py: 1.5,
+            borderRadius: '25px',
+            fontSize: '1.1rem',
+            border: '2px solid rgba(189, 250, 3, 0.3)',
+            '&:hover': {
+              background: 'rgba(189, 250, 3, 1)',
+              transform: 'translateY(-2px)',
+              boxShadow: '0 10px 30px rgba(189, 250, 3, 0.4)',
+            },
+            transition: 'all 0.3s ease',
+          }}
+        >
+          Watch Now
+        </Button>
+      </Box>
+    </GlassCard>
+  );
+
+  // Video Grid Component
+  const VideoGrid = () => {
+    const displayVideos = isSearching ? searchResults : videos.slice(1); // Skip first video as it's featured
+    
+    return (
+      <Grid container spacing={3}>
+        {displayVideos.map((video, index) => (
+          <Grid item xs={12} sm={6} md={4} key={video.video_id}>
+            <GlassCard 
               sx={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                width: '100%', 
-                height: '100%',
-                objectFit: 'cover'
+                height: 280,
+                cursor: 'pointer',
+                position: 'relative',
+                overflow: 'hidden',
               }}
-              onError={(e) => {
-                e.target.src = `https://picsum.photos/seed/${video.video_id}/640/360`;
-              }}
-            />
-            
-            {/* Overlay with title (top left) and views (top right) */}
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                padding: '8px',
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start'
-              }}
+              onClick={() => handleVideoClick(video.video_id, index + 1)}
             >
-              {/* Title on top left */}
-              <Typography 
-                variant="subtitle2" 
+              <CardMedia
+                component="img"
+                image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/400/225`}
                 sx={{ 
-                  color: 'white', 
-                  fontWeight: 'bold',
-                  maxWidth: '70%',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  textShadow: '1px 1px 2px rgba(0,0,0,0.7)'
+                  width: '100%', 
+                  height: 180, 
+                  objectFit: 'cover' 
                 }}
-              >
-                {video.title || "Untitled Video"}
-              </Typography>
-              
-              {/* Views on top right */}
-              <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
-                <Visibility sx={{ fontSize: 16, mr: 0.5, color: 'white' }} />
-                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
-                  {formatViewCount(video.views || 0)}
-                </Typography>
-              </Box>
-            </Box>
-            
-            {/* Video duration overlay - keep this in bottom right corner */}
-            {video.duration && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: 8,
-                  right: 8,
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                  borderRadius: 1,
-                  padding: '2px 6px',
-                  color: 'white',
-                  fontSize: '0.75rem'
-                }}
-              >
-                {formatDuration(video.duration)}
-              </Box>
-            )}
-            
-            {/* User details at the bottom */}
-            <Box
-              sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                padding: '8px',
-                background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <Avatar 
-                src={video.creator_profile_picture}
-                alt={video.creator_username}
-                sx={{ width: 24, height: 24, mr: 1 }}
               />
-              <Typography variant="caption" sx={{ color: 'white', fontWeight: 'medium', flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {video.creator_username || video.username || "Anonymous"}
-              </Typography>
-            </Box>
-            
-            {/* Play button overlay */}
-            <Box
-              sx={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                opacity: 0,
-                transition: 'opacity 0.3s',
-                '&:hover': {
-                  opacity: 1
-                },
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                borderRadius: '50%',
-                padding: '8px'
-              }}
-            >
-              <PlayArrow sx={{ fontSize: 48, color: 'white' }} />
-            </Box>
-          </Box>
-        </CardActionArea>
-      </Card>
+              
+              {/* Duration Badge */}
+              {video.duration && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    background: 'rgba(0, 0, 0, 0.8)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    color: 'white',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    fontFamily: 'Roboto, sans-serif',
+                  }}
+                >
+                  {formatDuration(video.duration)}
+                </Box>
+              )}
+              
+              {/* Content */}
+              <CardContent sx={{ p: 2 }}>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    color: 'white',
+                    fontFamily: 'Roboto, sans-serif',
+                    fontWeight: 600,
+                    fontSize: '16px',
+                    mb: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {video.title || "Untitled Video"}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Avatar 
+                    src={video.profile_picture || video.creator_profile_picture}
+                    sx={{ width: 20, height: 20 }}
+                  />
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: 'rgba(255, 255, 255, 0.8)',
+                      fontFamily: 'Roboto, sans-serif',
+                      fontSize: '14px',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {video.creator_username || video.username || "Anonymous"}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Visibility sx={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.6)' }} />
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        color: 'rgba(255, 255, 255, 0.6)',
+                        fontFamily: 'Roboto, sans-serif',
+                      }}
+                    >
+                      {formatViewCount(video.views || 0)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </GlassCard>
+          </Grid>
+        ))}
+      </Grid>
     );
   };
 
-  // Mobile app promo component
-  const MobileAppPromo = () => (
-    <Box
-      sx={{
+  if (loading && videos.length === 0) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
         minHeight: '100vh',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #121212 0%, #1e1e1e 100%)',
-        px: 3,
-        textAlign: 'center',
-        position: 'relative',
-        overflow: 'hidden' // Prevent overflow of decorative elements
-      }}
-    >
-      {/* Logo and branding */}
-      <Box 
-        sx={{ 
-          mb: 4,
-          width: '80%',
-          maxWidth: '300px'
-        }}
-      >
-        <img 
-          src="/logo.png" 
-          alt="Horizeel" 
-          style={{ width: '100%', height: 'auto' }}
-          onError={(e) => {
-            e.target.style.display = 'none';
-          }}
-        />
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+      }}>
+        <CircularProgress sx={{ color: '#BDFA03' }} />
       </Box>
-
-      {/* Main Heading */}
-      <Typography
-        variant="h4"
-        color="white"
-        fontWeight="bold"
-        sx={{
-          mb: 4,
-          background: 'linear-gradient(90deg, #BDFA03, #BEFF03)',
-          backgroundClip: 'text',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-        }}
-      >
-        Welcome to the World's First Horizontal Reels Platform!
-      </Typography>
-
-      {/* Description */}
-      <Typography
-        variant="body1"
-        color="white"
-        sx={{
-          mt: 2,
-          mb: 4,
-          maxWidth: '90%',
-          mx: 'auto',
-          fontSize: '1.1rem',
-          lineHeight: 1.6
-        }}
-      >
-        Thank you for your interest in exploring Horizontal Reels! To experience the true immersive quality of reels, please visit{' '}
-        <Box 
-          component="span" 
-          sx={{ 
-            fontWeight: 'bold',
-            color: '#BDFA03',
-            textDecoration: 'none'
-          }}
-          onClick={() => window.open('https://horizeel.com', '_blank')}
-        >
-          horizeel.com
-        </Box>{' '}
-        on a laptop or desktop.
-      </Typography>
-
-      {/* Coming soon message */}
-      <Typography
-        variant="body1"
-        color="white"
-        sx={{
-          mb: 6,
-          maxWidth: '90%',
-          mx: 'auto',
-          fontSize: '1.1rem',
-          lineHeight: 1.6
-        }}
-      >
-        We are working on bringing this revolutionary experience to mobile soon! Stay tuned for our app launch on the App Store & Play Store.
-      </Typography>
-
-      {/* App store indicators */}
-      <Box sx={{ display: 'flex', gap: 3, mt: 1, mb: 4 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          color: 'white',
-          padding: '8px 16px',
-          border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: '8px',
-          background: 'rgba(255,255,255,0.05)'
-        }}>
-          App Store
-        </Box>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          color: 'white',
-          padding: '8px 16px',
-          border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: '8px',
-          background: 'rgba(255,255,255,0.05)'
-        }}>
-          Google Play
-        </Box>
-      </Box>
-
-      
-    </Box>
-  );
-
-  if (showMobilePromo) {
-    return <MobileAppPromo />;
+    );
   }
 
-  const displayVideos = isSearching ? searchResults : videos;
-  const isLoading = isSearching ? searchLoading : loading;
-
   return (
-    <Container maxWidth="xl" sx={{ pt: 2, pb: 8 }}>
-      {showMobilePromo && <MobileAppPromo />}
+    <Box sx={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+    }}>
+      <TopNavigationBar />
       
-      {/* Hero Thumbnail Banner */}
-      {/*
-      {!isSearching && (
-        <Box 
-          sx={{ 
-            mb: 4,
-            mt: isMobile ? 1 : 3,
-            mx: 'auto', // Center alignment
-            maxWidth: '1200px',
-            borderRadius: isMobile ? 0 : '12px',
-            overflow: 'hidden',
-          }}
-        >
-          <HeroThumbnail 
-            thumbnailUrl="https://picsum.photos/id/1079/1200/400" 
-            videoUrl="https://horizeel.s3.ap-south-1.amazonaws.com/hzeel.mp4"
-            title="Start watching horizontal reels"
-            subtitle={isMobile ? "Swipe to discover" : "Discover the new way to watch short-form videos"}
-          />
-        </Box>
-      )}
-      */}
+      {!isMobile && !isTablet && <TopTenSidebarComponent />}
       
-      {isSearching && (
-        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h5">
-            Search results for: "{searchQuery}"
-          </Typography>
-          <Button onClick={() => navigate('/demo/')}>
-            Clear Search
-          </Button>
-        </Box>
-      )}
-      
-      {isLoading && displayVideos.length === 0 ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <>
-          {displayVideos.length === 0 ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
-              <Typography variant="h6" color="text.secondary">
-                {isSearching ? "No results found" : "No videos available"}
+      <MainContent>
+        <Box sx={{}}>
+          {/* Search Results Header */}
+          {isSearching && (
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h4" sx={{ color: 'white', fontWeight: 'bold', mb: 2 }}>
+                Search results for: "{searchQuery}"
               </Typography>
-            </Box>
-          ) : (
-            <Grid container spacing={3}>
-              {displayVideos.map((video, index) => (
-                <Grid item xs={12} sm={6} md={4} key={`${video.video_id}-${index}`}>
-                  <VideoThumbnail 
-                    video={video} 
-                    index={index}
-                    isLastElement={index === displayVideos.length - 1 && !isSearching}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          )}
-          
-          {/* Loading indicator for infinite scroll */}
-          {(loading || hasMore) && !isSearching && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
-              <CircularProgress size={30} />
+              <Button 
+                onClick={() => {
+                  setIsSearching(false);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                sx={{
+                  background: 'rgba(189, 250, 3, 0.1)',
+                  color: '#BDFA03',
+                  border: '1px solid rgba(189, 250, 3, 0.3)',
+                  '&:hover': {
+                    background: 'rgba(189, 250, 3, 0.2)',
+                  }
+                }}
+              >
+                Clear Search
+              </Button>
             </Box>
           )}
           
-          {error && (
+          {/* Featured Video */}
+          {!isSearching && <FeaturedVideo />}
+          
+          {/* Video Grid */}
+          <VideoGrid />
+          
+          {/* Loading indicator */}
+          {(loading || searchLoading) && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-              <Typography color="error">{error}</Typography>
+              <CircularProgress sx={{ color: '#BDFA03' }} />
             </Box>
           )}
-        </>
-      )}
-    </Container>
+        </Box>
+      </MainContent>
+    </Box>
   );
 };
 
-export default HomePage;
+export default HomePage; 

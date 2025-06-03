@@ -9,7 +9,6 @@ import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
-import VideoPage from "./pages/VideoPage";
 import VerticalFeedPage from "./pages/VerticalFeedPage";
 import UploadVideo from "./components/UploadVideo";
 import FollowersPage from "./pages/FollowersPage";

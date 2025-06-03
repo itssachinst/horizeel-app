@@ -1,18 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   IconButton, Typography, Box, Avatar, Snackbar, Alert, 
   Dialog, DialogContent, DialogTitle, Button, DialogActions, 
-  CircularProgress, Slide 
+  CircularProgress, Slide, Tooltip
 } from "@mui/material";
 import {
   ThumbUp, ThumbDown, Share, ArrowUpward, ArrowDownward,
   VolumeOff, VolumeUp, BookmarkBorder, Bookmark, PersonAdd,
-  Check, Pause, PlayArrow, Fullscreen, ArrowBack, FullscreenExit
+  Check, Pause, PlayArrow, Fullscreen, ArrowBack, FullscreenExit, Visibility
 } from "@mui/icons-material";
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import ThumbUpIcon from '@mui/icons-material/ThumbUp';
-import ThumbDownIcon from '@mui/icons-material/ThumbDown';
 import { useAuth } from "../contexts/AuthContext";
 import {
   incrementVideoLike, incrementVideoDislike, saveVideo, 
@@ -22,6 +18,7 @@ import {
 import useSwipeNavigate from "../hooks/useSwipeNavigate";
 import useTrackpadGestures from "../hooks/useTrackpadGestures";
 import { processVideoUrl } from "../utils/videoUtils";
+import { formatViewCount } from "../utils/videoUtils";
 import { navigateToHomeWithRefresh } from "../utils/navigation";
 import { useVideoContext } from "../contexts/VideoContext";
 import ReactHlsPlayer from 'react-hls-player';
@@ -98,7 +95,6 @@ const VideoPlayer = ({
 }) => {
   const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
-  const navigate = useNavigate();
   const { currentUser } = useAuth();
   // Removed hasMore and loadMoreVideos since navigation is now handled by parent
 
@@ -131,6 +127,7 @@ const VideoPlayer = ({
     window.innerHeight > window.innerWidth ? 'portrait' : 'landscape'
   );
   const [error, setError] = useState('');
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   // Create reference to current video data
   const videoData = videos[currentIndex];
@@ -201,10 +198,10 @@ const VideoPlayer = ({
       setShowControls(true);
     }
     
-    // Set new timeout to hide controls after 5 seconds
+    // Set new timeout to hide controls after 8 seconds
     const newTimeout = setTimeout(() => {
       setShowControls(false);
-    }, 5000);
+    }, 8000);
     
     setControlsTimeout(newTimeout);
   }, [controlsTimeout, showControls]);
@@ -242,7 +239,6 @@ const VideoPlayer = ({
   // Fixed toggle play/pause to prevent video restarts
   const togglePlayPause = useCallback(() => {
     if (!videoRef.current) {
-      console.warn("Video ref not available for play/pause toggle");
       return;
     }
 
@@ -250,7 +246,6 @@ const VideoPlayer = ({
 
     // Ensure we have a valid video element with the necessary methods
     if (!video.play || !video.pause || typeof video.paused === 'undefined') {
-      console.warn("Video element doesn't have required play/pause methods");
       return;
     }
     
@@ -264,7 +259,6 @@ const VideoPlayer = ({
       video.play()
           .then(() => {
             setIsPlaying(true);
-            console.log("Video resumed from position:", video.currentTime);
           })
         .catch(error => {
           console.error("Error playing video:", error);
@@ -274,39 +268,77 @@ const VideoPlayer = ({
         // Pause at current position
       video.pause();
       setIsPlaying(false);
-        console.log("Video paused at position:", video.currentTime);
-      }
+    }
     } catch (error) {
       console.error("Error in togglePlayPause:", error);
     }
   }, []);
 
-  // Fixed video container click handler to prevent video restarts
+  // Enhanced video container click handler with robust conflict prevention
   const handleVideoContainerClick = useCallback((e) => {
-    console.log("Video container clicked, target:", e.target.tagName, e.target.className);
-    
     // Show controls and reset timer on click
     showControlsAndResetTimer();
     
-    // Prevent click handling if clicked on a control element or button
-    if (e.target.closest('button') || 
-        e.target.closest('.video-controls') || 
-        e.target.closest('[role="button"]') ||
-        e.target.tagName === 'BUTTON') {
-      console.log("Click on control element, ignoring");
+    // Debug logging for development
+    console.log('Click detected on video container', {
+      target: e.target.tagName,
+      className: e.target.className,
+      closest: e.target.closest ? 'available' : 'not available'
+    });
+    
+    // Comprehensive check for interactive elements to avoid conflicts
+    const interactiveSelectors = [
+      'button',
+      'a',
+      'input',
+      'select',
+      'textarea',
+      '[role="button"]',
+      '[data-interactive]',
+      '.video-controls',
+      '.MuiIconButton-root',
+      '.MuiButton-root',
+      '.MuiSlider-root',
+      '[data-description-container]', // User info section
+    ];
+    
+    // Check if click target or any parent is an interactive element
+    const isInteractiveElement = interactiveSelectors.some(selector => {
+      return e.target.closest(selector);
+    });
+    
+    // If clicked on interactive element, don't handle play/pause
+    if (isInteractiveElement) {
+      console.log('Click ignored - interactive element detected');
       return;
     }
 
-    // Stop propagation and prevent default to avoid any video restart behavior
+    // Check if click is on the right-side button stack area
+    const rightSideButtonArea = e.target.closest('[data-right-buttons]');
+    if (rightSideButtonArea) {
+      console.log('Click ignored - right-side button area');
+      return;
+    }
+
+    // Check if click is on user info section
+    const userInfoArea = e.target.closest('[data-user-info]');
+    if (userInfoArea) {
+      console.log('Click ignored - user info area');
+      return;
+    }
+
+    console.log('Click accepted - toggling play/pause');
+    
+    // Stop propagation to prevent conflicts with other handlers
     e.stopPropagation();
     e.preventDefault();
     
-    console.log("Toggling play/pause, current video state:", videoRef.current?.paused);
-    
-    // Only toggle play/pause, never restart the video
-    // Check if we have a valid video reference before attempting to control it
-          if (videoRef.current) {
-      togglePlayPause();
+    // Only toggle play/pause if we have a valid video reference
+    if (videoRef.current) {
+      // Add a small delay to ensure other handlers have completed
+      setTimeout(() => {
+        togglePlayPause();
+      }, 10);
     }
   }, [togglePlayPause, showControlsAndResetTimer]);
 
@@ -322,13 +354,11 @@ const VideoPlayer = ({
   // Mute toggle function
   const toggleMute = useCallback(() => {
     if (!videoRef.current) {
-      console.warn("Video ref not available for mute toggle");
       return;
     }
     
     // Prevent unmuting if this video is force muted (non-current video)
     if (forceMuted) {
-      console.warn("Cannot unmute - video is force muted (non-current video)");
           return;
         }
 
@@ -342,20 +372,6 @@ const VideoPlayer = ({
     if (!newMutedState && video.volume === 0) {
       video.volume = 1.0;
     }
-    
-    console.log("Video muted:", newMutedState, "volume:", video.volume);
-    
-    // Additional debugging for audio state
-    if (!newMutedState) {
-      console.log("Audio should now be audible - checking audio context");
-      
-      // Try to detect if audio is actually playing
-      setTimeout(() => {
-        if (video && !video.paused && !video.muted) {
-          console.log("Video is playing and not muted - audio should be audible");
-        }
-      }, 100);
-    }
   }, [forceMuted]);
 
   // Seek forward function with proper HLS buffer flushing
@@ -367,8 +383,6 @@ const VideoPlayer = ({
       const wasPlaying = !video.paused;
       const newTime = Math.min(video.currentTime + 10, video.duration || 0);
       
-      console.log(`Seeking forward to: ${newTime}s`);
-      
       // Step 1: Pause video immediately to stop current audio stream
       video.pause();
       setIsPlaying(false);
@@ -378,15 +392,12 @@ const VideoPlayer = ({
       
       // Step 3: Wait for seek to complete and buffers to flush
       const handleSeeked = () => {
-        console.log("Forward seek completed, audio buffers flushed");
-        
         // Remove the event listener to avoid memory leaks
         video.removeEventListener('seeked', handleSeeked);
         
         // Step 4: Resume playback if it was playing before
         if (wasPlaying) {
           video.play().then(() => {
-            console.log("Video resumed after forward seek at:", video.currentTime);
             setIsPlaying(true);
           }).catch(error => {
             console.error("Error resuming after forward seek:", error);
@@ -405,7 +416,6 @@ const VideoPlayer = ({
         video.removeEventListener('seeked', handleSeeked);
         if (wasPlaying && video.paused) {
           video.play().then(() => {
-            console.log("Video resumed via forward seek fallback");
             setIsPlaying(true);
           }).catch(error => {
             console.error("Error in forward seek fallback:", error);
@@ -429,26 +439,21 @@ const VideoPlayer = ({
       const wasPlaying = !video.paused;
       const newTime = Math.max(video.currentTime - 10, 0);
       
-      console.log(`Seeking backward to: ${newTime}s`);
-      
       // Step 1: Pause video immediately to stop current audio stream
         video.pause();
-                setIsPlaying(false);
+        setIsPlaying(false);
       
       // Step 2: Set new time
       video.currentTime = newTime;
       
       // Step 3: Wait for seek to complete and buffers to flush
       const handleSeeked = () => {
-        console.log("Backward seek completed, audio buffers flushed");
-        
         // Remove the event listener to avoid memory leaks
         video.removeEventListener('seeked', handleSeeked);
         
         // Step 4: Resume playback if it was playing before
         if (wasPlaying) {
           video.play().then(() => {
-            console.log("Video resumed after backward seek at:", video.currentTime);
               setIsPlaying(true);
           }).catch(error => {
             console.error("Error resuming after backward seek:", error);
@@ -463,15 +468,14 @@ const VideoPlayer = ({
       video.addEventListener('seeked', handleSeeked);
       
       // Fallback timeout
-      setTimeout(() => {
+            setTimeout(() => {
         video.removeEventListener('seeked', handleSeeked);
         if (wasPlaying && video.paused) {
                 video.play().then(() => {
-            console.log("Video resumed via backward seek fallback");
             setIsPlaying(true);
           }).catch(error => {
             console.error("Error in backward seek fallback:", error);
-                  setIsPlaying(false);
+                setIsPlaying(false);
                 });
         }
         setCurrentTime(video.currentTime);
@@ -525,7 +529,7 @@ const VideoPlayer = ({
       await saveVideo(currentVideo.video_id);
       setIsSaved(!isSaved);
       setSnackbarMessage(isSaved ? "Video removed from saved" : "Video saved!");
-      setShowSnackbar(true);
+                  setShowSnackbar(true);
     } catch (error) {
       console.error("Error saving video:", error);
       setSnackbarMessage("Error saving video");
@@ -548,7 +552,7 @@ const VideoPlayer = ({
           url: shareUrl,
         });
         setWatchShared(true);
-              } else {
+          } else {
         // Fallback to clipboard
         await navigator.clipboard.writeText(shareUrl);
         setSnackbarMessage("Video link copied to clipboard!");
@@ -587,7 +591,7 @@ const VideoPlayer = ({
         await unfollowUser(currentVideo.user_id);
         setIsFollowing(false);
         setSnackbarMessage(`Unfollowed ${currentVideo.creator_username}`);
-      } else {
+          } else {
         await followUser(currentVideo.user_id);
         setIsFollowing(true);
         setSnackbarMessage(`Following ${currentVideo.creator_username}`);
@@ -597,7 +601,7 @@ const VideoPlayer = ({
     } catch (error) {
       console.error("Error following/unfollowing user:", error);
       setSnackbarMessage("Error updating follow status");
-          setShowSnackbar(true);
+      setShowSnackbar(true);
     } finally {
       setFollowLoading(false);
     }
@@ -613,12 +617,10 @@ const VideoPlayer = ({
     
     // Prevent rapid navigation calls with timestamp-based debouncing
     if (now - lastNavigationTimeRef.current < NAVIGATION_DEBOUNCE_MS) {
-      console.log("Navigation too rapid, ignoring");
       return;
     }
 
     lastNavigationTimeRef.current = now;
-    console.log("Navigating to previous video");
     
     if (onPrevVideo) {
       onPrevVideo();
@@ -630,15 +632,12 @@ const VideoPlayer = ({
     
     // Prevent rapid navigation calls with timestamp-based debouncing
     if (now - lastNavigationTimeRef.current < NAVIGATION_DEBOUNCE_MS) {
-      console.log("Navigation too rapid, ignoring");
       return;
     }
 
     lastNavigationTimeRef.current = now;
-    console.log("Navigating to next video");
     
     if (onNextVideo) {
-      console.log("Calling onNextVideo for automatic progression");
       onNextVideo();
           } else {
       console.log("onNextVideo is not available - cannot auto-advance");
@@ -670,52 +669,35 @@ const VideoPlayer = ({
     const isCurrentVideo = videos && videos[currentIndex] && videos[currentIndex].video_id === videoId;
     if (isCurrentVideo) {
       const currentVideoTime = video.currentTime;
-      
-      // CRITICAL: Additional safety check - if time jumps unexpectedly, log it
-      if (currentVideoTime > 0 && currentTime === 0) {
-        console.log("CRITICAL: Time update - video time:", currentVideoTime);
-      }
-      
       setCurrentTime(currentVideoTime);
-    } else {
-      console.log("CRITICAL: Ignoring time update for non-current video");
     }
-  }, [videos, currentIndex, videoId, currentTime]);
+  }, [videos, currentIndex, videoId]);
 
   // Video end handler
   const handleVideoEnd = useCallback(() => {
-    console.log("Video ended event triggered");
-    
     // CRITICAL: Only proceed if this is the current video
     const isCurrentVideo = videos && videos[currentIndex] && videos[currentIndex].video_id === videoId;
     if (!isCurrentVideo) {
-      console.log("Video end event triggered for non-current video - ignoring");
       return;
     }
     
     // CRITICAL: Check if user manually paused the video
     // If isPaused is true, the user paused it, so don't auto-advance
     if (isPaused) {
-      console.log("Video ended but user has paused - not auto-advancing");
       return;
     }
     
     // CRITICAL: Only proceed if video actually ended naturally
     // Check if video is at the end (don't check video.paused since videos auto-pause when they end)
     if (videoRef.current) {
-      const video = videoRef.current;
+    const video = videoRef.current;
       const isAtEnd = video.currentTime >= video.duration - 0.5; // Allow small tolerance
-      
-      console.log("Video end check - currentTime:", video.currentTime, "duration:", video.duration, "isAtEnd:", isAtEnd, "isPaused prop:", isPaused);
       
       // Only proceed if video actually reached the end
       if (!isAtEnd) {
-        console.log("Video end event triggered but video is not at natural end - ignoring");
         return;
       }
     }
-    
-    console.log("Video ended naturally and user has not paused - automatically playing next video");
     
     // Update watch history with completed flag if user is logged in
     if (currentUser && videos && videos.length > 0 && currentIndex < videos.length) {
@@ -747,10 +729,7 @@ const VideoPlayer = ({
     
     // Use parent's navigation function to go to next video
     if (onNextVideo) {
-      console.log("Calling onNextVideo for automatic progression");
       onNextVideo();
-    } else {
-      console.log("onNextVideo is not available - cannot auto-advance");
     }
   }, [currentIndex, videos, currentUser, isLiked, isDisliked, isSaved, watchShared, deviceType, onNextVideo, videoId, isPaused]);
 
@@ -764,18 +743,14 @@ const VideoPlayer = ({
   // Video update handler for ReactHlsPlayer with improved audio management
   useEffect(() => {
     if (!videos || videos.length === 0 || currentIndex >= videos.length) {
-      console.log("No videos available or invalid index");
         return;
       }
       
     const currentVideo = videos[currentIndex];
     if (!currentVideo || !currentVideo.video_url) {
-      console.log("Current video or URL is missing");
-      return;
-    }
-
-    console.log(`Loading video ${currentIndex}:`, currentVideo.video_url);
-
+        return;
+      }
+      
     // Reset the reported view flag for the new video
     reportedViewRef.current = false;
 
@@ -795,7 +770,6 @@ const VideoPlayer = ({
 
       // Only update if the path actually changed
       if (!currentPath.includes(currentVideo.video_id)) {
-        console.log(`Updating URL from ${currentPath} to ${targetPath}`);
         window.history.replaceState(
           { videoId: currentVideo.video_id },
           '',
@@ -824,11 +798,9 @@ const VideoPlayer = ({
     if (!isCurrentVideo) return;
     
     if (isPaused && !video.paused) {
-      console.log("Pausing video due to isPaused prop change");
       video.pause();
                   setIsPlaying(false);
     } else if (!isPaused && video.paused) {
-      console.log("Resuming video due to isPaused prop change");
       video.play().then(() => {
         setIsPlaying(true);
       }).catch(error => {
@@ -870,11 +842,9 @@ const VideoPlayer = ({
         seekBackward();
         break;
       case 'arrowup':
-        console.log("Arrow up pressed - navigating to previous video");
         handlePrevVideo();
         break;
       case 'arrowdown':
-        console.log("Arrow down pressed - navigating to next video");
         handleNextVideo();
         break;
       case 'l':
@@ -885,12 +855,10 @@ const VideoPlayer = ({
         break;
       case '/':
         // Focus search bar if available - this would need to be implemented in parent component
-        console.log('Search shortcut pressed');
         break;
       case 't':
         // Development shortcut to reset swipe tutorial
         if (process.env.NODE_ENV === 'development') {
-          console.log('Resetting swipe tutorial (dev mode)');
           localStorage.removeItem('horizeel_swipe_tutorial_completed');
           window.location.reload();
         }
@@ -906,11 +874,9 @@ const VideoPlayer = ({
     const isCurrentVideo = videos && videos[currentIndex] && videos[currentIndex].video_id === videoId;
     
     if (isCurrentVideo) {
-      console.log("Adding keyboard listener for current video:", videoId);
       document.addEventListener('keydown', handleKeyPress);
 
     return () => {
-        console.log("Removing keyboard listener for video:", videoId);
         document.removeEventListener('keydown', handleKeyPress);
       };
     }
@@ -965,12 +931,10 @@ const VideoPlayer = ({
   useEffect(() => {
     const currentVideoRef = videoRef.current;
 
-    return () => {
+      return () => {
       // Cleanup when component unmounts or video changes
       if (currentVideoRef) {
         try {
-          console.log("Cleaning up video on unmount/change");
-          
           // Stop playback immediately
           currentVideoRef.pause();
           
@@ -980,14 +944,33 @@ const VideoPlayer = ({
           // Remove all event listeners to prevent memory leaks
           currentVideoRef.removeEventListener('timeupdate', handleTimeUpdate);
           currentVideoRef.removeEventListener('ended', handleVideoEnd);
-          
-          console.log("Video cleanup completed");
-        } catch (error) {
+    } catch (error) {
           console.error("Error during video cleanup:", error);
         }
       }
     };
   }, [videoId]); // Cleanup when video ID changes
+
+  // Reset description expansion when video changes
+  useEffect(() => {
+    setIsDescriptionExpanded(false);
+  }, [videoId]);
+
+  // Handle click outside to collapse description
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isDescriptionExpanded && !event.target.closest('[data-description-container]')) {
+        setIsDescriptionExpanded(false);
+      }
+    };
+
+    if (isDescriptionExpanded) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [isDescriptionExpanded]);
 
   if (!videos || videos.length === 0 || currentIndex >= videos.length) {
     return (
@@ -1032,7 +1015,6 @@ const VideoPlayer = ({
             WebkitBackfaceVisibility: 'hidden',
             backfaceVisibility: 'hidden'
           }}
-          onClick={handleVideoContainerClick}
           onMouseMove={handleMouseMove}
           onMouseEnter={handleUserInteraction}
           onMouseLeave={handleUserInteraction}
@@ -1072,8 +1054,8 @@ const VideoPlayer = ({
                 justifyContent: 'space-between',
               }}
             >
-              {/* Left side - Back button and video info */}
-              <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+              {/* Left side - Back button only */}
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <IconButton
                   onClick={(e) => {
                     handleUserInteraction(e);
@@ -1081,7 +1063,6 @@ const VideoPlayer = ({
                   }}
                   sx={{
                     color: 'white',
-                    mr: 2,
                 '&:hover': {
                       bgcolor: 'rgba(255, 255, 255, 0.1)',
                 },
@@ -1089,92 +1070,6 @@ const VideoPlayer = ({
             >
               <ArrowBack />
             </IconButton>
-                
-                <Avatar
-                  src={currentVideo?.creator_profile_picture}
-                  alt={currentVideo?.creator_username}
-                  sx={{ width: 40, height: 40, mr: 2 }}
-                />
-                
-                <Box sx={{ flex: 1 }}>
-                  <Typography
-                    variant="h6"
-              sx={{
-                color: 'white',
-                      fontWeight: 'bold',
-                      fontSize: '18px',
-                      lineHeight: 1.2,
-                      mb: 0.5
-              }}
-            >
-                    {currentVideo?.title || 'Episode 23'}
-              </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{ 
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        fontSize: '14px'
-                      }}
-                    >
-                      {currentVideo?.creator_username}
-              </Typography>
-                    
-                    {/* Follow button - only show if not own video */}
-                    {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
-                      <Button
-                        onClick={(e) => {
-                          handleUserInteraction(e);
-                          handleFollow();
-                        }}
-                        disabled={followLoading}
-                        size="small"
-                        variant={isFollowing ? "outlined" : "contained"}
-                        sx={{
-                          minWidth: 'auto',
-                          px: 1.5,
-                          py: 0.5,
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          borderRadius: '16px',
-                          textTransform: 'none',
-                          ...(isFollowing ? {
-                            color: 'white',
-                            borderColor: 'rgba(255, 255, 255, 0.5)',
-                            '&:hover': {
-                              borderColor: 'rgba(255, 255, 255, 0.8)',
-                              bgcolor: 'rgba(255, 255, 255, 0.1)',
-                            },
-                          } : {
-                            bgcolor: '#1976d2',
-                            color: 'white',
-                            '&:hover': {
-                              bgcolor: '#1565c0',
-                            },
-                          }),
-                        }}
-                      >
-                        {followLoading ? (
-                          <CircularProgress size={12} color="inherit" />
-                        ) : (
-                          <>
-                            {isFollowing ? (
-                              <>
-                                <Check sx={{ fontSize: 14, mr: 0.5 }} />
-                                Following
-                              </>
-                            ) : (
-                              <>
-                                <PersonAdd sx={{ fontSize: 14, mr: 0.5 }} />
-                                Follow
-                              </>
-                            )}
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </Box>
-                </Box>
               </Box>
 
               
@@ -1187,15 +1082,14 @@ const VideoPlayer = ({
           playerRef={videoRef}
           src={videoSrc}
           autoPlay={shouldAutoPlay}
-          controls={false}
+            controls={false}
           muted={forceMuted || isMuted}
           loop={false}
           playsInline={true}
           style={videoStyle}
-          onEnded={handleVideoEnd}
+            onEnded={handleVideoEnd}
           onLoadedMetadata={() => {
             if (videoRef.current) {
-              console.log("Video metadata loaded");
               const video = videoRef.current;
               
               setDuration(video.duration || 0);
@@ -1214,25 +1108,6 @@ const VideoPlayer = ({
                 if (!forceMuted && !isMuted) {
                   video.volume = 1.0;
                 }
-                
-                // Log audio status for debugging
-                console.log("Audio status - forceMuted:", forceMuted, "isMuted:", isMuted, "final muted:", video.muted, "volume:", video.volume);
-                
-                // Ensure audio context is properly initialized
-                if (video.audioTracks && video.audioTracks.length > 0) {
-                  console.log("Audio tracks available:", video.audioTracks.length);
-                } else {
-                  console.log("No audio tracks detected or audioTracks not supported");
-                }
-                
-                // Check if audio is actually available
-                if (video.mozHasAudio !== false && video.webkitAudioDecodedByteCount !== 0) {
-                  console.log("Audio stream detected in video");
-                } else {
-                  console.log("No audio stream detected or audio check not supported");
-                }
-                
-                console.log("New video loaded - audio/video sync established");
               } catch (error) {
                 console.error("Error establishing audio/video sync on load:", error);
               }
@@ -1241,18 +1116,15 @@ const VideoPlayer = ({
           onTimeUpdate={handleTimeUpdate}
           onPlay={() => {
             setIsPlaying(true);
-            console.log("Video play event triggered - checking audio sync");
             
             // Report view if needed
             if (!reportedViewRef.current) {
               const currentVideo = videos[currentIndex];
               if (currentVideo && currentVideo.video_id) {
-                console.log("Incrementing view count for video:", currentVideo.video_id);
                 incrementVideoView(currentVideo.video_id)
                   .then(() => {
                     // Update local view count to reflect the increment
                     setViews(prev => prev + 1);
-                    console.log("View count incremented successfully");
                   })
                   .catch(err => 
                     console.error("Failed to increment view count:", err)
@@ -1267,66 +1139,42 @@ const VideoPlayer = ({
               
               // Ensure audio is enabled when video starts playing (unless force muted)
               if (!forceMuted && !isMuted && video.muted) {
-                console.log("Video was muted but should be unmuted, fixing...");
                 video.muted = false;
                 video.volume = 1.0;
               }
-              
-              // Log current audio state
-              console.log("Audio state on play - forceMuted:", forceMuted, "isMuted:", isMuted, "final muted:", video.muted, "volume:", video.volume);
-              
-              setTimeout(() => {
-                if (video && !video.paused) {
-                  console.log("Audio/video sync check - currentTime:", video.currentTime);
-                  
-                  // Additional audio debugging
-                  if (!video.muted && video.volume > 0) {
-                    console.log("Audio should be audible now");
-                  } else {
-                    console.warn("Audio may not be audible - muted:", video.muted, "volume:", video.volume);
-                  }
-                }
-              }, 100);
             }
           }}
           onPause={() => {
             setIsPlaying(false);
-            console.log("Video paused - ensuring no auto-advance timers are running");
-            
-            // Additional protection: Clear any potential background timers
-            // This helps prevent any auto-advance behavior when video is paused
-            if (videoRef.current) {
-              const video = videoRef.current;
-              console.log("Video paused at:", video.currentTime, "of", video.duration);
-            }
           }}
           onSeeked={() => {
             // Handle seek completion for better audio/video sync
             if (videoRef.current) {
               const video = videoRef.current;
-              console.log("Seek completed at:", video.currentTime);
               setCurrentTime(video.currentTime);
               
               // Validate audio/video sync after seek
               setTimeout(() => {
                 if (video && Math.abs(video.currentTime - currentTime) > 0.5) {
-                  console.log("Audio/video sync drift detected, correcting...");
                   setCurrentTime(video.currentTime);
                 }
               }, 100);
             }
           }}
           onWaiting={() => {
-            console.log("Video buffering - maintaining audio sync");
+            // Video buffering - maintaining audio sync
           }}
           onCanPlay={() => {
-            console.log("Video can play - audio/video ready");
+            // Video can play - audio/video ready
           }}
           onError={handleVideoError}
           onClick={(e) => {
-            // Prevent ReactHlsPlayer's default click behavior that might restart video
+            // Completely prevent ReactHlsPlayer's default click behavior
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
+            // Don't handle any click events on the video element itself
+            return false;
           }}
           hlsConfig={hlsConfig}
         />
@@ -1351,22 +1199,77 @@ const VideoPlayer = ({
             </Box>
           )}
 
-                {/* Navigation arrows - YouTube style */}
-          {videos.length > 1 && (
+          {/* Dedicated click overlay for reliable play/pause detection */}
             <Box
+            onClick={handleVideoContainerClick}
               sx={{
                 position: 'absolute',
-                right: 16,
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 5, // Above video but below controls
+              backgroundColor: 'transparent',
+              cursor: 'pointer',
+              // Ensure this overlay doesn't interfere with pointer events on controls
+              pointerEvents: 'auto',
+              // Create exclusion zones for interactive areas
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '80px', // Top control area
+                pointerEvents: 'none',
+                zIndex: 1,
+              },
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '120px', // Bottom control area
+                pointerEvents: 'none',
+                zIndex: 1,
+              },
+            }}
+          />
+
+                {/* Right-side button stack with glassy background */}
+            <Box
+              data-right-buttons
+              sx={{
+                position: 'absolute',
+              right: 16,
                 top: '50%',
                 transform: 'translateY(-50%)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 2,
+                alignItems: 'center',
+              gap: isMobile ? 1 : isTablet ? 1.5 : 2,
                 zIndex: 15,
-                opacity: showControls ? 1 : 0.7,
-                transition: 'opacity 300ms ease-in-out',
-              }}
-            >
+              opacity: showControls ? 1 : 0.7,
+              transition: 'all 300ms ease-in-out',
+              // Glassy background effect
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '50px', // Capsule shape - large radius for rounded ends
+              padding: isMobile ? '12px 8px' : '10px 6px',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              '&:hover': {
+                background: 'rgba(255, 255, 255, 0.15)',
+                transform: 'translateY(-50%) scale(1.02)',
+                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4)',
+              },
+            }}
+          >
+            {/* Navigation arrows and action buttons */}
+            {videos.length > 1 && (
+              <>
+              {/* Up Arrow */}
                 <IconButton
                 onClick={(e) => {
                   handleUserInteraction(e);
@@ -1388,36 +1291,431 @@ const VideoPlayer = ({
                 >
                   <ArrowUpward />
                 </IconButton>
+              </>
+            )}
 
-                <IconButton
-                onClick={(e) => {
-                  handleUserInteraction(e);
-                  handleNextVideo();
-                }}
-                  sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.7)',
-                  color: 'white',
-                  width: 48,
-                  height: 48,
-                  border: '2px solid rgba(255, 255, 255, 0.2)',
-                    '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.9)',
-                    border: '2px solid rgba(255, 255, 255, 0.4)',
-                    transform: 'scale(1.1)',
-                    },
-                  transition: 'all 0.2s ease',
-                  }}
-                >
-                  <ArrowDownward />
-                </IconButton>
-            </Box>
-          )}
-
-                {/* Bottom controls overlay - YouTube style */}
-          <Slide direction="up" in={showControls} timeout={300}>
+            {/* Action buttons in between arrows */}
             <Box
               sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: isMobile ? 0.5 : isTablet ? 0.8 : 1, // Reduced spacing between action buttons
+                my: videos.length > 1 ? 1 : 0, // Margin only if navigation arrows exist
+              }}
+            >
+              {/* Like */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 0.2, // Reduced gap between icon and label
+                }}
+              >
+                <IconButton
+                  onClick={(e) => {
+                    handleUserInteraction(e);
+                    handleLike();
+                  }}
+                  sx={{
+                    color: isLiked ? '#00ff00' : 'white',
+                    width: isMobile ? 28 : isTablet ? 32 : 40,
+                    height: isMobile ? 28 : isTablet ? 32 : 40,
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <ThumbUp fontSize={isMobile ? 'small' : 'medium'} /> {/* Increased icon size */}
+                </IconButton>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontSize: isMobile ? '10px' : '13px',
+                    textAlign: 'center',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                  }}
+                >
+                  Like
+                </Typography>
+            </Box>
+
+              {/* Dislike */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 0.2, // Reduced gap between icon and label
+                }}
+              >
+                <IconButton
+                  onClick={async (e) => {
+                    handleUserInteraction(e);
+                    if (!currentUser) {
+                      setSnackbarMessage("Please log in to dislike videos");
+                      setShowSnackbar(true);
+                      return;
+                    }
+                    try {
+                      await incrementVideoDislike(currentVideo.video_id);
+                      setIsDisliked(!isDisliked);
+                      setDislikes(prev => isDisliked ? prev - 1 : prev + 1);
+                      if (isLiked) {
+                        setIsLiked(false);
+                        setLikes(prev => prev - 1);
+                      }
+                    } catch (error) {
+                      console.error("Error disliking video:", error);
+                    }
+                  }}
+                sx={{
+                    color: isDisliked ? '#ff0000' : 'white',
+                    width: isMobile ? 32 : isTablet ? 36 : 48,
+                    height: isMobile ? 32 : isTablet ? 36 : 48,
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <ThumbDown fontSize={isMobile ? 'small' : 'medium'} /> {/* Increased icon size */}
+                </IconButton>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontSize: isMobile ? '10px' : '13px',
+                    textAlign: 'center',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                  }}
+                >
+                  Dislike
+                </Typography>
+              </Box>
+
+              {/* Share */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 0.2, // Reduced gap between icon and label
+                }}
+              >
+                  <IconButton
+                  onClick={(e) => {
+                    handleUserInteraction(e);
+                    handleShare();
+                  }}
+                    sx={{
+                      color: 'white',
+                    width: isMobile ? 32 : isTablet ? 36 : 48,
+                    height: isMobile ? 32 : isTablet ? 36 : 48,
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <Share fontSize={isMobile ? 'small' : 'medium'} /> {/* Increased icon size */}
+                  </IconButton>
+                <Typography
+                  variant="caption"
+                    sx={{
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontSize: isMobile ? '10px' : '13px',
+                    textAlign: 'center',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                  }}
+                >
+                  Share
+                </Typography>
+                </Box>
+
+              {/* Save */}
+              <Box
+                      sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 0.2, // Reduced gap between icon and label
+                }}
+              >
+                    <IconButton
+                  onClick={(e) => {
+                    handleUserInteraction(e);
+                    handleSave();
+                  }}
+                      sx={{
+                    color: isSaved ? '#ffeb3b' : 'white',
+                    width: isMobile ? 32 : isTablet ? 36 : 48,
+                    height: isMobile ? 32 : isTablet ? 36 : 48,
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {isSaved ? <Bookmark fontSize={isMobile ? 'small' : 'medium'} /> : <BookmarkBorder fontSize={isMobile ? 'medium' : 'large'} />} {/* Increased icon size */}
+                    </IconButton>
+                <Typography
+                  variant="caption"
+                      sx={{
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontSize: isMobile ? '10px' : '13px',
+                    textAlign: 'center',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                  }}
+                >
+                  Save
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Down Arrow */}
+            {videos.length > 1 && (
+                    <IconButton
+              onClick={(e) => {
+                handleUserInteraction(e);
+                handleNextVideo();
+              }}
+                      sx={{
+                bgcolor: 'rgba(0, 0, 0, 0.7)',
+                        color: 'white',
+                width: 48,
+                height: 48,
+                border: '2px solid rgba(255, 255, 255, 0.2)',
+                  '&:hover': {
+                  bgcolor: 'rgba(0, 0, 0, 0.9)',
+                  border: '2px solid rgba(255, 255, 255, 0.4)',
+                  transform: 'scale(1.1)',
+                  },
+                transition: 'all 0.2s ease',
+                }}
+              >
+                <ArrowDownward />
+                    </IconButton>
+            )}
+                  </Box>
+
+          {/* User Info Section - Bottom Left */}
+          <Slide direction="up" in={showControls} timeout={300}>
+            <Box
+              data-user-info
+              sx={{
                 position: 'absolute',
+                bottom: 90, // Above the bottom controls
+                left: 16,
+                right: isMobile ? 80 : 120, // Leave space for action buttons
+                zIndex: 12,
+                // background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.4) 70%, transparent)',
+                // borderRadius: '12px',
+                padding: isMobile ? '12px' : '16px',
+                // backdropFilter: 'blur(8px)',
+              }}
+            >
+              {/* User Icon + Username */}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Avatar
+                  src={currentVideo?.profile_picture}
+                  alt={currentVideo?.username}
+                  sx={{ 
+                    width: isMobile ? 32 : 40, 
+                    height: isMobile ? 32 : 40, 
+                    mr: 1.5 
+                  }}
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                    <Typography
+                    variant="body1"
+                    sx={{
+                      color: 'white',
+                      fontFamily: 'Roboto',
+                      fontSize: isMobile ? '14px' : '18px',
+                      fontWeight: '600',
+                      textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                    }}
+                  >
+                    {currentVideo?.username}
+                    </Typography>
+                  
+                  {/* Follow button - only show if not own video */}
+                  {currentUser && currentVideo?.user_id && currentUser.user_id !== currentVideo.user_id && (
+                  <Button
+                      onClick={(e) => {
+                        handleUserInteraction(e);
+                        handleFollow();
+                      }}
+                    disabled={followLoading}
+                      size="small"
+                      variant={isFollowing ? "outlined" : "contained"}
+                    sx={{
+                      minWidth: 'auto',
+                        px: 1.5,
+                        py: 0.5,
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        borderRadius: '16px',
+                        textTransform: 'none',
+                        border: '1px solid',
+                        transition: 'all 0.2s ease-in-out',
+                        ...(isFollowing ? {
+                          color: 'white',
+                          borderColor: 'rgba(255, 255, 255, 0.6)',
+                          bgcolor: 'transparent',
+                          '&:hover': {
+                            borderColor: 'rgba(255, 255, 255, 0.9)',
+                            bgcolor: 'rgba(255, 255, 255, 0.1)',
+                            transform: 'scale(1.05)',
+                          },
+                        } : {
+                          bgcolor: 'transparent',
+                          color: 'white',
+                          borderColor: 'white',
+                          '&:hover': {
+                            bgcolor: 'rgba(255, 255, 255, 0.9)',
+                            color: 'black',
+                            transform: 'scale(1.05)',
+                          },
+                        }),
+                    }}
+                  >
+                    {followLoading ? (
+                        <CircularProgress size={12} color="inherit" />
+                      ) : (
+                        <>
+                          {isFollowing ? (
+                            <>
+                              <Check sx={{ fontSize: 14, mr: 0.5 }} />
+                              Following
+                            </>
+                          ) : (
+                            <>
+                              <PersonAdd sx={{ fontSize: 14, mr: 0.5 }} />
+                              Follow
+                            </>
+                          )}
+                        </>
+                    )}
+                  </Button>
+                )}
+                </Box>
+              </Box>
+
+              {/* Video Title */}
+              <Typography
+                variant="h6"
+                sx={{
+                color: 'white',
+                  fontFamily: 'Roboto',
+                  fontSize: isMobile ? '16px' : '18px',
+                  fontWeight: '500',
+                  lineHeight: 1.3,
+                  mb: 1,
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                }}
+              >
+                {currentVideo?.title || 'Episode 23'}
+                  </Typography>
+
+              {/* Video Description */}
+              {currentVideo?.description && (
+                <Box sx={{ mb: 1 }} data-description-container>
+                  <Typography
+                    variant="body2"
+                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                    sx={{
+                      color: 'rgba(255, 255, 255, 0.9)',
+                      fontFamily: 'Roboto',
+                      fontSize: isMobile ? '13px' : '14px',
+                      lineHeight: 1.4,
+                      cursor: 'pointer',
+                      textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                      maxWidth: '200px',
+                      ...(isDescriptionExpanded ? {
+                        whiteSpace: 'normal',
+                        overflow: 'visible',
+                      } : {
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }),
+                      '&:hover': {
+                        color: 'white',
+                      },
+                      transition: 'color 0.2s ease',
+                    }}
+                  >
+                    {isDescriptionExpanded 
+                      ? currentVideo.description 
+                      : currentVideo.description
+                    }
+                    {!isDescriptionExpanded && currentVideo.description.length > 50 && (
+                      <span style={{ color: 'rgba(255, 255, 255, 0.7)', marginLeft: '4px' }}>
+                        ...more
+                      </span>
+                    )}
+                  </Typography>
+                  
+                  {/* View Count & Like Count - Only show when expanded */}
+                  {isDescriptionExpanded && (
+                    <Box sx={{ display: 'flex', gap: 3, mt: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Visibility 
+                          sx={{ 
+                            fontSize: isMobile ? '16px' : '18px', 
+                            color: 'white' 
+                          }} 
+                        />
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            color: 'white',
+                            fontFamily: 'Roboto',
+                            fontSize: isMobile ? '14px' : '16px',
+                            fontWeight: 'bold',
+                            textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                          }}
+                        >
+                          {formatViewCount(views)} Views
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <ThumbUp 
+                          sx={{ 
+                            fontSize: isMobile ? '16px' : '18px', 
+                            color: isLiked ? '#00ff00' : 'white' 
+                          }} 
+                        />
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            color: 'white',
+                            fontFamily: 'Roboto',
+                            fontSize: isMobile ? '14px' : '16px',
+                            fontWeight: 'bold',
+                            textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                          }}
+                        >
+                          {formatViewCount(likes)} Likes
+                  </Typography>
+                </Box>
+              </Box>
+                  )}
+            </Box>
+              )}
+        </Box>
+          </Slide>
+
+          {/* Bottom controls overlay - YouTube style */}
+          <Slide direction="up" in={showControls} timeout={300}>
+          <Box
+            sx={{
+              position: 'absolute',
                 bottom: 0,
                 left: 0,
                 right: 0,
@@ -1454,13 +1752,9 @@ const VideoPlayer = ({
                   const clickX = e.clientX - rect.left;
                   const newTime = (clickX / rect.width) * duration;
                   
-                  console.log(`Seeking to: ${newTime}s (${Math.floor(newTime/60)}:${String(Math.floor(newTime%60)).padStart(2, '0')})`);
-                  
                   // CRITICAL: Proper HLS seek to prevent duplicate audio streams
                   try {
                     const wasPlaying = !video.paused;
-                    
-                    console.log("Starting seek operation - pausing video");
                     
                     // Step 1: Pause video immediately to stop current audio stream
                     video.pause();
@@ -1475,15 +1769,12 @@ const VideoPlayer = ({
                     
                     // Step 4: Wait for seek to complete and buffers to flush
                     const handleSeeked = () => {
-                      console.log("Seek completed, audio buffers flushed");
-                      
                       // Remove the event listener to avoid memory leaks
                       video.removeEventListener('seeked', handleSeeked);
                       
                       // Step 5: Resume playback if it was playing before
                       if (wasPlaying) {
                         video.play().then(() => {
-                          console.log("Video resumed after clean seek at:", video.currentTime);
                           setIsPlaying(true);
                         }).catch(error => {
                           console.error("Error resuming video after seek:", error);
@@ -1501,7 +1792,6 @@ const VideoPlayer = ({
                     // Fallback: If seeked event doesn't fire within reasonable time
                     setTimeout(() => {
                       if (video.currentTime !== newTime) {
-                        console.log("Seek fallback - manually setting time again");
                         video.currentTime = newTime;
                       }
                       
@@ -1510,7 +1800,6 @@ const VideoPlayer = ({
                       
                       if (wasPlaying && video.paused) {
                         video.play().then(() => {
-                          console.log("Video resumed via fallback at:", video.currentTime);
                           setIsPlaying(true);
                         }).catch(error => {
                           console.error("Error in fallback resume:", error);
@@ -1560,10 +1849,10 @@ const VideoPlayer = ({
               </Box>
 
               {/* Control buttons */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
                   justifyContent: 'space-between',
                   width: '100%'
                 }}
@@ -1591,8 +1880,8 @@ const VideoPlayer = ({
                       handleUserInteraction(e);
                       toggleMute();
                     }}
-                    sx={{
-                      color: 'white',
+            sx={{
+              color: 'white',
                       p: 1,
                       '&:hover': {
                         bgcolor: 'rgba(255, 255, 255, 0.1)',
@@ -1605,98 +1894,19 @@ const VideoPlayer = ({
                   {/* Time display */}
                   <Typography
                     variant="body2"
-                    sx={{ 
-                      color: 'white',
-                      fontFamily: 'monospace',
-                      fontSize: '14px',
+                      sx={{
+                        color: 'white',
+                      fontFamily: 'Roboto',
+                      fontSize: '16px',
                       ml: 1
-                    }}
-                  >
+                      }}
+                    >
                     {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')} / {Math.floor(duration / 60)}:{String(Math.floor(duration % 60)).padStart(2, '0')}
-                    </Typography>
-                </Box>
+            </Typography>
+          </Box>
 
                 {/* Right controls */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <IconButton
-                      onClick={(e) => {
-                        handleUserInteraction(e);
-                        handleLike();
-                      }}
-                      sx={{
-                      color: isLiked ? '#00ff00' : 'white',
-                      p: 1,
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                    }}
-                  >
-                    <ThumbUp />
-                    </IconButton>
-
-                    <IconButton
-                    onClick={async (e) => {
-                      handleUserInteraction(e);
-                      if (!currentUser) {
-                        setSnackbarMessage("Please log in to dislike videos");
-                        setShowSnackbar(true);
-                        return;
-                      }
-                      try {
-                        await incrementVideoDislike(currentVideo.video_id);
-                        setIsDisliked(!isDisliked);
-                        setDislikes(prev => isDisliked ? prev - 1 : prev + 1);
-                        if (isLiked) {
-                          setIsLiked(false);
-                          setLikes(prev => prev - 1);
-                        }
-                      } catch (error) {
-                        console.error("Error disliking video:", error);
-                      }
-                    }}
-                      sx={{
-                      color: isDisliked ? '#ff0000' : 'white',
-                      p: 1,
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                    }}
-                  >
-                    <ThumbDown />
-                    </IconButton>
-
-                    <IconButton
-                      onClick={(e) => {
-                        handleUserInteraction(e);
-                        handleShare();
-                      }}
-                      sx={{
-                        color: 'white',
-                      p: 1,
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                      }}
-                    >
-                    <Share />
-                    </IconButton>
-
-                    <IconButton
-                    onClick={(e) => {
-                      handleUserInteraction(e);
-                      handleSave();
-                    }}
-                      sx={{
-                      color: isSaved ? '#ffeb3b' : 'white',
-                      p: 1,
-                      '&:hover': {
-                        bgcolor: 'rgba(255, 255, 255, 0.1)',
-                      },
-                    }}
-                  >
-                    {isSaved ? <Bookmark /> : <BookmarkBorder />}
-                    </IconButton>
-
                     <IconButton
                     onClick={(e) => {
                       handleUserInteraction(e);
@@ -1712,7 +1922,7 @@ const VideoPlayer = ({
                     >
                     {isFullscreen ? <FullscreenExit /> : <Fullscreen />}
                     </IconButton>
-                </Box>
+      </Box>
               </Box>
             </Box>
           </Slide>
