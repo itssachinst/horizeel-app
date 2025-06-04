@@ -5,12 +5,12 @@ import { styled } from '@mui/material/styles';
 const LogoWrapper = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
-  gap: theme.spacing(1),
+  gap: theme.spacing(0),
   cursor: 'pointer',
 }));
 
 const LogoImage = styled('img')(({ theme }) => ({
-  height: '52px',
+  height: '68px',
   width: 'auto',
   [theme.breakpoints.down('sm')]: {
     height: '24px',
@@ -18,12 +18,11 @@ const LogoImage = styled('img')(({ theme }) => ({
 }));
 
 const LogoText = styled(Typography)(({ theme }) => ({
-  fontWeight: 700,
-  letterSpacing: '-0.5px',
-  fontSize: '1.5rem',
+  fontWeight: 800,
+  letterSpacing: '0.5px',
+  fontSize: '2.5rem',
   color: 'white',
-  marginLeft: theme.spacing(1),
-  fontFamily: 'Roboto, sans-serif',
+  fontFamily: 'Roboto',
   [theme.breakpoints.down('sm')]: {
     fontSize: '1.2rem',
   },
@@ -33,7 +32,7 @@ const Logo = ({ onClick }) => {
   return (
     <LogoWrapper onClick={onClick}>
       <LogoImage src="/logo512.png" alt="Horizeel Logo" />
-      <LogoText variant="h6" fontFamily="Roboto-bold">
+      <LogoText fontFamily="Roboto-black">
         Horizeel
       </LogoText>
     </LogoWrapper>

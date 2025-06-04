@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { 
-  Card, 
-  CardMedia, 
-  Typography, 
-  Grid, 
-  Container, 
-  Box, 
+import {
+  Card,
+  CardMedia,
+  Typography,
+  Grid,
+  Container,
+  Box,
   CircularProgress,
   Chip,
   useTheme,
@@ -78,7 +78,7 @@ const SearchContainer = styled('div')(({ theme }) => ({
     boxShadow: '0 0 20px rgba(189, 250, 3, 0.2)',
   },
   width: '100%',
-  maxWidth: 500,
+  maxWidth: 450,
   display: 'flex',
   alignItems: 'center',
   transition: 'all 0.3s ease',
@@ -112,8 +112,8 @@ const GlassCard = styled(Card)(({ theme }) => ({
 const TopTenSidebar = styled(Box)(({ theme }) => ({
   position: 'fixed',
   left: 0,
-  top: 80,
-  width: 280,
+  top: 65,
+  width: 420,
   height: 'calc(100vh - 80px)',
   background: 'rgba(0, 0, 0, 0.8)',
   backdropFilter: 'blur(20px)',
@@ -151,11 +151,11 @@ const TopTenSidebar = styled(Box)(({ theme }) => ({
 }));
 
 const MainContent = styled(Box)(({ theme }) => ({
-  marginLeft: 280,
-  paddingTop: theme.spacing(2),
-  paddingLeft: theme.spacing(2),
-  paddingRight: theme.spacing(2),
-  paddingBottom: theme.spacing(2),
+  marginLeft: 420,
+  paddingTop: theme.spacing(1),
+  paddingLeft: theme.spacing(1),
+  paddingRight: theme.spacing(1),
+  paddingBottom: theme.spacing(1),
   minHeight: '100vh',
   background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
   overflowY: 'auto',
@@ -230,16 +230,16 @@ const SearchBar = React.memo(({ currentCategoryName, searchQuery, onSearchChange
 ));
 
 const HomePage = () => {
-  const { 
-    videos, 
-    loading, 
-    hasMore, 
-    error, 
-    fetchVideos, 
+  const {
+    videos,
+    loading,
+    hasMore,
+    error,
+    fetchVideos,
     loadMoreVideos,
     setCurrentIndex
   } = useVideoContext();
-  
+
   const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -254,13 +254,13 @@ const HomePage = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
 
-  // Auto-scrolling categories effect - optimized to prevent unnecessary re-renders
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // Auto-scrolling categories effect - DISABLED to prevent auto-refresh
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     setCurrentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length);
+  //   }, 30000);
+  //   return () => clearInterval(interval);
+  // }, []);
 
   // Generate top 10 videos from current videos - memoized
   const topVideos = useMemo(() => {
@@ -315,7 +315,7 @@ const HomePage = () => {
         {/* Right Side Icons */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <IconButton 
-            sx={{ 
+        sx={{
               color: 'white',
               '&:hover': { 
                 background: 'rgba(255, 255, 255, 0.1)',
@@ -327,7 +327,7 @@ const HomePage = () => {
             <UploadIcon />
           </IconButton>
           <IconButton 
-            sx={{ 
+            sx={{
               color: 'white',
               '&:hover': { 
                 background: 'rgba(255, 255, 255, 0.1)',
@@ -339,7 +339,7 @@ const HomePage = () => {
             <FeedbackIcon />
           </IconButton>
           <IconButton 
-            sx={{ 
+              sx={{
               color: 'white',
               '&:hover': { 
                 background: 'rgba(255, 255, 255, 0.1)',
@@ -390,30 +390,20 @@ const HomePage = () => {
                 top: '50%',
                 transform: 'translateY(-50%)', // Center vertically
                 zIndex: 10,
-                width: 50,
-                height: 50,
+                width: 60,
+                height: 60,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
               <Typography
-                variant="h1"
                 sx={{
                   color: '#BDFA03',
                   fontFamily: 'Roboto',
                   fontWeight: 'bold', // Bold weight as requested
-                  fontSize: '8rem',
+                  fontSize: '6rem',
                   lineHeight: 1,
-                  textShadow: `
-                    -3px -3px 0 #000,
-                    3px -3px 0 #000,
-                    -3px 3px 0 #000,
-                    3px 3px 0 #000,
-                    0 0 10px rgba(0, 0, 0, 0.9),
-                    0 0 20px rgba(189, 250, 3, 0.4)
-                  `,
-                  WebkitTextStroke: '2px #000',
                   filter: 'drop-shadow(0 6px 12px rgba(0, 0, 0, 0.8))',
                 }}
               >
@@ -434,7 +424,7 @@ const HomePage = () => {
             >
               <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5 }}>
                 {/* Video Thumbnail */}
-                <Box sx={{ position: 'relative', width: 200, height: 110, borderRadius: '8px', overflow: 'hidden' }}>
+                <Box sx={{ position: 'relative', width: 380, height: 160, borderRadius: '8px', overflow: 'hidden' }}>
                   <CardMedia
                     component="img"
                     image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/240/135`}
@@ -450,8 +440,8 @@ const HomePage = () => {
                   />
                   
                   {/* Play Icon Overlay */}
-                  <Box
-                    sx={{
+              <Box
+                sx={{
                       position: 'absolute',
                       top: '50%',
                       left: '50%',
@@ -470,11 +460,11 @@ const HomePage = () => {
                         filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8))',
                       }}
                     />
-                  </Box>
-                  
+              </Box>
+
                   {/* View Count Badge */}
-                  <Box
-                    sx={{
+            <Box
+              sx={{
                       position: 'absolute',
                       top: 4,
                       right: 4,
@@ -488,20 +478,20 @@ const HomePage = () => {
                     }}
                   >
                     <Visibility sx={{ fontSize: 10, color: 'white' }} />
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
+              <Typography
+                variant="caption"
+                sx={{
                         color: 'white',
-                        fontFamily: 'Roboto, sans-serif',
+                        fontFamily: 'Roboto',
                         fontSize: '10px',
                         fontWeight: 500,
                       }}
                     >
                       {formatViewCount(video.views || 0)}
-                    </Typography>
-                  </Box>
+              </Typography>
+            </Box>
                 </Box>
-              </Box>
+            </Box>
             </GlassCard>
           </Box>
         </Grow>
@@ -512,9 +502,9 @@ const HomePage = () => {
   // Featured Video Component
   const FeaturedVideo = () => (
     <GlassCard 
-      sx={{ 
-        mb: 4, 
-        height: 550,
+      sx={{
+        mb: 1, 
+        height: 520,
         position: 'relative',
         overflow: 'hidden',
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)',
@@ -523,7 +513,7 @@ const HomePage = () => {
       <CardMedia
         component="img"
         image="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
-        sx={{ 
+        sx={{
           width: '100%', 
           height: '100%', 
           objectFit: 'cover',
@@ -545,16 +535,15 @@ const HomePage = () => {
           // justifyContent: 'center',
           // alignItems: 'center',
           textAlign: 'left',
-          p: 4,
+          p: 2,
         }}
       >
-        <Typography 
-          variant="h3" 
-          sx={{ 
+      <Typography
+        sx={{
             color: 'white', 
             fontWeight: 'bold',
-            fontFamily: 'Roboto, sans-serif',
-            mb: 2,
+            fontFamily: 'Roboto',
+            fontSize: '3.2rem',
             textShadow: '0 4px 20px rgba(0, 0, 0, 0.8)',
             background: 'linear-gradient(90deg, #BDFA03, #BEFF03)',
             backgroundClip: 'text',
@@ -563,14 +552,14 @@ const HomePage = () => {
           }}
         >
           Experience the world's first horizontal reels
-        </Typography>
-        
-        <Typography 
-          variant="h6" 
-          sx={{ 
+      </Typography>
+
+      <Typography
+      sx={{
             color: 'rgba(255, 255, 255, 0.9)', 
-            mb: 4,
-            fontFamily: 'Roboto, sans-serif',
+            mb: 1,
+            fontFamily: 'Roboto',
+            fontSize: '1.5rem',
             textShadow: '0 2px 10px rgba(0, 0, 0, 0.8)',
           }}
         >
@@ -587,12 +576,16 @@ const HomePage = () => {
             backdropFilter: 'blur(10px)',
             color: 'black',
             fontWeight: 'bold',
-            fontFamily: 'Roboto, sans-serif',
-            px: 4,
+            fontFamily: 'Roboto',
+            px: 3,
             py: 1.5,
-            borderRadius: '25px',
+            borderRadius: '50px',
             fontSize: '1.1rem',
-            border: '2px solid rgba(189, 250, 3, 0.3)',
+            textTransform: 'none',
+            justifyContent: 'flex-start',
+            width: 'fit-content',
+            minWidth: '160px',
+            border: '2px solid rgba(32, 32, 30, 0.3)',
             '&:hover': {
               background: 'rgba(189, 250, 3, 1)',
               transform: 'translateY(-2px)',
@@ -609,15 +602,15 @@ const HomePage = () => {
 
   // Video Grid Component
   const VideoGrid = () => {
-    const displayVideos = isSearching ? searchResults : videos.slice(1); // Skip first video as it's featured
-    
-    return (
+    const displayVideos = isSearching ? searchResults : videos.slice(10); // Skip first video as it's featured
+
+  return (
       <Grid container spacing={3}>
         {displayVideos.map((video, index) => (
           <Grid item xs={12} sm={6} md={4} key={video.video_id}>
             <GlassCard 
               sx={{ 
-                height: 280,
+                height: 210, // Match image height only
                 cursor: 'pointer',
                 position: 'relative',
                 overflow: 'hidden',
@@ -629,87 +622,93 @@ const HomePage = () => {
                 image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/400/225`}
                 sx={{ 
                   width: '100%', 
-                  height: 180, 
+                  height: '100%', 
                   objectFit: 'cover' 
                 }}
               />
               
-              {/* Duration Badge */}
+              {/* Views Count - Top Right Overlay */}
+        <Box 
+          sx={{ 
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: '12px',
+                  padding: '4px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                }}
+              >
+                <Visibility sx={{ fontSize: 12, color: 'white' }} />
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: 'white',
+                    fontFamily: 'Roboto, sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                  }}
+                >
+                  {formatViewCount(video.views || 0)} 
+                </Typography>
+        </Box>
+
+              {/* Duration Badge - Top Left */}
               {video.duration && (
-                <Box
-                  sx={{
+        <Box
+          sx={{
                     position: 'absolute',
                     top: 8,
-                    right: 8,
-                    background: 'rgba(0, 0, 0, 0.8)',
+                    left: 8,
+                    background: 'rgba(0, 0, 0, 0.7)',
                     backdropFilter: 'blur(10px)',
                     borderRadius: '4px',
                     padding: '2px 6px',
                     color: 'white',
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontWeight: '500',
                     fontFamily: 'Roboto, sans-serif',
                   }}
                 >
                   {formatDuration(video.duration)}
-                </Box>
-              )}
-              
-              {/* Content */}
-              <CardContent sx={{ p: 2 }}>
+        </Box>
+      )}
+
+              {/* Title - Bottom Left Overlay */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  background: 'linear-gradient(transparent, rgba(0, 0, 0, 0.8))',
+                  padding: '20px 12px 12px 12px',
+                }}
+              >
                 <Typography 
                   variant="h6" 
                   sx={{ 
                     color: 'white',
                     fontFamily: 'Roboto, sans-serif',
                     fontWeight: 600,
-                    fontSize: '16px',
-                    mb: 1,
+                    fontSize: '14px',
+                    lineHeight: 1.2,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    textShadow: '0 1px 3px rgba(0, 0, 0, 0.8)',
                   }}
                 >
                   {video.title || "Untitled Video"}
                 </Typography>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Avatar 
-                    src={video.profile_picture || video.creator_profile_picture}
-                    sx={{ width: 20, height: 20 }}
-                  />
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      color: 'rgba(255, 255, 255, 0.8)',
-                      fontFamily: 'Roboto, sans-serif',
-                      fontSize: '14px',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {video.creator_username || video.username || "Anonymous"}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Visibility sx={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.6)' }} />
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: 'rgba(255, 255, 255, 0.6)',
-                        fontFamily: 'Roboto, sans-serif',
-                      }}
-                    >
-                      {formatViewCount(video.views || 0)}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
+              </Box>
             </GlassCard>
-          </Grid>
-        ))}
-      </Grid>
+                </Grid>
+              ))}
+            </Grid>
     );
   };
 
@@ -737,7 +736,7 @@ const HomePage = () => {
       {!isMobile && !isTablet && <TopTenSidebarComponent />}
       
       <MainContent>
-        <Box sx={{}}>
+        <Box sx={{ pt: 2 }}>
           {/* Search Results Header */}
           {isSearching && (
             <Box sx={{ mb: 4 }}>
@@ -763,7 +762,7 @@ const HomePage = () => {
               </Button>
             </Box>
           )}
-          
+
           {/* Featured Video */}
           {!isSearching && <FeaturedVideo />}
           
@@ -782,4 +781,4 @@ const HomePage = () => {
   );
 };
 
-export default HomePage; 
+export default HomePage;
