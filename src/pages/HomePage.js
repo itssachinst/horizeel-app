@@ -417,14 +417,14 @@ const HomePage = () => {
               sx={{ 
                 flex: 1,
                 ml: 2, // Margin to accommodate the ranking number
-                background: 'rgba(255, 255, 255, 0.08)',
+                background: 'rgba(255, 255, 255, 0.12)',
                 transition: 'all 0.3s ease',
                 borderRadius: '12px',
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5 }}>
                 {/* Video Thumbnail */}
-                <Box sx={{ position: 'relative', width: 380, height: 160, borderRadius: '8px', overflow: 'hidden' }}>
+                <Box sx={{ position: 'relative', width: 380, height: 160, borderRadius: '12px', overflow: 'hidden' }}>
                   <CardMedia
                     component="img"
                     image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/240/135`}
@@ -567,35 +567,48 @@ const HomePage = () => {
         </Typography>
         
         <Button
-          variant="contained"
-          size="large"
-          startIcon={<PlayArrow />}
-          onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
-          sx={{
-            background: 'rgba(189, 250, 3, 0.9)',
-            backdropFilter: 'blur(10px)',
-            color: 'black',
-            fontWeight: 'bold',
-            fontFamily: 'Roboto',
-            px: 3,
-            py: 1.5,
-            borderRadius: '50px',
-            fontSize: '1.1rem',
-            textTransform: 'none',
-            justifyContent: 'flex-start',
-            width: 'fit-content',
-            minWidth: '160px',
-            border: '2px solid rgba(32, 32, 30, 0.3)',
-            '&:hover': {
-              background: 'rgba(189, 250, 3, 1)',
-              transform: 'translateY(-2px)',
-              boxShadow: '0 10px 30px rgba(189, 250, 3, 0.4)',
-            },
-            transition: 'all 0.3s ease',
-          }}
-        >
-          Watch Now
-        </Button>
+  variant="contained"
+  size="large"
+  startIcon={
+    <Box
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: '50%',
+        background: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        mr: 1,
+      }}
+    >
+      <PlayArrow sx={{ color: '#0072c6' }} />
+    </Box>
+  }
+  onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
+  sx={{
+    background: 'linear-gradient(to bottom, #00cfff, #0072c6)',
+    color: 'white',
+    width: '220px',
+    fontWeight: 'bold',
+    fontFamily: 'Arial, sans-serif',
+    px: 4,
+    py: 1.5,
+    borderRadius: '50px',
+    fontSize: '1.1rem',
+    textTransform: 'uppercase',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+    minWidth: '200px',
+    '&:hover': {
+      background: 'linear-gradient(to bottom, #00b5e2, #005b9f)',
+      transform: 'translateY(-2px)',
+      boxShadow: '0 8px 20px rgba(0, 114, 198, 0.4)',
+    },
+    transition: 'all 0.3s ease',
+  }}
+>
+  Watch Now
+</Button>
       </Box>
     </GlassCard>
   );
