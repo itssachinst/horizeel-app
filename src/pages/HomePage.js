@@ -555,7 +555,7 @@ const HomePage = () => {
       </Typography>
 
       <Typography
-      sx={{
+        sx={{
             color: 'rgba(255, 255, 255, 0.9)', 
             mb: 1,
             fontFamily: 'Roboto',
@@ -564,14 +564,14 @@ const HomePage = () => {
           }}
         >
           Discover a new way to watch and create content
-        </Typography>
-        
+      </Typography>
+
         <Button
   variant="contained"
   size="large"
   startIcon={
-    <Box
-      sx={{
+        <Box
+          sx={{
         width: 32,
         height: 32,
         borderRadius: '50%',
@@ -583,10 +583,10 @@ const HomePage = () => {
       }}
     >
       <PlayArrow sx={{ color: '#0072c6' }} />
-    </Box>
+        </Box>
   }
   onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
-  sx={{
+          sx={{
     background: 'linear-gradient(to bottom, #00cfff, #0072c6)',
     color: 'white',
     width: '220px',

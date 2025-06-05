@@ -133,6 +133,9 @@ const VideoPlayer = ({
   const videoData = videos[currentIndex];
   const videoId = videoData?.video_id;
 
+  // Debug mode for click detection - only in development
+  const DEBUG_CLICKS = process.env.NODE_ENV === 'development';
+
   // CRITICAL: Force unique key for each video change to ensure complete remount
   const videoKey = useMemo(() => {
     return `${videoId}-${currentIndex}`;
@@ -279,27 +282,27 @@ const VideoPlayer = ({
     // Show controls and reset timer on click
     showControlsAndResetTimer();
     
+    // Get click coordinates for better detection
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
     // Debug logging for development
     console.log('Click detected on video container', {
       target: e.target.tagName,
       className: e.target.className,
-      closest: e.target.closest ? 'available' : 'not available'
+      coordinates: { x: clickX, y: clickY },
+      containerSize: { width: rect.width, height: rect.height }
     });
     
-    // Comprehensive check for interactive elements to avoid conflicts
+    // More specific interactive element detection - reduced false positives
     const interactiveSelectors = [
-      'button',
-      'a',
-      'input',
-      'select',
-      'textarea',
-      '[role="button"]',
-      '[data-interactive]',
-      '.video-controls',
       '.MuiIconButton-root',
       '.MuiButton-root',
       '.MuiSlider-root',
-      '[data-description-container]', // User info section
+      '[data-right-buttons] *', // Any child of right buttons
+      '[data-user-info] button', // Only buttons in user info
+      'input', 'select', 'textarea', 'a'
     ];
     
     // Check if click target or any parent is an interactive element
@@ -313,32 +316,29 @@ const VideoPlayer = ({
       return;
     }
 
-    // Check if click is on the right-side button stack area
-    const rightSideButtonArea = e.target.closest('[data-right-buttons]');
-    if (rightSideButtonArea) {
-      console.log('Click ignored - right-side button area');
-      return;
-    }
-
-    // Check if click is on user info section
-    const userInfoArea = e.target.closest('[data-user-info]');
-    if (userInfoArea) {
-      console.log('Click ignored - user info area');
+    // Coordinate-based exclusion zones (more reliable than CSS)
+    const topExclusionZone = clickY < 80; // Top 80px
+    const bottomExclusionZone = clickY > rect.height - 120; // Bottom 120px
+    const rightExclusionZone = clickX > rect.width - 100; // Right 100px for buttons
+    
+    if (topExclusionZone || bottomExclusionZone || rightExclusionZone) {
+      console.log('Click ignored - exclusion zone', {
+        top: topExclusionZone,
+        bottom: bottomExclusionZone,
+        right: rightExclusionZone
+      });
       return;
     }
 
     console.log('Click accepted - toggling play/pause');
     
-    // Stop propagation to prevent conflicts with other handlers
+    // Immediate action without delay - this was the main issue
     e.stopPropagation();
     e.preventDefault();
     
     // Only toggle play/pause if we have a valid video reference
     if (videoRef.current) {
-      // Add a small delay to ensure other handlers have completed
-      setTimeout(() => {
-        togglePlayPause();
-      }, 10);
+      togglePlayPause(); // Remove the problematic setTimeout
     }
   }, [togglePlayPause, showControlsAndResetTimer]);
 
@@ -956,6 +956,35 @@ const VideoPlayer = ({
     setIsDescriptionExpanded(false);
   }, [videoId]);
 
+  // Global click debugging in development mode
+  useEffect(() => {
+    if (DEBUG_CLICKS) {
+      const handleGlobalClick = (e) => {
+        const rect = videoContainerRef.current?.getBoundingClientRect();
+        if (rect) {
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+          const isInsidePlayer = clickX >= 0 && clickX <= rect.width && 
+                                clickY >= 0 && clickY <= rect.height;
+          
+          if (isInsidePlayer) {
+            console.log('🎯 Global click in player area:', {
+              target: e.target.tagName,
+              className: e.target.className,
+              id: e.target.id,
+              coordinates: { x: clickX, y: clickY },
+              zIndex: window.getComputedStyle(e.target).zIndex,
+              isVideoElement: e.target.tagName === 'VIDEO'
+            });
+          }
+        }
+      };
+      
+      document.addEventListener('click', handleGlobalClick, true);
+      return () => document.removeEventListener('click', handleGlobalClick, true);
+    }
+  }, [DEBUG_CLICKS]);
+
   // Handle click outside to collapse description
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1199,11 +1228,15 @@ const VideoPlayer = ({
             </Box>
           )}
 
-          {/* Dedicated click overlay for reliable play/pause detection */}
-            <Box
+          {/* Enhanced click overlay for reliable play/pause detection */}
+          <Box
             onClick={handleVideoContainerClick}
-              sx={{
-                position: 'absolute',
+            onMouseDown={(e) => {
+              // Prevent interference with other mouse handlers
+              e.stopPropagation();
+            }}
+            sx={{
+              position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
@@ -1211,29 +1244,8 @@ const VideoPlayer = ({
               zIndex: 5, // Above video but below controls
               backgroundColor: 'transparent',
               cursor: 'pointer',
-              // Ensure this overlay doesn't interfere with pointer events on controls
               pointerEvents: 'auto',
-              // Create exclusion zones for interactive areas
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '80px', // Top control area
-                pointerEvents: 'none',
-                zIndex: 1,
-              },
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: '120px', // Bottom control area
-                pointerEvents: 'none',
-                zIndex: 1,
-              },
+              // Remove the problematic CSS pseudo-elements that don't work
             }}
           />
 
