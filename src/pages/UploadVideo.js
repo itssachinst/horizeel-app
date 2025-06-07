@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { TextField, Button, Card, CardContent, Typography } from "@mui/material";
+import { TextField, Button, Card, CardContent, Typography, Box } from "@mui/material";
 import { API_BASE_URL } from "../api";
 
 const UploadVideo = () => {
@@ -101,55 +101,168 @@ const UploadVideo = () => {
   };
 
   return (
-    <Card style={{ maxWidth: "500px", margin: "20px auto", padding: "20px" }}>
-      <CardContent>
-        <Typography variant="h5" gutterBottom>
-          Upload Video
-        </Typography>
-        {message && (
-          <Typography variant="body1" color="error" gutterBottom>
-            {message}
+    <Box sx={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+      pt: 9, // Add padding for fixed header
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      px: 2,
+    }}>
+      <Card sx={{ 
+        maxWidth: "500px", 
+        width: "100%",
+        background: 'rgba(18, 18, 18, 0.95)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: 3,
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+      }}>
+        <CardContent sx={{ p: 4 }}>
+          <Typography variant="h5" gutterBottom sx={{ 
+            color: 'white',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            mb: 3
+          }}>
+            Upload Video
           </Typography>
-        )}
-        <form onSubmit={handleSubmit}>
-          <TextField
-            label="Video Title"
-            name="title" // FIX: Matched API field name
-            value={videoDetails.title}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          />
-          <TextField
-            label="Description"
-            name="description"
-            value={videoDetails.description}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          />
-          <input
-            type="file"
-            accept="video/*"
-            onChange={handleFileChange}
-            style={{ marginTop: "10px", marginBottom: "10px" }}
-            required
-          />
-          {thumbnailURL && (
-            <img
-              src={thumbnailURL}
-              alt="Thumbnail"
-              style={{ maxWidth: "100px", marginTop: "20px" }}
-            />
+          {message && (
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                color: message.includes('successfully') ? '#4caf50' : '#f44336',
+                mb: 2,
+                textAlign: 'center',
+                p: 2,
+                borderRadius: 1,
+                background: message.includes('successfully') 
+                  ? 'rgba(76, 175, 80, 0.1)' 
+                  : 'rgba(244, 67, 54, 0.1)',
+                border: `1px solid ${message.includes('successfully') ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)'}`,
+              }}
+            >
+              {message}
+            </Typography>
           )}
-          <Button type="submit" variant="contained" color="primary" fullWidth>
-            Upload
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          <form onSubmit={handleSubmit}>
+            <TextField
+              label="Video Title"
+              name="title" // FIX: Matched API field name
+              value={videoDetails.title}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  color: 'white',
+                  '& fieldset': {
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(255, 255, 255, 0.5)',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#BDFA03',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  '&.Mui-focused': {
+                    color: '#BDFA03',
+                  },
+                },
+              }}
+            />
+            <TextField
+              label="Description"
+              name="description"
+              value={videoDetails.description}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+              multiline
+              rows={3}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  color: 'white',
+                  '& fieldset': {
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: 'rgba(255, 255, 255, 0.5)',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#BDFA03',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  '&.Mui-focused': {
+                    color: '#BDFA03',
+                  },
+                },
+              }}
+            />
+            <Box sx={{ mt: 2, mb: 2 }}>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                required
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: 'white',
+                  fontSize: '16px',
+                }}
+              />
+            </Box>
+            {thumbnailURL && (
+              <Box sx={{ textAlign: 'center', mb: 2 }}>
+                <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 1 }}>
+                  Generated Thumbnail:
+                </Typography>
+                <img
+                  src={thumbnailURL}
+                  alt="Thumbnail"
+                  style={{ 
+                    maxWidth: "150px", 
+                    borderRadius: "8px",
+                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                  }}
+                />
+              </Box>
+            )}
+            <Button 
+              type="submit" 
+              variant="contained" 
+              fullWidth
+              sx={{ 
+                mt: 3,
+                py: 1.5,
+                background: '#BDFA03',
+                color: '#000',
+                fontWeight: 'bold',
+                fontSize: '1.1rem',
+                '&:hover': {
+                  background: '#A8E003',
+                  boxShadow: '0 0 20px rgba(189, 250, 3, 0.4)',
+                },
+              }}
+            >
+              Upload Video
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 

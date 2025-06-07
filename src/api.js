@@ -535,6 +535,94 @@ export const getAllUserFeedback = async (skip = 0, limit = 100) => {
   }
 };
 
+// Fetch videos for a specific user
+export const fetchUserVideos = async (userId, skip = 0, limit = 20) => {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required to fetch user videos");
+    }
+
+    console.log(`API: Fetching videos for user ID: ${userId} with skip=${skip}, limit=${limit}`);
+    
+    const response = await authAxios.get(`${API_BASE_URL}/videos/`, {
+      params: { 
+        user_id: userId, 
+        skip, 
+        limit 
+      },
+      timeout: 15000 // 15 seconds timeout
+    });
+
+    if (!response.data) {
+      console.warn("API: Empty response from fetchUserVideos");
+      return [];
+    }
+
+    // Handle different response formats
+    let videos = response.data;
+    
+    if (!Array.isArray(videos)) {
+      console.warn(`API: Unexpected response format from fetchUserVideos (not an array):`, videos);
+      
+      // Try to extract videos array if response is an object with a videos property
+      if (videos && videos.videos && Array.isArray(videos.videos)) {
+        console.log(`API: Extracted videos array from response object, contains ${videos.videos.length} videos`);
+        videos = videos.videos;
+      } else if (videos && videos.data && Array.isArray(videos.data)) {
+        console.log(`API: Extracted videos array from .data property, contains ${videos.data.length} videos`);
+        videos = videos.data;
+      } else if (videos && videos.results && Array.isArray(videos.results)) {
+        console.log(`API: Extracted videos array from .results property, contains ${videos.results.length} videos`);
+        videos = videos.results;
+      } else {
+        console.error("API: Could not extract videos array from response");
+        return [];
+      }
+    }
+
+    // Validate and sanitize video objects
+    const validVideos = videos.filter((video, index) => {
+      // Check if it's a valid object
+      if (!video || typeof video !== 'object') {
+        console.warn(`API: Skipping invalid video entry at index ${index} (not an object):`, video);
+        return false;
+      }
+      
+      // Ensure required fields exist
+      if (!video.video_id) {
+        console.warn(`API: Skipping video at index ${index} with missing video_id:`, video);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    console.log(`API: Received ${videos.length} videos for user ${userId}, ${validVideos.length} are valid`);
+    return validVideos;
+    
+  } catch (error) {
+    console.error(`API: Error fetching videos for user ${userId}:`, error.message || error);
+    
+    if (error.response) {
+      console.error(`API: Error status: ${error.response.status}`);
+      console.error(`API: Error response data:`, error.response.data);
+      
+      // Handle specific error cases
+      if (error.response.status === 404) {
+        console.warn(`API: User ${userId} not found or has no videos`);
+        return [];
+      } else if (error.response.status === 401 || error.response.status === 403) {
+        throw new Error("Authentication required to fetch user videos");
+      }
+    } else if (error.request) {
+      console.error("API: No response received from server");
+      throw new Error("No response received from server");
+    }
+    
+    throw new Error(error.message || "Failed to fetch user videos");
+  }
+};
+
 // Create a named export object instead of an anonymous one
 const apiServices = {
   fetchVideos,
@@ -568,6 +656,7 @@ const apiServices = {
   deleteWatchHistory,
   submitUserFeedback,
   getAllUserFeedback,
+  fetchUserVideos,
 };
 
 export default apiServices;

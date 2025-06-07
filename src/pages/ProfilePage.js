@@ -13,13 +13,12 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useVideoContext } from '../contexts/VideoContext';
-import { deleteVideo, getSavedVideos, getFollowStats, uploadProfileImage, updateUserProfile } from '../api';
+import { deleteVideo, getSavedVideos, getFollowStats, uploadProfileImage, updateUserProfile, fetchUserVideos } from '../api';
 import { useNavigate } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 
 const ProfilePage = () => {
   const { currentUser, logout, updateAuthUser } = useAuth();
-  const { fetchVideos } = useVideoContext();
   const [userVideos, setUserVideos] = useState([]);
   const [savedVideos, setSavedVideos] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -107,19 +106,90 @@ const ProfilePage = () => {
       }
 
       console.log("Current user ID:", currentUser.user_id);
-      console.log("About to call fetchVideos with params:", 0, 20, currentUser.user_id);
+      console.log("About to call fetchUserVideos with params:", { userId: currentUser.user_id, skip: 0, limit: 20 });
 
-      // Use the updated fetchVideos function from VideoContext
-      const videos = await fetchVideos(0, 20, currentUser.user_id);
-      console.log(`Fetched ${videos ? videos.length : 0} videos for user ${currentUser.user_id}`);
+      // Use the dedicated fetchUserVideos function from API
+      const videos = await fetchUserVideos(currentUser.user_id, 0, 20);
+      console.log(`Fetched response:`, videos);
+      console.log(`Response type:`, typeof videos);
+      console.log(`Is array:`, Array.isArray(videos));
 
-      if (videos && Array.isArray(videos)) {
-        setUserVideos(videos);
-      } else {
-        console.error("Invalid response format from fetchVideos", videos);
-        setError("Received invalid data format from server");
-        showSnackbarMessage("Received invalid data format from server", "error");
+      // Enhanced validation with detailed logging
+      if (videos === null || videos === undefined) {
+        console.error("fetchUserVideos returned null or undefined");
+        setError("No data received from server");
+        showSnackbarMessage("No data received from server", "error");
+        setUserVideos([]);
+        return;
       }
+
+      if (!Array.isArray(videos)) {
+        console.error("fetchUserVideos did not return an array. Received:", videos);
+        console.error("Type of response:", typeof videos);
+        
+        // Try to extract videos from different possible response formats
+        let extractedVideos = [];
+        
+        if (videos && typeof videos === 'object') {
+          // Check common response wrapper patterns
+          if (videos.videos && Array.isArray(videos.videos)) {
+            console.log("Extracting videos from .videos property");
+            extractedVideos = videos.videos;
+          } else if (videos.data && Array.isArray(videos.data)) {
+            console.log("Extracting videos from .data property");
+            extractedVideos = videos.data;
+          } else if (videos.results && Array.isArray(videos.results)) {
+            console.log("Extracting videos from .results property");
+            extractedVideos = videos.results;
+          } else {
+            console.error("Could not extract videos array from response object");
+            setError("Received invalid data format from server");
+            showSnackbarMessage("Received invalid data format from server", "error");
+            setUserVideos([]);
+            return;
+          }
+        } else {
+          console.error("Response is not an object or array");
+          setError("Received invalid data format from server");
+          showSnackbarMessage("Received invalid data format from server", "error");
+          setUserVideos([]);
+          return;
+        }
+        
+        videos = extractedVideos;
+      }
+
+      // Validate each video object
+      const validVideos = videos.filter((video, index) => {
+        if (!video || typeof video !== 'object') {
+          console.warn(`Video at index ${index} is not a valid object:`, video);
+          return false;
+        }
+        
+        // Check for required fields
+        const requiredFields = ['video_id'];
+        const missingFields = requiredFields.filter(field => !video[field]);
+        
+        if (missingFields.length > 0) {
+          console.warn(`Video at index ${index} missing required fields:`, missingFields, video);
+          return false;
+        }
+        
+        return true;
+      });
+
+      console.log(`Validated ${validVideos.length} out of ${videos.length} videos`);
+      
+      if (validVideos.length !== videos.length) {
+        console.warn(`Filtered out ${videos.length - validVideos.length} invalid videos`);
+      }
+
+      setUserVideos(validVideos);
+      
+      if (validVideos.length === 0 && videos.length > 0) {
+        showSnackbarMessage("Some videos could not be loaded due to invalid format", "warning");
+      }
+      
     } catch (error) {
       console.error("Error loading user videos:", error);
       const errorMessage = error.message || "Failed to load your videos";
@@ -130,7 +200,14 @@ const ProfilePage = () => {
       if (error.response) {
         console.error("Error response data:", error.response.data);
         console.error("Error response status:", error.response.status);
+        console.error("Error response headers:", error.response.headers);
+      } else if (error.request) {
+        console.error("Error request:", error.request);
+        console.error("No response received from server");
       }
+      
+      // Set empty array as fallback
+      setUserVideos([]);
     } finally {
       setLoadingUserVideos(false);
     }
@@ -142,15 +219,99 @@ const ProfilePage = () => {
       if (currentUser) {
         console.log("Fetching saved videos...");
         const videos = await getSavedVideos();
-        console.log("Saved videos fetched:", videos);
-        setSavedVideos(videos);
+        console.log("Saved videos response:", videos);
+        console.log("Saved videos response type:", typeof videos);
+        console.log("Saved videos is array:", Array.isArray(videos));
+
+        // Enhanced validation for saved videos
+        if (videos === null || videos === undefined) {
+          console.error("getSavedVideos returned null or undefined");
+          setSavedVideos([]);
+          return;
+        }
+
+        if (!Array.isArray(videos)) {
+          console.error("getSavedVideos did not return an array. Received:", videos);
+          
+          // Try to extract videos from different possible response formats
+          let extractedVideos = [];
+          
+          if (videos && typeof videos === 'object') {
+            // Check common response wrapper patterns
+            if (videos.videos && Array.isArray(videos.videos)) {
+              console.log("Extracting saved videos from .videos property");
+              extractedVideos = videos.videos;
+            } else if (videos.data && Array.isArray(videos.data)) {
+              console.log("Extracting saved videos from .data property");
+              extractedVideos = videos.data;
+            } else if (videos.results && Array.isArray(videos.results)) {
+              console.log("Extracting saved videos from .results property");
+              extractedVideos = videos.results;
+            } else {
+              console.error("Could not extract saved videos array from response object");
+              setSavedVideos([]);
+              return;
+            }
+          } else {
+            console.error("Saved videos response is not an object or array");
+            setSavedVideos([]);
+            return;
+          }
+          
+          videos = extractedVideos;
+        }
+
+        // Validate each saved video object
+        const validVideos = videos.filter((video, index) => {
+          if (!video || typeof video !== 'object') {
+            console.warn(`Saved video at index ${index} is not a valid object:`, video);
+            return false;
+          }
+          
+          // Check for required fields
+          const requiredFields = ['video_id'];
+          const missingFields = requiredFields.filter(field => !video[field]);
+          
+          if (missingFields.length > 0) {
+            console.warn(`Saved video at index ${index} missing required fields:`, missingFields, video);
+            return false;
+          }
+          
+          return true;
+        });
+
+        console.log(`Validated ${validVideos.length} out of ${videos.length} saved videos`);
+        
+        if (validVideos.length !== videos.length) {
+          console.warn(`Filtered out ${videos.length - validVideos.length} invalid saved videos`);
+        }
+
+        setSavedVideos(validVideos);
+        
+        if (validVideos.length === 0 && videos.length > 0) {
+          showSnackbarMessage("Some saved videos could not be loaded due to invalid format", "warning");
+        }
       } else {
         console.error("Cannot fetch saved videos - user not logged in");
+        setSavedVideos([]);
       }
     } catch (error) {
       console.error("Error loading saved videos:", error);
       setError("Failed to load your saved videos");
       showSnackbarMessage("Failed to load your saved videos", "error");
+      
+      // Log additional error details if available
+      if (error.response) {
+        console.error("Saved videos error response data:", error.response.data);
+        console.error("Saved videos error response status:", error.response.status);
+        console.error("Saved videos error response headers:", error.response.headers);
+      } else if (error.request) {
+        console.error("Saved videos error request:", error.request);
+        console.error("No response received from server for saved videos");
+      }
+      
+      // Set empty array as fallback
+      setSavedVideos([]);
     } finally {
       setLoadingSavedVideos(false);
     }
@@ -539,8 +700,26 @@ const ProfilePage = () => {
         <Button
           variant="outlined"
           onClick={() => {
-            console.log("Debug - Current user:", currentUser);
-            console.log("Debug - API base URL:", process.env.REACT_APP_API_URL || "http://127.0.0.1:8000/api");
+            console.log("=== PROFILE PAGE DEBUG INFO ===");
+            console.log("Current user:", currentUser);
+            console.log("Current user ID:", currentUser?.user_id);
+            console.log("API base URL:", process.env.REACT_APP_API_URL || "http://127.0.0.1:8000/api");
+            console.log("User videos state:", userVideos);
+            console.log("Saved videos state:", savedVideos);
+            console.log("Loading states:", { loadingUserVideos, loadingSavedVideos });
+            console.log("Error state:", error);
+            console.log("Active tab:", activeTab);
+            console.log("Auth token exists:", !!localStorage.getItem('auth_token'));
+            console.log("=== END DEBUG INFO ===");
+            
+            // Also show an alert with key info
+            alert(`Debug Info:
+User ID: ${currentUser?.user_id || 'Not available'}
+API URL: ${process.env.REACT_APP_API_URL || "http://127.0.0.1:8000/api"}
+User Videos: ${userVideos.length} loaded
+Saved Videos: ${savedVideos.length} loaded
+Error: ${error || 'None'}
+Check console for full details.`);
           }}
         >
           Debug Info
@@ -594,7 +773,7 @@ const ProfilePage = () => {
 
   return (
     <Container maxWidth="lg" sx={{
-      pt: 2,
+      pt: 9,
       pb: 8,
       bgcolor: '#000',
       position: 'relative',

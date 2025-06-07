@@ -16,22 +16,11 @@ import {
   CardActionArea,
   Link,
   IconButton,
-  AppBar,
-  Toolbar,
-  InputBase,
-  Drawer,
-  List,
-  ListItem,
-  ListItemText,
   Fade,
   Grow
 } from "@mui/material";
-import { 
-  Search as SearchIcon,
+import {
   PlayArrow,
-  Upload as UploadIcon,
-  Feedback as FeedbackIcon,
-  AccountCircle as ProfileIcon,
   Visibility,
   PlayCircleOutline,
   TrendingUp,
@@ -52,63 +41,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { useVideoContext } from "../contexts/VideoContext";
 import { formatViewCount, formatDuration } from "../utils/videoUtils";
 import { useAuth } from '../contexts/AuthContext';
-import Logo from '../components/Logo';
+import Header from '../components/Header';
 
 // Styled components for the modern layout
-const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  background: 'rgba(0, 0, 0, 0.9)',
-  backdropFilter: 'blur(20px)',
-  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-}));
-
-const SearchContainer = styled('div')(({ theme }) => ({
-  position: 'relative',
-  borderRadius: 25,
-  background: 'rgba(255, 255, 255, 0.1)',
-  backdropFilter: 'blur(10px)',
-  border: '1px solid rgba(255, 255, 255, 0.2)',
-  '&:hover': {
-    background: 'rgba(255, 255, 255, 0.15)',
-    border: '1px solid rgba(255, 255, 255, 0.3)',
-  },
-  '&:focus-within': {
-    background: 'rgba(255, 255, 255, 0.15)',
-    border: '1px solid rgba(189, 250, 3, 0.5)',
-    boxShadow: '0 0 20px rgba(189, 250, 3, 0.2)',
-  },
-  width: '100%',
-  maxWidth: 450,
-  display: 'flex',
-  alignItems: 'center',
-  transition: 'all 0.3s ease',
-}));
-
-const SearchInput = styled(InputBase)(({ theme }) => ({
-  color: 'white',
-  width: '100%',
-  '& .MuiInputBase-input': {
-    padding: theme.spacing(1.5, 1, 1.5, 0),
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    paddingRight: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create('width'),
-    width: '100%',
-  },
-}));
-
-const GlassCard = styled(Card)(({ theme }) => ({
-  background: 'rgba(255, 255, 255, 0.05)',
-  backdropFilter: 'blur(15px)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  borderRadius: '16px',
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  '&:hover': {
-    transform: 'translateY(-4px)',
-    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(189, 250, 3, 0.2)',
-    border: '1px solid rgba(189, 250, 3, 0.3)',
-  },
-}));
-
 const TopTenSidebar = styled(Box)(({ theme }) => ({
   position: 'fixed',
   left: 0,
@@ -152,7 +87,7 @@ const TopTenSidebar = styled(Box)(({ theme }) => ({
 
 const MainContent = styled(Box)(({ theme }) => ({
   marginLeft: 420,
-  paddingTop: theme.spacing(1),
+  paddingTop: theme.spacing(9), // Add padding for fixed header
   paddingLeft: theme.spacing(1),
   paddingRight: theme.spacing(1),
   paddingBottom: theme.spacing(1),
@@ -161,6 +96,7 @@ const MainContent = styled(Box)(({ theme }) => ({
   overflowY: 'auto',
   [theme.breakpoints.down('lg')]: {
     marginLeft: 0,
+    paddingTop: theme.spacing(9), // Consistent header spacing
   },
   // Custom scrollbar styling for WebKit browsers (Chrome, Safari, Edge)
   '&::-webkit-scrollbar': {
@@ -188,6 +124,19 @@ const MainContent = styled(Box)(({ theme }) => ({
   },
 }));
 
+const GlassCard = styled(Card)(({ theme }) => ({
+  background: 'rgba(255, 255, 255, 0.05)',
+  backdropFilter: 'blur(15px)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRadius: '16px',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  '&:hover': {
+    transform: 'translateY(-4px)',
+    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(189, 250, 3, 0.2)',
+    border: '1px solid rgba(189, 250, 3, 0.3)',
+  },
+}));
+
 // Category data with icons
 const CATEGORIES = [
   { name: 'Trending', icon: TrendingUp },
@@ -201,33 +150,6 @@ const CATEGORIES = [
   { name: 'Cars', icon: DirectionsCar },
   { name: 'Education', icon: School },
 ];
-
-// Memoized SearchBar component to prevent unnecessary re-renders
-const SearchBar = React.memo(({ currentCategoryName, searchQuery, onSearchChange, onSearch }) => (
-  <SearchContainer>
-    <Box sx={{ position: 'absolute', left: 16, display: 'flex', alignItems: 'center' }}>
-      <SearchIcon sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
-    </Box>
-    <SearchInput
-      placeholder={`Search ${currentCategoryName}...`}
-      value={searchQuery}
-      onChange={(e) => onSearchChange(e.target.value)}
-      onKeyPress={(e) => {
-        if (e.key === 'Enter') {
-          onSearch(searchQuery);
-        }
-      }}
-    />
-    {searchQuery && (
-      <IconButton 
-        onClick={() => onSearch(searchQuery)}
-        sx={{ position: 'absolute', right: 8, color: 'white' }}
-      >
-        <SearchIcon />
-      </IconButton>
-    )}
-  </SearchContainer>
-));
 
 const HomePage = () => {
   const {
@@ -248,19 +170,12 @@ const HomePage = () => {
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
 
   const observer = useRef();
+  const loadMoreRef = useRef();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
-
-  // Auto-scrolling categories effect - DISABLED to prevent auto-refresh
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     setCurrentCategoryIndex((prev) => (prev + 1) % CATEGORIES.length);
-  //   }, 30000);
-  //   return () => clearInterval(interval);
-  // }, []);
 
   // Generate top 10 videos from current videos - memoized
   const topVideos = useMemo(() => {
@@ -292,85 +207,42 @@ const HomePage = () => {
     }
   }, []);
 
-  // Memoized current category name to prevent re-renders
-  const currentCategoryName = useMemo(() => CATEGORIES[currentCategoryIndex].name, [currentCategoryIndex]);
+  // Infinite scroll implementation for homepage
+  const lastVideoElementRef = useCallback(node => {
+    if (loading) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !loading && !isSearching) {
+        console.log('Loading more videos from HomePage...');
+        loadMoreVideos();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore, loadMoreVideos, isSearching]);
 
-  // Top Navigation Bar Component - memoized to prevent unnecessary re-renders
-  const TopNavigationBar = useCallback(() => (
-    <StyledAppBar position="fixed">
-      <Toolbar sx={{ justifyContent: 'space-between', px: 3 }}>
-        {/* Logo */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Logo />
-        </Box>
+  // Infinite scroll implementation for home page
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + document.documentElement.scrollTop + 1000 >= document.documentElement.offsetHeight) {
+        if (hasMore && !loading && !isSearching) {
+          console.log('Loading more videos from HomePage scroll...');
+          loadMoreVideos();
+        }
+      }
+    };
 
-        {/* Search Bar with Auto-scrolling Categories */}
-        <SearchBar
-          currentCategoryName={currentCategoryName}
-          searchQuery={searchQuery}
-          onSearchChange={(value) => setSearchQuery(value)}
-          onSearch={handleSearch}
-        />
-
-        {/* Right Side Icons */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton 
-        sx={{
-              color: 'white',
-              '&:hover': { 
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)' 
-              }
-            }}
-            onClick={() => navigate('/upload')}
-          >
-            <UploadIcon />
-          </IconButton>
-          <IconButton 
-            sx={{
-              color: 'white',
-              '&:hover': { 
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)' 
-              }
-            }}
-            onClick={() => navigate('/feedback')}
-          >
-            <FeedbackIcon />
-          </IconButton>
-          <IconButton 
-              sx={{
-              color: 'white',
-              '&:hover': { 
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)' 
-              }
-            }}
-            onClick={() => navigate('/profile')}
-          >
-            {currentUser?.profile_picture ? (
-              <Avatar 
-                src={currentUser.profile_picture} 
-                sx={{ width: 32, height: 32, border: '2px solid rgba(189, 250, 3, 0.5)' }}
-              />
-            ) : (
-              <ProfileIcon />
-            )}
-          </IconButton>
-        </Box>
-      </Toolbar>
-    </StyledAppBar>
-  ), [currentCategoryName, searchQuery, handleSearch, navigate, currentUser]);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [hasMore, loading, loadMoreVideos, isSearching]);
 
   // Top 10 Sidebar Component - memoized to prevent unnecessary re-renders
   const TopTenSidebarComponent = useCallback(() => (
     <TopTenSidebar>
-      
       {topVideos.map((video, index) => (
         <Grow key={video.video_id} in timeout={300 + index * 100}>
-          <Box 
-            sx={{ 
-              mb: 2, 
+          <Box
+            sx={{
+              mb: 2,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -404,7 +276,8 @@ const HomePage = () => {
                   fontWeight: 'bold', // Bold weight as requested
                   fontSize: '6rem',
                   lineHeight: 1,
-                  filter: 'drop-shadow(0 6px 12px rgba(0, 0, 0, 0.8))',
+                  filter: 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.8))',
+                  textShadow: '0 2px 4px rgba(0, 0, 0, 0.8)',
                 }}
               >
                 {index + 1}
@@ -412,9 +285,9 @@ const HomePage = () => {
             </Box>
 
             {/* Thumbnail Card Container */}
-            <GlassCard 
+            <GlassCard
               className="thumbnail-card"
-              sx={{ 
+              sx={{
                 flex: 1,
                 ml: 2, // Margin to accommodate the ranking number
                 background: 'rgba(255, 255, 255, 0.12)',
@@ -428,9 +301,9 @@ const HomePage = () => {
                   <CardMedia
                     component="img"
                     image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/240/135`}
-                    sx={{ 
-                      width: '100%', 
-                      height: '100%', 
+                    sx={{
+                      width: '100%',
+                      height: '100%',
                       objectFit: 'cover',
                       transition: 'transform 0.3s ease',
                       '&:hover': {
@@ -438,10 +311,10 @@ const HomePage = () => {
                       }
                     }}
                   />
-                  
+
                   {/* Play Icon Overlay */}
-              <Box
-                sx={{
+                  <Box
+                    sx={{
                       position: 'absolute',
                       top: '50%',
                       left: '50%',
@@ -453,18 +326,18 @@ const HomePage = () => {
                       },
                     }}
                   >
-                    <PlayCircleOutline 
-                      sx={{ 
+                    <PlayCircleOutline
+                      sx={{
                         color: 'white',
                         fontSize: 32,
                         filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8))',
                       }}
                     />
-              </Box>
+                  </Box>
 
                   {/* View Count Badge */}
-            <Box
-              sx={{
+                  <Box
+                    sx={{
                       position: 'absolute',
                       top: 4,
                       right: 4,
@@ -478,9 +351,9 @@ const HomePage = () => {
                     }}
                   >
                     <Visibility sx={{ fontSize: 10, color: 'white' }} />
-              <Typography
-                variant="caption"
-                sx={{
+                    <Typography
+                      variant="caption"
+                      sx={{
                         color: 'white',
                         fontFamily: 'Roboto',
                         fontSize: '10px',
@@ -488,10 +361,10 @@ const HomePage = () => {
                       }}
                     >
                       {formatViewCount(video.views || 0)}
-              </Typography>
-            </Box>
+                    </Typography>
+                  </Box>
                 </Box>
-            </Box>
+              </Box>
             </GlassCard>
           </Box>
         </Grow>
@@ -501,9 +374,9 @@ const HomePage = () => {
 
   // Featured Video Component
   const FeaturedVideo = () => (
-    <GlassCard 
+    <GlassCard
       sx={{
-        mb: 1, 
+        mb: 1,
         height: 520,
         position: 'relative',
         overflow: 'hidden',
@@ -514,36 +387,34 @@ const HomePage = () => {
         component="img"
         image="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80"
         sx={{
-          width: '100%', 
-          height: '100%', 
+          width: '100%',
+          height: '100%',
           objectFit: 'cover',
           position: 'absolute',
           top: 0,
           left: 0,
         }}
       />
-      
+
       {/* Overlay */}
       <Box
         sx={{
           position: 'absolute',
           left: 0,
           bottom: 0,
-          // background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.7) 100%)',
           display: 'flex',
           flexDirection: 'column',
-          // justifyContent: 'center',
-          // alignItems: 'center',
           textAlign: 'left',
           p: 2,
         }}
       >
-      <Typography
-        sx={{
-            color: 'white', 
+        <Typography
+          sx={{
+            color: 'white',
             fontWeight: 'bold',
             fontFamily: 'Roboto',
             fontSize: '3.2rem',
+            paddingBottom: '20px',
             textShadow: '0 4px 20px rgba(0, 0, 0, 0.8)',
             background: 'linear-gradient(90deg, #BDFA03, #BEFF03)',
             backgroundClip: 'text',
@@ -552,185 +423,186 @@ const HomePage = () => {
           }}
         >
           Experience the world's first horizontal reels
-      </Typography>
-
-      <Typography
-        sx={{
-            color: 'rgba(255, 255, 255, 0.9)', 
-            mb: 1,
-            fontFamily: 'Roboto',
-            fontSize: '1.5rem',
-            textShadow: '0 2px 10px rgba(0, 0, 0, 0.8)',
-          }}
-        >
-          Discover a new way to watch and create content
-      </Typography>
+        </Typography>
 
         <Button
-  variant="contained"
-  size="large"
-  startIcon={
-        <Box
+          variant="contained"
+          size="large"
+          startIcon={
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mr: 1,
+                boxShadow: 'inset 0 0 4px rgba(255,255,255,0.6)',
+              }}
+            >
+              <PlayArrow sx={{ color: '#000000' }} />
+            </Box>
+          }
+          onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
           sx={{
-        width: 32,
-        height: 32,
-        borderRadius: '50%',
-        background: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        mr: 1,
-      }}
-    >
-      <PlayArrow sx={{ color: '#0072c6' }} />
-        </Box>
-  }
-  onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
-          sx={{
-    background: 'linear-gradient(to bottom, #00cfff, #0072c6)',
-    color: 'white',
-    width: '220px',
-    fontWeight: 'bold',
-    fontFamily: 'Arial, sans-serif',
-    px: 4,
-    py: 1.5,
-    borderRadius: '50px',
-    fontSize: '1.1rem',
-    textTransform: 'uppercase',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-    minWidth: '200px',
-    '&:hover': {
-      background: 'linear-gradient(to bottom, #00b5e2, #005b9f)',
-      transform: 'translateY(-2px)',
-      boxShadow: '0 8px 20px rgba(0, 114, 198, 0.4)',
-    },
-    transition: 'all 0.3s ease',
-  }}
->
-  Watch Now
-</Button>
+            background: 'linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(200,200,200,0.3))',
+            color: '#000000',
+            fontWeight: 'bold',
+            fontFamily: 'Roboto',
+            px: 4,
+            py: 1.5,
+            borderRadius: '50px',
+            fontSize: '1.1rem',
+            textTransform: 'uppercase',
+            width: '220px',
+            minWidth: '200px',
+            border: '1px solid rgba(255, 255, 255, 0.5)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.4)',
+            '&:hover': {
+              background: 'linear-gradient(to bottom, rgba(255,255,255,0.7), rgba(180,180,180,0.4))',
+              transform: 'translateY(-1px)',
+              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
+            },
+            transition: 'all 0.3s ease',
+          }}
+        >
+          Watch Now
+        </Button>
       </Box>
     </GlassCard>
   );
 
   // Video Grid Component
   const VideoGrid = () => {
-    const displayVideos = isSearching ? searchResults : videos.slice(10); // Skip first video as it's featured
+    const displayVideos = isSearching ? searchResults : videos.slice(1); // Skip first video as it's featured
 
-  return (
+    return (
       <Grid container spacing={3}>
-        {displayVideos.map((video, index) => (
-          <Grid item xs={12} sm={6} md={4} key={video.video_id}>
-            <GlassCard 
-              sx={{ 
-                height: 210, // Match image height only
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-              onClick={() => handleVideoClick(video.video_id, index + 1)}
+        {displayVideos.map((video, index) => {
+          const isLast = index === displayVideos.length - 1;
+          return (
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={4}
+              key={video.video_id}
+              ref={isLast ? lastVideoElementRef : null}
             >
-              <CardMedia
-                component="img"
-                image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/400/225`}
-                sx={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'cover' 
+              <GlassCard
+                sx={{
+                  height: 210, // Match image height only
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}
-              />
-              
-              {/* Views Count - Top Right Overlay */}
-        <Box 
-          sx={{ 
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  background: 'rgba(0, 0, 0, 0.7)',
-                  backdropFilter: 'blur(10px)',
-                  borderRadius: '12px',
-                  padding: '4px 8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                }}
+                onClick={() => handleVideoClick(video.video_id, index + 1)}
               >
-                <Visibility sx={{ fontSize: 12, color: 'white' }} />
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    color: 'white',
-                    fontFamily: 'Roboto, sans-serif',
-                    fontSize: '11px',
-                    fontWeight: 500,
+                <CardMedia
+                  component="img"
+                  image={video.thumbnail_url || `https://picsum.photos/seed/${video.video_id}/400/225`}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
                   }}
-                >
-                  {formatViewCount(video.views || 0)} 
-                </Typography>
-        </Box>
+                />
 
-              {/* Duration Badge - Top Left */}
-              {video.duration && (
-        <Box
-          sx={{
+                {/* Views Count - Top Right Overlay */}
+                <Box
+                  sx={{
                     position: 'absolute',
                     top: 8,
-                    left: 8,
+                    right: 8,
                     background: 'rgba(0, 0, 0, 0.7)',
                     backdropFilter: 'blur(10px)',
-                    borderRadius: '4px',
-                    padding: '2px 6px',
-                    color: 'white',
-                    fontSize: '11px',
-                    fontWeight: '500',
-                    fontFamily: 'Roboto, sans-serif',
+                    borderRadius: '12px',
+                    padding: '4px 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
                   }}
                 >
-                  {formatDuration(video.duration)}
-        </Box>
-      )}
+                  <Visibility sx={{ fontSize: 12, color: 'white' }} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'white',
+                      fontFamily: 'Roboto, sans-serif',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {formatViewCount(video.views || 0)}
+                  </Typography>
+                </Box>
 
-              {/* Title - Bottom Left Overlay */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  background: 'linear-gradient(transparent, rgba(0, 0, 0, 0.8))',
-                  padding: '20px 12px 12px 12px',
-                }}
-              >
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
-                    color: 'white',
-                    fontFamily: 'Roboto, sans-serif',
-                    fontWeight: 600,
-                    fontSize: '14px',
-                    lineHeight: 1.2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    textShadow: '0 1px 3px rgba(0, 0, 0, 0.8)',
+                {/* Duration Badge - Top Left */}
+                {video.duration && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      left: 8,
+                      background: 'rgba(0, 0, 0, 0.7)',
+                      backdropFilter: 'blur(10px)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      color: 'white',
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      fontFamily: 'Roboto, sans-serif',
+                    }}
+                  >
+                    {formatDuration(video.duration)}
+                  </Box>
+                )}
+
+                {/* Title - Bottom Left Overlay */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: 'linear-gradient(transparent, rgba(0, 0, 0, 0.8))',
+                    padding: '20px 12px 12px 12px',
                   }}
                 >
-                  {video.title || "Untitled Video"}
-                </Typography>
-              </Box>
-            </GlassCard>
-                </Grid>
-              ))}
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      color: 'white',
+                      fontFamily: 'Roboto, sans-serif',
+                      fontWeight: 600,
+                      fontSize: '14px',
+                      lineHeight: 1.2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.8)',
+                    }}
+                  >
+                    {video.title || "Untitled Video"}
+                  </Typography>
+                </Box>
+              </GlassCard>
             </Grid>
+          );
+        })}
+      </Grid>
     );
   };
 
   if (loading && videos.length === 0) {
     return (
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
       }}>
@@ -740,14 +612,20 @@ const HomePage = () => {
   }
 
   return (
-    <Box sx={{ 
+    <Box sx={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
     }}>
-      <TopNavigationBar />
-      
+      <Header 
+        variant="home"
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearch={handleSearch}
+        showSearch={true}
+      />
+
       {!isMobile && !isTablet && <TopTenSidebarComponent />}
-      
+
       <MainContent>
         <Box sx={{ pt: 2 }}>
           {/* Search Results Header */}
@@ -756,7 +634,7 @@ const HomePage = () => {
               <Typography variant="h4" sx={{ color: 'white', fontWeight: 'bold', mb: 2 }}>
                 Search results for: "{searchQuery}"
               </Typography>
-              <Button 
+              <Button
                 onClick={() => {
                   setIsSearching(false);
                   setSearchQuery('');
@@ -778,10 +656,54 @@ const HomePage = () => {
 
           {/* Featured Video */}
           {!isSearching && <FeaturedVideo />}
-          
+
           {/* Video Grid */}
           <VideoGrid />
-          
+
+          {/* Load More Videos Button */}
+          {!isSearching && hasMore && videos.length > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  console.log('Manual load more videos clicked');
+                  loadMoreVideos();
+                }}
+                disabled={loading}
+                sx={{
+                  background: 'rgba(189, 250, 3, 0.9)',
+                  color: 'black',
+                  fontWeight: 'bold',
+                  fontFamily: 'Roboto',
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: '25px',
+                  fontSize: '1rem',
+                  textTransform: 'none',
+                  '&:hover': {
+                    background: 'rgba(189, 250, 3, 1)',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 10px 30px rgba(189, 250, 3, 0.4)',
+                  },
+                  '&:disabled': {
+                    background: 'rgba(189, 250, 3, 0.5)',
+                    color: 'rgba(0, 0, 0, 0.5)',
+                  },
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                {loading ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} sx={{ color: 'black' }} />
+                    Loading...
+                  </Box>
+                ) : (
+                  `Load More Videos`
+                )}
+              </Button>
+            </Box>
+          )}
+
           {/* Loading indicator */}
           {(loading || searchLoading) && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>

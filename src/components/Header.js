@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -30,18 +30,29 @@ import {
   BookmarkBorder as BookmarkIcon,
   Menu as MenuIcon,
   Mic as MicIcon,
-  Feedback as FeedbackIcon
+  Feedback as FeedbackIcon,
+  Upload as UploadIcon
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { navigateToHomeWithRefresh, isVideoPage } from '../utils/navigation';
+import { searchVideos } from '../api';
 import Logo from './Logo';
 
-// Enhanced styled search bar with glassy effect
-const Search = styled('div')(({ theme }) => ({
+// Unified styled components for consistent header design
+const StyledAppBar = styled(AppBar)(({ theme }) => ({
+  background: 'rgba(0, 0, 0, 0.9)',
+  backdropFilter: 'blur(20px)',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+  position: 'fixed',
+  zIndex: theme.zIndex.appBar,
+}));
+
+const SearchContainer = styled('div')(({ theme }) => ({
   position: 'relative',
-  borderRadius: 20,
+  borderRadius: 25,
   background: 'rgba(255, 255, 255, 0.1)',
   backdropFilter: 'blur(10px)',
   border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -55,31 +66,17 @@ const Search = styled('div')(({ theme }) => ({
     boxShadow: '0 0 20px rgba(189, 250, 3, 0.2)',
   },
   width: '100%',
-  maxWidth: 600,
-  [theme.breakpoints.up('sm')]: {
-    width: '100%',
-  },
+  maxWidth: 450,
   display: 'flex',
   alignItems: 'center',
   transition: 'all 0.3s ease',
 }));
 
-const SearchIconWrapper = styled('div')(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: '100%',
-  position: 'absolute',
-  pointerEvents: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: alpha(theme.palette.common.white, 0.7),
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: 'inherit',
+const SearchInput = styled(InputBase)(({ theme }) => ({
+  color: 'white',
   width: '100%',
   '& .MuiInputBase-input': {
-    padding: theme.spacing(1, 1, 1, 0),
+    padding: theme.spacing(1.5, 1, 1.5, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
     paddingRight: `calc(1em + ${theme.spacing(4)})`,
     transition: theme.transitions.create('width'),
@@ -87,7 +84,6 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-// Styled component for rotating suggestions
 const RotatingSuggestions = styled(Box)(({ theme }) => ({
   position: 'absolute',
   left: `calc(1em + ${theme.spacing(4)})`,
@@ -112,26 +108,10 @@ const SuggestionText = styled(Typography)(({ theme }) => ({
   color: 'inherit',
 }));
 
-// Styled right side icon buttons
-const ActionIconButton = styled(IconButton)(({ theme }) => ({
-  color: theme.palette.common.white,
-  marginLeft: theme.spacing(1),
-}));
-
-// Predefined search suggestions
-const SEARCH_SUGGESTIONS = [
-  'Cars',
-  'Music',
-  'Places',
-  'Food',
-  'Travel',
-  'Technology',
-  'Sports',
-  'Fashion',
-  'Gaming',
-  'Art',
-  'Nature',
-  'Comedy'
+// Category data for rotating suggestions
+const CATEGORIES = [
+  'Trending', 'Music', 'Travel', 'Food', 'Gaming', 'Movies', 
+  'Art', 'Nature', 'Cars', 'Education', 'Sports', 'Fashion'
 ];
 
 // Rotating Suggestions Component
@@ -147,11 +127,11 @@ const RotatingSuggestionsComponent = ({ isVisible }) => {
       
       setTimeout(() => {
         setCurrentIndex((prevIndex) => 
-          (prevIndex + 1) % SEARCH_SUGGESTIONS.length
+          (prevIndex + 1) % CATEGORIES.length
         );
         setIsAnimating(false);
-      }, 300); // Half of the transition duration
-    }, 2500); // Change every 2.5 seconds
+      }, 300);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [isVisible]);
@@ -167,31 +147,65 @@ const RotatingSuggestionsComponent = ({ isVisible }) => {
           transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
-        Search for {SEARCH_SUGGESTIONS[currentIndex]}...
+        Search {CATEGORIES[currentIndex]}...
       </SuggestionText>
     </RotatingSuggestions>
   );
 };
 
-const Header = () => {
+// Memoized SearchBar component
+const SearchBar = React.memo(({ searchQuery, onSearchChange, onSearch, showRotatingSuggestions = true }) => (
+  <SearchContainer>
+    <Box sx={{ position: 'absolute', left: 16, display: 'flex', alignItems: 'center' }}>
+      <SearchIcon sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
+    </Box>
+    <SearchInput
+      placeholder={searchQuery ? "" : "Search videos..."}
+      value={searchQuery}
+      onChange={(e) => onSearchChange(e.target.value)}
+      onKeyPress={(e) => {
+        if (e.key === 'Enter') {
+          onSearch(searchQuery);
+        }
+      }}
+    />
+    {/* Rotating suggestions - only show when search is empty and enabled */}
+    {showRotatingSuggestions && <RotatingSuggestionsComponent isVisible={!searchQuery} />}
+    {searchQuery && (
+      <IconButton
+        onClick={() => onSearch(searchQuery)}
+        sx={{ position: 'absolute', right: 8, color: 'white' }}
+      >
+        <SearchIcon />
+      </IconButton>
+    )}
+  </SearchContainer>
+));
+
+const Header = ({ 
+  variant = 'default', // 'default' or 'home'
+  onSearch,
+  searchQuery: externalSearchQuery,
+  onSearchChange: externalOnSearchChange,
+  showSearch = true,
+  customSearchPlaceholder
+}) => {
   const { currentUser, logout, canUpload } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
-  // const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [anchorEl, setAnchorEl] = useState(null);
   const [mobileMenuAnchorEl, setMobileMenuAnchorEl] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isDemo, setIsDemo] = useState(false);
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  
+  // Use external search state if provided, otherwise use internal state
+  const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery;
+  const setSearchQuery = externalOnSearchChange || setInternalSearchQuery;
   
   const isMenuOpen = Boolean(anchorEl);
   const isMobileMenuOpen = Boolean(mobileMenuAnchorEl);
-
-  // Check if we're in demo mode
-  useEffect(() => {
-    setIsDemo(location.pathname.startsWith('/demo'));
-  }, [location.pathname]);
 
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -212,19 +226,18 @@ const Header = () => {
     handleMenuClose();
   };
 
-  // Handle search input change with hashtag highlighting
-  const handleSearchInputChange = (e) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-  };
-
-  // Handle search form submission
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+  // Handle search
+  const handleSearch = useCallback(async (query) => {
+    if (onSearch) {
+      // Use external search handler if provided
+      onSearch(query);
+    } else {
+      // Default search behavior
+      if (query.trim()) {
+        navigate(`/search?q=${encodeURIComponent(query)}`);
+      }
     }
-  };
+  }, [onSearch, navigate]);
 
   const handleGoToProfile = () => {
     navigate('/profile');
@@ -242,12 +255,7 @@ const Header = () => {
   };
 
   const handleGoToUpload = () => {
-    if (canUpload) {
-      navigate('/upload');
-    } else {
-      // Still navigate to upload route, but the UploadProtectedRoute will handle the restriction
     navigate('/upload');
-    }
     handleMenuClose();
   };
 
@@ -256,7 +264,15 @@ const Header = () => {
     handleMenuClose();
   };
 
-  // Desktop menu with added waiting list option
+  const handleLogoClick = () => {
+    if (isVideoPage(location.pathname)) {
+      navigateToHomeWithRefresh();
+    } else {
+      navigate('/demo/');
+    }
+  };
+
+  // Desktop menu
   const renderMenu = (
     <Menu
       anchorEl={anchorEl}
@@ -276,6 +292,9 @@ const Header = () => {
           overflow: 'visible',
           filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
           mt: 1.5,
+          background: 'rgba(18, 18, 18, 0.95)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
           '& .MuiAvatar-root': {
             width: 32,
             height: 32,
@@ -290,41 +309,41 @@ const Header = () => {
             right: 14,
             width: 10,
             height: 10,
-            bgcolor: 'background.paper',
+            bgcolor: 'rgba(18, 18, 18, 0.95)',
             transform: 'translateY(-50%) rotate(45deg)',
             zIndex: 0,
           },
         },
       }}
     >
-      <MenuItem onClick={handleGoToProfile}>
+      <MenuItem onClick={handleGoToProfile} sx={{ color: 'white' }}>
         <ListItemIcon>
-          <AccountCircleIcon fontSize="small" />
+          <AccountCircleIcon fontSize="small" sx={{ color: 'white' }} />
         </ListItemIcon>
         Profile
       </MenuItem>
-      <MenuItem onClick={handleGoToSavedVideos}>
+      <MenuItem onClick={handleGoToSavedVideos} sx={{ color: 'white' }}>
         <ListItemIcon>
-          <BookmarkIcon fontSize="small" />
+          <BookmarkIcon fontSize="small" sx={{ color: 'white' }} />
         </ListItemIcon>
         Saved Videos
       </MenuItem>
-      <MenuItem onClick={handleGoToSettings}>
+      <MenuItem onClick={handleGoToSettings} sx={{ color: 'white' }}>
         <ListItemIcon>
-          <SettingsIcon fontSize="small" />
+          <SettingsIcon fontSize="small" sx={{ color: 'white' }} />
         </ListItemIcon>
         Settings
       </MenuItem>
-      <MenuItem onClick={handleGoToFeedback}>
+      <MenuItem onClick={handleGoToFeedback} sx={{ color: 'white' }}>
         <ListItemIcon>
-          <FeedbackIcon fontSize="small" />
+          <FeedbackIcon fontSize="small" sx={{ color: 'white' }} />
         </ListItemIcon>
         Feedback
       </MenuItem>
-      <Divider />
-      <MenuItem onClick={handleLogout}>
+      <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)' }} />
+      <MenuItem onClick={handleLogout} sx={{ color: 'white' }}>
         <ListItemIcon>
-          <LogoutIcon fontSize="small" />
+          <LogoutIcon fontSize="small" sx={{ color: 'white' }} />
         </ListItemIcon>
         Logout
       </MenuItem>
@@ -346,87 +365,49 @@ const Header = () => {
       }}
       open={isMobileMenuOpen}
       onClose={handleMenuClose}
+      PaperProps={{
+        sx: {
+          background: 'rgba(18, 18, 18, 0.95)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+        }
+      }}
     >
       <MenuItem 
         onClick={handleGoToUpload}
         sx={{
+          color: 'white',
           opacity: canUpload ? 1 : 0.5,
           '&:hover': {
-            backgroundColor: canUpload ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 0, 0, 0.04)',
+            backgroundColor: canUpload ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)',
           }
         }}
       >
-        <IconButton size="large" color="inherit">
+        <IconButton size="large" sx={{ color: 'white' }}>
           <VideoCallIcon />
         </IconButton>
-        <p>{canUpload ? 'Upload' : 'Upload (Restricted)'}</p>
+        <Typography>{canUpload ? 'Upload' : 'Upload (Restricted)'}</Typography>
       </MenuItem>
-      <MenuItem onClick={handleGoToFeedback}>
-        <IconButton size="large" color="inherit">
+      <MenuItem onClick={handleGoToFeedback} sx={{ color: 'white' }}>
+        <IconButton size="large" sx={{ color: 'white' }}>
           <FeedbackIcon />
         </IconButton>
-        <p>Feedback</p>
+        <Typography>Feedback</Typography>
       </MenuItem>
-      <MenuItem onClick={handleGoToProfile}>
-        <IconButton
-          size="large"
-          color="inherit"
-        >
+      <MenuItem onClick={handleGoToProfile} sx={{ color: 'white' }}>
+        <IconButton size="large" sx={{ color: 'white' }}>
           <AccountCircleIcon />
         </IconButton>
-        <p>Profile</p>
+        <Typography>Profile</Typography>
       </MenuItem>
     </Menu>
   );
 
-  // Enhanced Search component with rotating suggestions
-  const renderSearchBox = () => (
-    <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', position: 'relative' }}>
-      <Search>
-        <form onSubmit={handleSearch} style={{ width: '100%', position: 'relative' }}>
-          <SearchIconWrapper>
-            <SearchIcon />
-          </SearchIconWrapper>
-          <StyledInputBase
-            placeholder={searchQuery ? "" : "Search videos or #hashtags..."}
-            inputProps={{ 'aria-label': 'search' }}
-            value={searchQuery}
-            onChange={handleSearchInputChange}
-            sx={{
-              '& .MuiInputBase-input': {
-                backgroundColor: 'transparent',
-              }
-            }}
-          />
-          {/* Rotating suggestions - only show when search is empty */}
-          <RotatingSuggestionsComponent isVisible={!searchQuery} />
-          {searchQuery && (
-            <IconButton 
-              type="submit" 
-              aria-label="search"
-              sx={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}
-            >
-              <SearchIcon />
-            </IconButton>
-          )}
-        </form>
-      </Search>
-    </Box>
-  );
-
   return (
     <Box sx={{ flexGrow: 1 }}>
-      <AppBar 
-        position="sticky" 
-        color="default" 
-        sx={{ 
-          boxShadow: 'none', 
-          background: 'rgba(0, 0, 0, 0.8)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      >
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+      <StyledAppBar>
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 3 } }}>
+          {/* Left side - Logo and mobile menu */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <IconButton
               size="large"
@@ -436,6 +417,7 @@ const Header = () => {
               sx={{ 
                 display: { xs: 'flex', md: 'none' }, 
                 mr: 1,
+                color: 'white',
                 '&:hover': {
                   background: 'rgba(255, 255, 255, 0.1)',
                   backdropFilter: 'blur(10px)',
@@ -452,85 +434,84 @@ const Header = () => {
                 alignItems: 'center',
                 cursor: 'pointer'
               }}
-              onClick={() => {
-                // Force refresh if coming from video/reels page
-                if (isVideoPage(location.pathname)) {
-                  navigateToHomeWithRefresh();
-                } else {
-                  navigate('/demo/');
-                }
-              }}
+              onClick={handleLogoClick}
             >
               <Logo />
             </Box>
           </Box>
           
-          {/* Insert the new search component here */}
-          {renderSearchBox()}
+          {/* Center - Search Bar */}
+          {showSearch && (
+            <Box sx={{ 
+              flexGrow: 1, 
+              display: 'flex', 
+              justifyContent: 'center',
+              mx: { xs: 1, md: 3 },
+              maxWidth: { xs: '200px', sm: '300px', md: '450px' }
+            }}>
+              <SearchBar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onSearch={handleSearch}
+                showRotatingSuggestions={variant === 'home'}
+              />
+            </Box>
+          )}
           
-          {/* Desktop Navigation Items */}
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center' }}>
-            <ActionIconButton
-              size="large"
-              color="inherit"
-              onClick={handleGoToUpload}
-              title={canUpload ? "Upload Video" : "Upload Restricted"}
-              sx={{
-                opacity: canUpload ? 1 : 0.5,
-                '&:hover': {
-                  backgroundColor: canUpload ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)',
-                  backdropFilter: 'blur(10px)',
-                }
-              }}
-            >
-              <VideoCallIcon />
-            </ActionIconButton>
-            
-            <ActionIconButton
-              size="large"
-              color="inherit"
-              onClick={handleGoToFeedback}
-              sx={{
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(10px)',
-                }
-              }}
-            >
-              <FeedbackIcon />
-            </ActionIconButton>
-            
-            <ActionIconButton
-              size="large"
-              edge="end"
-              aria-label="account"
-              aria-haspopup="true"
-              onClick={handleProfileMenuOpen}
-              sx={{
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(10px)',
-                }
-              }}
-            >
-              {currentUser?.profile_picture ? (
-                <Avatar 
-                  src={currentUser.profile_picture} 
-                  alt={currentUser.username}
-                  sx={{ 
-                    width: 32, 
-                    height: 32,
-                    border: '2px solid rgba(189, 250, 3, 0.5)',
-                  }}
-                />
-              ) : (
-                <AccountCircleIcon />
-              )}
-            </ActionIconButton>
+          {/* Right side - Action buttons */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Desktop Navigation Items */}
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
+              <IconButton
+                sx={{
+                  color: 'white',
+                  '&:hover': {
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(10px)'
+                  }
+                }}
+                onClick={handleGoToUpload}
+                title={canUpload ? "Upload Video" : "Upload Restricted"}
+              >
+                <UploadIcon />
+              </IconButton>
+              
+              <IconButton
+                sx={{
+                  color: 'white',
+                  '&:hover': {
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(10px)'
+                  }
+                }}
+                onClick={handleGoToFeedback}
+              >
+                <FeedbackIcon />
+              </IconButton>
+              
+              <IconButton
+                sx={{
+                  color: 'white',
+                  '&:hover': {
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(10px)'
+                  }
+                }}
+                onClick={handleProfileMenuOpen}
+              >
+                {currentUser?.profile_picture ? (
+                  <Avatar
+                    src={currentUser.profile_picture}
+                    sx={{ width: 32, height: 32, border: '2px solid rgba(189, 250, 3, 0.5)' }}
+                  />
+                ) : (
+                  <AccountCircleIcon />
+                )}
+              </IconButton>
+            </Box>
           </Box>
         </Toolbar>
-      </AppBar>
-      {/* Remove this spacer Toolbar */}
+      </StyledAppBar>
       {renderMobileMenu}
       {renderMenu}
     </Box>

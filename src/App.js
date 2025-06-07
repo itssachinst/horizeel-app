@@ -26,14 +26,12 @@ const AppLayout = ({ children }) => {
   const location = useLocation();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
   const isReelsPage = location.pathname.startsWith('/reels');
-  const isHomePage = location.pathname === '/' || location.pathname === '/demo/' || location.pathname.startsWith('/demo/');
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
     <>
-      {!isAuthPage && !isReelsPage && (!isHomePage || !isMobile) && <Header />}
+      {!isAuthPage && !isReelsPage && <Header />}
       <Box sx={{
-          pt: 0, // Remove padding top
+        pt: 0, // Remove padding top since Header is fixed
         minHeight: '100vh',
         bgcolor: theme.palette.background.default
       }}>
