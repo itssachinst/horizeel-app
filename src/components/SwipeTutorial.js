@@ -210,7 +210,7 @@ const SwipeTutorial = ({ onDismiss, onFirstSwipe }) => {
             }
           </Typography>
 
-          <Typography
+          {/* <Typography
             variant="body2"
             sx={{
               opacity: 0.9,
@@ -221,7 +221,7 @@ const SwipeTutorial = ({ onDismiss, onFirstSwipe }) => {
             }}
           >
             {navigationHints.primary}
-          </Typography>
+          </Typography> */}
 
           {/* Progress indicator */}
           <Box
