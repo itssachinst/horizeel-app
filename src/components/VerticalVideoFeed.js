@@ -318,8 +318,8 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
   
   // Use trackpad gestures for desktop navigation
   const { resetGesture } = useTrackpadGestures(
-    goToNextVideo, // onSwipeUp (next video)
-    goToPrevVideo, // onSwipeDown (previous video)
+    goToPrevVideo, // onSwipeUp (previous video)
+    goToNextVideo, // onSwipeDown (next video)
     80, // sensitivity (lower = more sensitive)
     !isDragging && !showTutorial // enabled when not dragging and tutorial is not showing
   );

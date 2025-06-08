@@ -654,8 +654,8 @@ const VideoPlayer = ({
 
   // Add trackpad gesture support for desktop users
   const { resetGesture } = useTrackpadGestures(
-    handleNextVideo, // onSwipeUp (next video)
-    handlePrevVideo, // onSwipeDown (previous video)
+    handlePrevVideo, // onSwipeUp (previous video) - FIXED
+    handleNextVideo, // onSwipeDown (next video) - FIXED
     100, // sensitivity (slightly less sensitive than VerticalVideoFeed)
     true // always enabled for video player
   );

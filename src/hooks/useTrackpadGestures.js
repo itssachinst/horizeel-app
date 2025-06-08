@@ -39,7 +39,8 @@ const useTrackpadGestures = (onSwipeUp, onSwipeDown, sensitivity = 100, enabled 
       deltaY: e.deltaY,
       isTrackpad,
       accumulated: accumulatedDeltaRef.current,
-      threshold: GESTURE_THRESHOLD
+      threshold: GESTURE_THRESHOLD,
+      inputType: isTrackpad ? 'trackpad' : 'mouse wheel'
     });
     
     // Check if we've crossed the threshold for navigation
@@ -49,14 +50,19 @@ const useTrackpadGestures = (onSwipeUp, onSwipeDown, sensitivity = 100, enabled 
         return;
       }
       
+      // Determine direction based on accumulated delta
+      // Positive deltaY = scrolling down/swiping down = next video
+      // Negative deltaY = scrolling up/swiping up = previous video
       const direction = accumulatedDeltaRef.current > 0 ? 'down' : 'up';
       
-      console.log(`Trackpad/Mouse gesture detected: ${direction}`);
+      console.log(`${isTrackpad ? 'Trackpad' : 'Mouse'} gesture detected: ${direction} (deltaY: ${e.deltaY}, accumulated: ${accumulatedDeltaRef.current})`);
       
-      // Execute navigation
+      // Execute navigation based on direction
       if (direction === 'up' && onSwipeUp) {
+        console.log('Executing onSwipeUp (previous video)');
         onSwipeUp();
       } else if (direction === 'down' && onSwipeDown) {
+        console.log('Executing onSwipeDown (next video)');
         onSwipeDown();
       }
       

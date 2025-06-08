@@ -3,13 +3,15 @@ import axios from "axios";
 import { 
   TextField, Button, Card, CardContent, Typography, Box, CircularProgress, 
   Chip, InputAdornment, IconButton, Alert, Snackbar, Dialog, DialogTitle, 
-  DialogContent, DialogActions, LinearProgress, Stepper, Step, StepLabel 
+  DialogContent, DialogActions, LinearProgress, Stepper, Step, StepLabel,
+  Grid
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { 
   Add as AddIcon, Tag as TagIcon, CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon, Schedule as ScheduleIcon, PlayArrow as PlayArrowIcon
+  Error as ErrorIcon, Schedule as ScheduleIcon, PlayArrow as PlayArrowIcon,
+  RadioButtonUnchecked, Refresh
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../api";
 
@@ -21,6 +23,12 @@ const UploadVideo = () => {
   const [videoFile, setVideoFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailURL, setThumbnailURL] = useState(null);
+  
+  // Multiple thumbnail states
+  const [thumbnailOptions, setThumbnailOptions] = useState([]);
+  const [selectedThumbnailIndex, setSelectedThumbnailIndex] = useState(0);
+  const [isGeneratingThumbnails, setIsGeneratingThumbnails] = useState(false);
+  
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -40,14 +48,18 @@ const UploadVideo = () => {
   const videoRef = useRef(null);
   const pollingIntervalRef = useRef(null);
 
-  // Cleanup polling on unmount
+  // Cleanup polling and object URLs on unmount
   useEffect(() => {
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
+      // Cleanup thumbnail URLs
+      thumbnailOptions.forEach(option => {
+        URL.revokeObjectURL(option.url);
+      });
     };
-  }, []);
+  }, [thumbnailOptions]);
 
   // Check upload permission
   useEffect(() => {
@@ -110,6 +122,218 @@ const UploadVideo = () => {
     });
   };
 
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const generateThumbnailAtTime = (file, timeInSeconds) => {
+    return new Promise((resolve, reject) => {
+      console.log(`Starting thumbnail generation at ${timeInSeconds}s`);
+      
+      const video = document.createElement("video");
+      video.muted = true;
+      video.crossOrigin = "anonymous";
+      video.preload = "metadata";
+      
+      // Create a unique object URL for this video element
+      const videoURL = URL.createObjectURL(file);
+      video.src = videoURL;
+
+      let hasResolved = false;
+
+      const cleanup = () => {
+        URL.revokeObjectURL(videoURL);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+      };
+
+      const onLoadedMetadata = () => {
+        console.log(`Video metadata loaded for ${timeInSeconds}s thumbnail. Duration: ${video.duration}s`);
+        // Ensure we don't exceed video duration
+        const targetTime = Math.min(timeInSeconds, video.duration - 0.5);
+        const safeTime = Math.max(0, targetTime);
+        console.log(`Setting currentTime to ${safeTime}s for ${timeInSeconds}s thumbnail`);
+        video.currentTime = safeTime;
+      };
+
+      const onSeeked = () => {
+        if (hasResolved) return;
+        
+        console.log(`Video seeked to ${video.currentTime}s for ${timeInSeconds}s thumbnail`);
+        
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.min(video.videoWidth, 640); // Limit max width
+          canvas.height = Math.min(video.videoHeight, 360); // Limit max height
+          
+          // Maintain aspect ratio
+          if (video.videoWidth > 640) {
+            const ratio = 640 / video.videoWidth;
+            canvas.width = 640;
+            canvas.height = video.videoHeight * ratio;
+          }
+          
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          canvas.toBlob((blob) => {
+            if (blob && !hasResolved) {
+              hasResolved = true;
+              const thumbnailFile = new File([blob], `thumbnail_${timeInSeconds}s.jpg`, { type: "image/jpeg" });
+              const thumbnailURL = URL.createObjectURL(blob);
+              
+              console.log(`Successfully generated thumbnail at ${timeInSeconds}s`);
+              
+              cleanup();
+              resolve({
+                file: thumbnailFile,
+                url: thumbnailURL,
+                timestamp: timeInSeconds,
+                formattedTime: formatTime(timeInSeconds)
+              });
+            } else if (!hasResolved) {
+              hasResolved = true;
+              cleanup();
+              reject(new Error(`Failed to create thumbnail blob at ${timeInSeconds}s`));
+            }
+          }, "image/jpeg", 0.8);
+        } catch (error) {
+          if (!hasResolved) {
+            hasResolved = true;
+            cleanup();
+            reject(new Error(`Canvas error at ${timeInSeconds}s: ${error.message}`));
+          }
+        }
+      };
+
+      const onError = (error) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          cleanup();
+          reject(new Error(`Video error at ${timeInSeconds}s: ${error.message || 'Unknown video error'}`));
+        }
+      };
+
+      // Add event listeners
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+
+      // Add timeout to prevent hanging
+      setTimeout(() => {
+        if (!hasResolved) {
+          hasResolved = true;
+          cleanup();
+          reject(new Error(`Timeout generating thumbnail at ${timeInSeconds}s`));
+        }
+      }, 15000); // Increased timeout to 15 seconds
+    });
+  };
+
+  const generateMultipleThumbnails = async (file) => {
+    setIsGeneratingThumbnails(true);
+    setMessage("Generating thumbnail options...");
+    
+    try {
+      // First, get video duration
+      const video = document.createElement("video");
+      const videoURL = URL.createObjectURL(file);
+      video.src = videoURL;
+      
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          URL.revokeObjectURL(videoURL);
+          resolve();
+        };
+        video.onerror = () => {
+          URL.revokeObjectURL(videoURL);
+          reject(new Error("Failed to load video metadata"));
+        };
+        setTimeout(() => {
+          URL.revokeObjectURL(videoURL);
+          reject(new Error("Timeout loading video metadata"));
+        }, 5000);
+      });
+
+      const duration = video.duration;
+      console.log(`Video duration: ${duration} seconds`);
+
+      if (duration < 2) {
+        throw new Error("Video is too short to generate multiple thumbnails");
+      }
+
+      // Generate 5 thumbnails at different timestamps
+      const timestamps = [
+        Math.max(1, duration * 0.1),    // 10% into video
+        duration * 0.25,                // 25% into video
+        duration * 0.5,                 // 50% into video (middle)
+        duration * 0.75,                // 75% into video
+        Math.min(duration - 1, duration * 0.9) // 90% into video
+      ];
+
+      console.log("Generating thumbnails at timestamps:", timestamps);
+
+      // Generate thumbnails sequentially for better reliability
+      const validThumbnails = [];
+      
+      for (let i = 0; i < timestamps.length; i++) {
+        const timestamp = timestamps[i];
+        setMessage(`Generating thumbnail ${i + 1} of ${timestamps.length}...`);
+        
+        try {
+          console.log(`Generating thumbnail ${i + 1} at ${timestamp}s`);
+          const thumbnail = await generateThumbnailAtTime(file, timestamp);
+          validThumbnails.push(thumbnail);
+          console.log(`Successfully generated thumbnail ${i + 1}`);
+        } catch (error) {
+          console.error(`Failed to generate thumbnail ${i + 1} at ${timestamp}s:`, error);
+          // Continue with next thumbnail instead of failing completely
+        }
+        
+        // Small delay between generations to prevent conflicts
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      if (validThumbnails.length === 0) {
+        throw new Error("Failed to generate any thumbnails");
+      }
+
+      console.log(`Successfully generated ${validThumbnails.length} out of ${timestamps.length} thumbnails`);
+      setThumbnailOptions(validThumbnails);
+      setSelectedThumbnailIndex(0); // Default to first thumbnail
+      
+      // Set the first thumbnail as the selected one for upload
+      setThumbnailFile(validThumbnails[0].file);
+      setThumbnailURL(validThumbnails[0].url);
+      
+      setMessage(`Generated ${validThumbnails.length} thumbnail options. Select your preferred one.`);
+
+    } catch (error) {
+      console.error("Error generating thumbnails:", error);
+      setMessage(`Failed to generate thumbnails: ${error.message}. Please try again.`);
+      setThumbnailOptions([]);
+    } finally {
+      setIsGeneratingThumbnails(false);
+    }
+  };
+
+  const handleThumbnailSelect = (index) => {
+    setSelectedThumbnailIndex(index);
+    const selectedThumbnail = thumbnailOptions[index];
+    setThumbnailFile(selectedThumbnail.file);
+    setThumbnailURL(selectedThumbnail.url);
+  };
+
+  const handleRegenerateThumbnails = async () => {
+    if (videoFile) {
+      await generateMultipleThumbnails(videoFile);
+    }
+  };
+
+  // Legacy single thumbnail generation (keeping for fallback)
   const generateThumbnail = (file, videoFileName) => {
     return new Promise((resolve, reject) => {
         const video = document.createElement("video");
@@ -152,6 +376,8 @@ const UploadVideo = () => {
 
     setValidationErrors([]);
     setMessage("");
+    setThumbnailOptions([]);
+    setSelectedThumbnailIndex(0);
 
     try {
       // Validate video requirements
@@ -160,19 +386,14 @@ const UploadVideo = () => {
 
       setVideoFile(selectedFile);
 
-      // Extract video filename without extension
-      const videoFileName = selectedFile.name.split('.').slice(0, -1).join('.');
-
-      // Generate thumbnail
-      const thumbnail = await generateThumbnail(selectedFile, videoFileName);
-      setThumbnailFile(thumbnail);
-      setThumbnailURL(URL.createObjectURL(thumbnail));
-
       setSnackbar({
         open: true,
-        message: "Video validated successfully!",
+        message: "Video validated successfully! Generating thumbnails...",
         severity: "success"
       });
+
+      // Generate multiple thumbnails instead of single thumbnail
+      await generateMultipleThumbnails(selectedFile);
 
     } catch (errors) {
       console.error("Video validation failed:", errors);
@@ -180,6 +401,7 @@ const UploadVideo = () => {
       setVideoFile(null);
       setThumbnailFile(null);
       setThumbnailURL(null);
+      setThumbnailOptions([]);
       
       setSnackbar({
         open: true,
@@ -433,6 +655,8 @@ const UploadVideo = () => {
         setVideoFile(null);
         setThumbnailFile(null);
         setThumbnailURL(null);
+        setThumbnailOptions([]);
+        setSelectedThumbnailIndex(0);
         setHashtags([]);
         
         setSnackbar({
@@ -499,9 +723,6 @@ const UploadVideo = () => {
         <CardContent>
           <Typography variant="h4" gutterBottom color="white" align="center">
             Upload Your Video
-          </Typography>
-          <Typography variant="body2" gutterBottom color="gray" align="center" sx={{ mb: 3 }}>
-            Share your short videos (max 1 minute) with the world
           </Typography>
           
           {message && (
@@ -613,7 +834,145 @@ const UploadVideo = () => {
               </Typography>
             </Box>
             
-            {thumbnailURL && (
+            {/* Thumbnail Generation Progress */}
+            {isGeneratingThumbnails && (
+              <Box sx={{ textAlign: 'center', mb: 3 }}>
+                <CircularProgress sx={{ color: 'primary.main' }} />
+                <Typography variant="body2" sx={{ color: 'gray', mt: 1 }}>
+                  {message || "Generating thumbnails..."}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'gray', display: 'block', mt: 1 }}>
+                  This may take a few seconds...
+                </Typography>
+              </Box>
+            )}
+            
+            {/* Multiple Thumbnail Selection */}
+            {thumbnailOptions.length > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: 'white' }}>
+                    Choose your thumbnail ({thumbnailOptions.length} options):
+                  </Typography>
+                  <IconButton
+                    onClick={handleRegenerateThumbnails}
+                    size="small"
+                    sx={{ 
+                      color: 'primary.main',
+                      '&:hover': { backgroundColor: 'rgba(25, 118, 210, 0.1)' }
+                    }}
+                    title="Regenerate thumbnails"
+                  >
+                    <Refresh fontSize="small" />
+                  </IconButton>
+                </Box>
+                
+                <Grid container spacing={1}>
+                  {thumbnailOptions.map((thumbnail, index) => (
+                    <Grid item xs={6} sm={4} key={index}>
+                      <Box
+                        onClick={() => handleThumbnailSelect(index)}
+                        sx={{
+                          position: 'relative',
+                          cursor: 'pointer',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          border: selectedThumbnailIndex === index 
+                            ? '2px solid #1976d2' 
+                            : '2px solid rgba(255, 255, 255, 0.2)',
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            border: '2px solid #1976d2',
+                            transform: 'scale(1.02)',
+                          }
+                        }}
+                      >
+                        <img
+                          src={thumbnail.url}
+                          alt={`Thumbnail ${index + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '80px',
+                            objectFit: 'cover',
+                            display: 'block'
+                          }}
+                        />
+                        
+                        {/* Selection indicator */}
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            color: selectedThumbnailIndex === index ? '#1976d2' : 'rgba(255, 255, 255, 0.7)',
+                            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                            borderRadius: '50%',
+                            padding: '2px'
+                          }}
+                        >
+                          {selectedThumbnailIndex === index ? (
+                            <CheckCircleIcon fontSize="small" />
+                          ) : (
+                            <RadioButtonUnchecked fontSize="small" />
+                          )}
+                        </Box>
+                        
+                        {/* Timestamp label */}
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            bottom: 4,
+                            left: 4,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            color: 'white',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '0.7rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {thumbnail.formattedTime}
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+                
+                {/* Selected thumbnail preview */}
+                <Box sx={{ textAlign: 'center', mt: 2 }}>
+                  <Typography variant="body2" sx={{ color: 'gray', mb: 1 }}>
+                    Selected Thumbnail:
+                  </Typography>
+                  <Box sx={{ display: 'inline-block', position: 'relative' }}>
+                    <img
+                      src={thumbnailOptions[selectedThumbnailIndex]?.url}
+                      alt="Selected thumbnail"
+                      style={{
+                        maxWidth: '200px',
+                        borderRadius: '8px',
+                        border: '2px solid #1976d2',
+                        boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)'
+                      }}
+                    />
+                    <Chip
+                      label={`Option ${selectedThumbnailIndex + 1} - ${thumbnailOptions[selectedThumbnailIndex]?.formattedTime}`}
+                      sx={{
+                        position: 'absolute',
+                        bottom: -10,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        backgroundColor: '#1976d2',
+                        color: 'white',
+                        fontWeight: 'bold'
+                      }}
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            )}
+            
+            {/* Legacy single thumbnail display (fallback) */}
+            {thumbnailURL && thumbnailOptions.length === 0 && (
               <Box textAlign="center" mb={3}>
                 <Typography variant="body2" color="gray" gutterBottom>
                   Generated Thumbnail:
@@ -628,6 +987,19 @@ const UploadVideo = () => {
                     border: "1px solid #333" 
                   }}
                 />
+              </Box>
+            )}
+            
+            {/* Debug info for development */}
+            {process.env.NODE_ENV === 'development' && videoFile && (
+              <Box sx={{ mb: 2, p: 2, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 1 }}>
+                <Typography variant="caption" sx={{ color: 'gray' }}>
+                  Debug: Video selected - {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)}MB)
+                  <br />
+                  Thumbnails generated: {thumbnailOptions.length}
+                  <br />
+                  Selected thumbnail: {selectedThumbnailIndex + 1}
+                </Typography>
               </Box>
             )}
             
@@ -725,13 +1097,17 @@ const UploadVideo = () => {
                   !canUpload || 
                   !videoFile || 
                   !thumbnailFile || 
+                  isGeneratingThumbnails ||
                   validationErrors.length > 0 ||
                   !videoDetails.title.trim() ||
                   !videoDetails.description.trim()
                 }
                 sx={{ py: 1.5 }}
               >
-                {!canUpload ? 'Upload Restricted' : 'Upload Video'}
+                {!canUpload ? 'Upload Restricted' : 
+                 isGeneratingThumbnails ? 'Generating Thumbnails...' :
+                 thumbnailOptions.length === 0 && videoFile ? 'Select Video First' :
+                 'Upload Video'}
               </Button>
             )}
           </form>

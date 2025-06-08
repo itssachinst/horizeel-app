@@ -438,7 +438,6 @@ const HomePage = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                mr: 1,
                 boxShadow: 'inset 0 0 4px rgba(255,255,255,0.6)',
               }}
             >
@@ -451,13 +450,13 @@ const HomePage = () => {
             color: '#000000',
             fontWeight: 'bold',
             fontFamily: 'Roboto',
-            px: 4,
-            py: 1.5,
+            px: 1,
+            py: 1,
             borderRadius: '50px',
             fontSize: '1.1rem',
             textTransform: 'uppercase',
-            width: '220px',
-            minWidth: '200px',
+            width: '170px',
+            minWidth: '160px',
             border: '1px solid rgba(255, 255, 255, 0.5)',
             backdropFilter: 'blur(10px)',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.4)',
@@ -477,7 +476,7 @@ const HomePage = () => {
 
   // Video Grid Component
   const VideoGrid = () => {
-    const displayVideos = isSearching ? searchResults : videos.slice(1); // Skip first video as it's featured
+    const displayVideos = isSearching ? searchResults : videos.slice(10); // Skip first video as it's featured
 
     return (
       <Grid container spacing={3}>
