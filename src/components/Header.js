@@ -108,6 +108,32 @@ const SuggestionText = styled(Typography)(({ theme }) => ({
   color: 'inherit',
 }));
 
+// Styled component for icon buttons with text labels
+const IconButtonWithText = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  cursor: 'pointer',
+  padding: theme.spacing(0.5),
+  borderRadius: '8px',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    background: 'rgba(255, 255, 255, 0.1)',
+    backdropFilter: 'blur(10px)',
+    transform: 'translateY(-1px)',
+  },
+}));
+
+const IconButtonText = styled(Typography)(({ theme }) => ({
+  fontSize: '10px',
+  fontWeight: 500,
+  color: 'rgba(255, 255, 255, 0.9)',
+  marginTop: theme.spacing(0.25),
+  textAlign: 'center',
+  lineHeight: 1,
+  letterSpacing: '0.5px',
+}));
+
 // Category data for rotating suggestions
 const CATEGORIES = [
   'Trending', 'Music', 'Travel', 'Food', 'Gaming', 'Movies', 
@@ -461,33 +487,52 @@ const Header = ({
           {/* Right side - Action buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {/* Desktop Navigation Items */}
-            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
-              <IconButton
-                sx={{
-                  color: 'white',
-                  '&:hover': {
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    backdropFilter: 'blur(10px)'
-                  }
-                }}
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1.5 }}>
+              <IconButtonWithText
                 onClick={handleGoToUpload}
                 title={canUpload ? "Upload Video" : "Upload Restricted"}
-              >
-                <UploadIcon />
-              </IconButton>
-              
-              <IconButton
                 sx={{
-                  color: 'white',
+                  opacity: canUpload ? 1 : 0.6,
                   '&:hover': {
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    backdropFilter: 'blur(10px)'
+                    background: canUpload ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)',
                   }
                 }}
-                onClick={handleGoToFeedback}
               >
-                <FeedbackIcon />
-              </IconButton>
+                <IconButton
+                  sx={{
+                    color: 'white',
+                    p: 0.5,
+                    '&:hover': {
+                      background: 'transparent'
+                    }
+                  }}
+                >
+                  <UploadIcon fontSize="medium" />
+                </IconButton>
+                <IconButtonText>
+                  {canUpload ? 'Upload' : 'Restricted'}
+                </IconButtonText>
+              </IconButtonWithText>
+              
+              <IconButtonWithText
+                onClick={handleGoToFeedback}
+                title="Send Feedback"
+              >
+                <IconButton
+                  sx={{
+                    color: 'white',
+                    p: 0.5,
+                    '&:hover': {
+                      background: 'transparent'
+                    }
+                  }}
+                >
+                  <FeedbackIcon fontSize="medium" />
+                </IconButton>
+                <IconButtonText>
+                  Feedback
+                </IconButtonText>
+              </IconButtonWithText>
               
               <IconButton
                 sx={{
