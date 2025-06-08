@@ -83,7 +83,6 @@ const VideoPlayer = ({
   setCurrentIndex,
   isMobile,
   isTablet,
-  isPaused,
   shouldPreserveFullscreen,
   shouldPreload,
   visibilityState,
@@ -101,7 +100,8 @@ const VideoPlayer = ({
   // Important refs
   const reportedViewRef = useRef(false);
 
-  // State variables
+  // State variables - INTERNAL PAUSE STATE ONLY
+  const [isPaused, setIsPaused] = useState(false); // ✅ Internal state only
   const [likes, setLikes] = useState(0);
   const [dislikes, setDislikes] = useState(0);
   const [views, setViews] = useState(0);
@@ -690,7 +690,7 @@ const VideoPlayer = ({
     // CRITICAL: Only proceed if video actually ended naturally
     // Check if video is at the end (don't check video.paused since videos auto-pause when they end)
     if (videoRef.current) {
-    const video = videoRef.current;
+      const video = videoRef.current;
       const isAtEnd = video.currentTime >= video.duration - 0.5; // Allow small tolerance
       
       // Only proceed if video actually reached the end
@@ -786,28 +786,6 @@ const VideoPlayer = ({
       checkFollowStatus(currentVideo.user_id);
     }
   }, [videos, currentIndex, currentUser]);
-
-  // Handle isPaused changes without restarting the video
-  useEffect(() => {
-    if (!videoRef.current) return;
-    
-    const video = videoRef.current;
-    const isCurrentVideo = videos && videos[currentIndex] && videos[currentIndex].video_id === videoId;
-    
-    // Only control playback for the current video
-    if (!isCurrentVideo) return;
-    
-    if (isPaused && !video.paused) {
-      video.pause();
-                  setIsPlaying(false);
-    } else if (!isPaused && video.paused) {
-      video.play().then(() => {
-        setIsPlaying(true);
-      }).catch(error => {
-        console.error("Error resuming video:", error);
-      });
-    }
-  }, [isPaused, videos, currentIndex, videoId]);
 
   // Keyboard shortcuts handler - defined after all functions it depends on
   const handleKeyPress = useCallback((e) => {

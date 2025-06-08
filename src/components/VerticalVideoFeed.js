@@ -135,7 +135,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
   const isFullscreenRef = useRef(isFullscreen);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
   
   // Track when we're trying to load next video after current last
   const [pendingNextAfterLoad, setPendingNextAfterLoad] = useState(false);
@@ -331,7 +330,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     touchStartTimeRef.current = Date.now();
     setIsDragging(true);
     setDragOffset(0);
-    setIsPaused(true); // Pause videos during drag
   };
   
   const handleTouchMove = (e) => {
@@ -376,11 +374,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     touchStartTimeRef.current = null;
     setIsDragging(false);
     setDragOffset(0);
-    
-    // Resume playback after a short delay to allow navigation to complete
-    setTimeout(() => {
-      setIsPaused(false);
-    }, 100);
   };
   
   // Calculate transform based on current index and drag
@@ -457,7 +450,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
         touchStartTimeRef.current = Date.now();
         setIsDragging(true);
         setDragOffset(0);
-        setIsPaused(true);
       }}
       onMouseMove={(e) => {
         if (!touchStartRef.current || !isDragging) return;
@@ -492,11 +484,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
         touchStartTimeRef.current = null;
         setIsDragging(false);
         setDragOffset(0);
-        
-        // Resume playback after a short delay
-        setTimeout(() => {
-          setIsPaused(false);
-        }, 100);
       }}
       onMouseLeave={() => {
         if (isDragging) {
@@ -504,11 +491,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
           touchStartTimeRef.current = null;
           setIsDragging(false);
           setDragOffset(0);
-          
-          // Resume playback
-          setTimeout(() => {
-            setIsPaused(false);
-          }, 100);
         }
       }}
     >
@@ -549,7 +531,6 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
                 setCurrentIndex={setCurrentIndex}
                 isMobile={isMobile}
                 isTablet={isTablet}
-                isPaused={index !== currentIndex || isPaused} // Only play the current video and respect isPaused state
                 shouldPreserveFullscreen={isFullscreenRef.current} // Prevent exiting fullscreen on swipe
                 shouldPreload={state.shouldPreload} // Indicate if this video should be preloaded
                 visibilityState={
