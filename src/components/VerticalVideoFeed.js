@@ -293,7 +293,7 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
       return;
     }
 
-    if (targetIndex < videos.length) {
+    if (targetIndex <= videos.length) {
       console.log("✅ Navigating to already loaded video:", targetIndex);
       setCurrentIndex(targetIndex);
     } else if (hasMore) {
@@ -306,7 +306,7 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
       }
     } else {
       console.log("🔁 Looping to first video");
-      setCurrentIndex(0);
+      // setCurrentIndex(0);
     }
   }, [currentIndex, videos.length, hasMore, loading, setCurrentIndex, loadMoreVideos, isFirstTime, showTutorial, handleFirstSwipe]);
   

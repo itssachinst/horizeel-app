@@ -50,9 +50,13 @@ const TopTenSidebar = styled(Box)(({ theme }) => ({
   top: 65,
   width: 420,
   height: 'calc(100vh - 80px)',
-  background: 'rgba(0, 0, 0, 0.8)',
+  background: `
+    radial-gradient(ellipse at center, rgba(189, 250, 3, 0.08) 0%, transparent 70%),
+    rgba(0, 0, 0, 0.85)
+  `,
   backdropFilter: 'blur(20px)',
-  borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+  borderRight: '1px solid rgba(189, 250, 3, 0.2)',
+  boxShadow: 'inset -1px 0 0 rgba(189, 250, 3, 0.1)',
   padding: theme.spacing(3),
   overflowY: 'auto',
   zIndex: 1000,
@@ -92,7 +96,13 @@ const MainContent = styled(Box)(({ theme }) => ({
   paddingRight: theme.spacing(1),
   paddingBottom: theme.spacing(1),
   minHeight: '100vh',
-  background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+  background: `
+    radial-gradient(ellipse at top left, rgba(189, 250, 3, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at top right, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom left, rgba(255, 0, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(189, 250, 3, 0.12) 0%, transparent 50%),
+    linear-gradient(135deg, #000000 0%, #0a0a0a 25%, #111111 50%, #0f0f0f 75%, #000000 100%)
+  `,
   overflowY: 'auto',
   [theme.breakpoints.down('lg')]: {
     marginLeft: 0,
@@ -341,7 +351,10 @@ const HomePage = () => {
                       position: 'absolute',
                       top: 4,
                       right: 4,
-                      background: 'rgba(0, 0, 0, 0.8)',
+                      background: `
+    radial-gradient(ellipse at center, rgba(189, 250, 3, 0.08) 0%, transparent 70%),
+    rgba(0, 0, 0, 0.85)
+  `,
                       backdropFilter: 'blur(10px)',
                       borderRadius: '12px',
                       padding: '2px 6px',
@@ -603,7 +616,13 @@ const HomePage = () => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+        background: `
+          radial-gradient(ellipse at top left, rgba(189, 250, 3, 0.15) 0%, transparent 50%),
+          radial-gradient(ellipse at top right, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+          radial-gradient(ellipse at bottom left, rgba(255, 0, 255, 0.08) 0%, transparent 50%),
+          radial-gradient(ellipse at bottom right, rgba(189, 250, 3, 0.12) 0%, transparent 50%),
+          linear-gradient(135deg, #000000 0%, #0a0a0a 25%, #111111 50%, #0f0f0f 75%, #000000 100%)
+        `,
       }}>
         <CircularProgress sx={{ color: '#BDFA03' }} />
         </Box>
@@ -613,7 +632,13 @@ const HomePage = () => {
   return (
     <Box sx={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
+      background: `
+        radial-gradient(ellipse at top left, rgba(189, 250, 3, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at top right, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom left, rgba(255, 0, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom right, rgba(189, 250, 3, 0.12) 0%, transparent 50%),
+        linear-gradient(135deg, #000000 0%, #0a0a0a 25%, #111111 50%, #0f0f0f 75%, #000000 100%)
+      `,
     }}>
       <Header 
         variant="home"
