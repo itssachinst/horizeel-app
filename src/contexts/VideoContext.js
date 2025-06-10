@@ -107,11 +107,22 @@ export const VideoProvider = ({ children }) => {
   }, []);
 
   // Load next batch of videos
-  const loadMoreVideos = useCallback((userId = null) => {
-    if (!hasMore || loadingRef.current) return;
+  const loadMoreVideos = useCallback(async (userId = null) => {
+    if (!hasMore || loadingRef.current) {
+      console.log("📋 loadMoreVideos: Skipping load", { hasMore, loading: loadingRef.current });
+      return []; // Return empty array for consistency
+    }
     
-    console.log("Loading more videos at offset:", videos.length);
-    fetchVideos(videos.length, 20, userId);
+    console.log("📥 loadMoreVideos: Starting load at offset:", videos.length);
+    
+    try {
+      const newVideos = await fetchVideos(videos.length, 20, userId);
+      console.log("✅ loadMoreVideos: Successfully loaded", newVideos?.length || 0, "videos");
+      return newVideos || [];
+    } catch (error) {
+      console.error("❌ loadMoreVideos: Error loading videos:", error);
+      return [];
+    }
   }, [fetchVideos, hasMore, videos.length]);
 
   // Initialize videos on mount, but only once
@@ -125,13 +136,24 @@ export const VideoProvider = ({ children }) => {
 
   // Handle when user approaches end of video list
   useEffect(() => {
+    // DISABLED: Automatic loading is now handled by VerticalVideoFeed to prevent race conditions
     // Only load more if we're close to the end and not already loading
-    if (videos.length > 0 && 
-        currentIndex >= videos.length - 3 && 
-        hasMore && 
-        !loadingRef.current) {
-      console.log("Near end of list, loading more videos");
-      loadMoreVideos();
+    // if (videos.length > 0 && 
+    //     currentIndex >= videos.length - 3 && 
+    //     hasMore && 
+    //     !loadingRef.current) {
+    //   console.log("Near end of list, loading more videos");
+    //   loadMoreVideos();
+    // }
+    
+    // Keep the effect but make it passive for debugging
+    if (videos.length > 0 && currentIndex >= videos.length - 3) {
+      console.log("VideoContext: Near end of list detected", {
+        currentIndex,
+        videosLength: videos.length,
+        hasMore,
+        loading: loadingRef.current
+      });
     }
   }, [currentIndex, videos.length, hasMore, loadMoreVideos]);
 

@@ -14,12 +14,17 @@ const VerticalFeedPage = () => {
   const userExitedFullscreenRef = useRef(false);
   const hasAutoEnteredFullscreenRef = useRef(false);
   
+  // Track if we've already initialized to prevent unnecessary resets
+  const hasInitializedRef = useRef(false);
+  
   const { 
     videos, 
     loading, 
     currentIndex, 
     setCurrentIndex,
-    resetVideos
+    resetVideos,
+    hasMore,
+    loadMoreVideos
   } = useVideoContext();
   
   // Handle toggling fullscreen mode with improved error handling and state validation
@@ -114,12 +119,35 @@ const VerticalFeedPage = () => {
   
   // Reset videos on mount to clear any previous feeds
   useEffect(() => {
-    resetVideos();
+    // CRITICAL FIX: Only reset videos if we're coming from a different page
+    // Don't reset when navigating between videos in the same session
+    const isVideoNavigation = id && window.location.pathname.startsWith('/reels/');
+    
+    if (!isVideoNavigation) {
+      console.log("🔄 Resetting videos - fresh page load");
+      // CRITICAL FIX: Use session storage to track if we're in a video navigation session
+    const isInVideoSession = sessionStorage.getItem('horizeel_video_session') === 'true';
+    const isVideoPage = window.location.pathname.startsWith('/reels/');
+    
+    if (!isInVideoSession || !isVideoPage) {
+      console.log("🔄 Resetting videos - fresh session or non-video page");
+      resetVideos();
+      
+      // Mark that we're now in a video session
+      if (isVideoPage) {
+        sessionStorage.setItem('horizeel_video_session', 'true');
+      }
+    } else {
+      console.log("🎯 Video session detected - preserving video state");
+    }
+    } else {
+      console.log("🎯 Video navigation detected - preserving video state");
+    }
     
     // Reset fullscreen tracking on fresh page load
     userExitedFullscreenRef.current = false;
     hasAutoEnteredFullscreenRef.current = false;
-  }, [resetVideos]);
+  }, []); // Remove resetVideos from dependencies to prevent unnecessary resets
   
   // Improve handling of video ID
   useEffect(() => {
@@ -130,13 +158,21 @@ const VerticalFeedPage = () => {
       if (videoIndex !== -1) {
         console.log(`Found video at index ${videoIndex}, setting as current`);
         setCurrentIndex(videoIndex);
+        
+        // CRITICAL FIX: If we're accessing a video near the end of the loaded batch,
+        // preemptively load more videos to ensure smooth navigation
+        const isNearEnd = videoIndex >= videos.length - 5; // Within 5 videos of the end
+        if (isNearEnd && hasMore && !loading) {
+          console.log(`Direct access to video near end (index ${videoIndex}), preloading more videos`);
+          loadMoreVideos();
+        }
       } else {
         console.log(`Video ID ${id} not found in loaded videos`);
         // If the video is not found, we will stay at index 0
         // This could potentially be enhanced to fetch the specific video
       }
     }
-  }, [id, videos, setCurrentIndex]);
+  }, [id, videos, setCurrentIndex, hasMore, loading, loadMoreVideos]);
   
   // Add auto-fullscreen for better experience on direct access - but respect user choice
   useEffect(() => {
@@ -230,7 +266,7 @@ const VerticalFeedPage = () => {
       // Update state only if it actually changed
       if (isFullscreen !== isDocumentFullscreen) {
         console.log(`Updating fullscreen state: ${isFullscreen} -> ${isDocumentFullscreen}`);
-        setIsFullscreen(isDocumentFullscreen);
+      setIsFullscreen(isDocumentFullscreen);
       }
     };
     

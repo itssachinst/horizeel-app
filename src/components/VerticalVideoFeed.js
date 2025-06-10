@@ -140,11 +140,31 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
   const [pendingNextAfterLoad, setPendingNextAfterLoad] = useState(false);
   
   // Track when we're trying to loop to last video
-  const [pendingLoopToLast, setPendingLoopToLast] = useState(false);
+
   const previousVideosLengthRef = useRef(videos.length);
   
   // Track preloaded videos to avoid redundant preloading
   const preloadedVideosRef = useRef(new Set());
+  
+  // Track target index for next navigation to avoid stale closure issues
+  const pendingNextTargetIndexRef = useRef(null);
+  
+  // Add timeout ref to handle delayed state checks
+  const navigationTimeoutRef = useRef(null);
+  
+  // Add debounce ref to prevent rapid navigation calls
+  const lastNavigationTimeRef = useRef(0);
+  const NAVIGATION_DEBOUNCE_MS = 300;
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+        navigationTimeoutRef.current = null;
+      }
+    };
+  }, []);
   
   // Compute which videos should be visible or preloaded
   const videoRenderStates = useMemo(() => {
@@ -256,64 +276,56 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     
   }, [videos, currentIndex, videoRenderStates]);
   
-  // Handle manual navigation with seamless looping
   const goToNextVideo = useCallback(() => {
-    console.log("goToNextVideo called - currentIndex:", currentIndex, "videos.length:", videos.length, "hasMore:", hasMore, "loading:", loading);
+    const now = Date.now();
     
-    // Handle first swipe for tutorial
+    // Debounce rapid navigation calls
+    if (now - lastNavigationTimeRef.current < NAVIGATION_DEBOUNCE_MS) {
+      console.log("🚫 Navigation debounced");
+      return;
+    }
+    lastNavigationTimeRef.current = now;
+
+    const targetIndex = currentIndex + 1;
+
     if (isFirstTime && showTutorial) {
       handleFirstSwipe();
+      return;
     }
-    
-    if (currentIndex < videos.length - 1) {
-      // Normal forward navigation
-      console.log("Normal forward navigation to index:", currentIndex + 1);
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      // At the last video - implement looping behavior
-      if (hasMore && !loading) {
-        // Load more videos and wait for them to load before navigating
-        console.log("At last video with more available - loading more videos");
-        setPendingNextAfterLoad(true);
+
+    if (targetIndex < videos.length) {
+      console.log("✅ Navigating to already loaded video:", targetIndex);
+      setCurrentIndex(targetIndex);
+    } else if (hasMore) {
+      console.log("📥 Need to load more videos to reach:", targetIndex);
+      pendingNextTargetIndexRef.current = targetIndex;
+      setPendingNextAfterLoad(true);
+
+      if (!loading) {
         loadMoreVideos();
-      } else {
-        // No more videos available - loop back to first video
-        console.log("At last video with no more available - looping to first video");
-        setCurrentIndex(0);
       }
+    } else {
+      console.log("🔁 Looping to first video");
+      setCurrentIndex(0);
     }
-  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex, isFirstTime, showTutorial, handleFirstSwipe]);
+  }, [currentIndex, videos.length, hasMore, loading, setCurrentIndex, loadMoreVideos, isFirstTime, showTutorial, handleFirstSwipe]);
   
   const goToPrevVideo = useCallback(() => {
-    // Handle first swipe for tutorial
     if (isFirstTime && showTutorial) {
       handleFirstSwipe();
+      return;
     }
-    
-    if (currentIndex > 0) {
-      // Normal backward navigation
-      setCurrentIndex(currentIndex - 1);
+
+    const targetIndex = currentIndex - 1;
+
+    if (targetIndex >= 0) {
+      console.log("⬅️ Going to previous video:", targetIndex);
+      setCurrentIndex(targetIndex);
     } else {
-      // At the first video - loop to last video
-      console.log("At first video - implementing loop to last video");
-      
-      if (hasMore && !loading) {
-        // There are more videos available - load more and then go to last
-        console.log("More videos available - loading more to find true last video");
-        setPendingLoopToLast(true);
-        loadMoreVideos();
-      } else {
-        // No more videos available or already loading - go to current last video
-        if (videos.length > 1) {
-          console.log("Going to current last video:", videos.length - 1);
-          setCurrentIndex(videos.length - 1);
-        } else {
-          // Edge case: only one video, stay at current
-          console.log("Only one video available - staying at current");
-        }
-      }
+      console.log("🔁 Looping to last video");
+      setCurrentIndex(videos.length - 1);
     }
-  }, [currentIndex, videos.length, hasMore, loading, loadMoreVideos, setCurrentIndex, setPendingLoopToLast, isFirstTime, showTutorial, handleFirstSwipe]);
+  }, [currentIndex, videos.length, isFirstTime, showTutorial, handleFirstSwipe, setCurrentIndex]);
   
   // Use trackpad gestures for desktop navigation
   const { resetGesture } = useTrackpadGestures(
@@ -413,23 +425,24 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
     return 0.85; // Default scale for non-active videos
   };
   
-  // Handle pending navigation operations when videos are loaded
+  // Handle pending next navigation after video load
   useEffect(() => {
-    if (!loading && videos.length > previousVideosLengthRef.current) {
-      if (pendingLoopToLast) {
-        // New videos have been loaded, now go to the last video
-        console.log("New videos loaded, navigating to last video for loop");
-        setCurrentIndex(videos.length - 1);
-        setPendingLoopToLast(false);
-      } else if (pendingNextAfterLoad) {
-        // New videos have been loaded, now go to the next video
-        console.log("New videos loaded, navigating to next video");
-        setCurrentIndex(currentIndex + 1);
-        setPendingNextAfterLoad(false);
-      }
+    const targetIndex = pendingNextTargetIndexRef.current;
+
+    if (!pendingNextAfterLoad || targetIndex == null) return;
+
+    console.log("🔄 Post-load Navigation Trigger", {
+      loading,
+      targetIndex,
+      available: videos.length
+    });
+
+    if (!loading && targetIndex < videos.length) {
+      setCurrentIndex(targetIndex);
+      setPendingNextAfterLoad(false);
+      pendingNextTargetIndexRef.current = null;
     }
-    previousVideosLengthRef.current = videos.length;
-  }, [videos.length, loading, pendingLoopToLast, pendingNextAfterLoad, currentIndex, setCurrentIndex]);
+  }, [videos.length, loading, pendingNextAfterLoad, setCurrentIndex]);
   
   return (
     <Box 
@@ -567,4 +580,4 @@ const VerticalVideoFeed = ({ isMobile, isTablet, isFullscreen, onToggleFullscree
   );
 };
 
-export default VerticalVideoFeed; 
+export default VerticalVideoFeed;

@@ -384,7 +384,7 @@ const UploadVideo = () => {
       const videoInfo = await validateVideo(selectedFile);
       console.log("Video validation passed:", videoInfo);
 
-      setVideoFile(selectedFile);
+    setVideoFile(selectedFile);
 
       setSnackbar({
         open: true,

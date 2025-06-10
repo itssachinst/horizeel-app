@@ -214,7 +214,7 @@ const HomePage = () => {
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !loading && !isSearching) {
         console.log('Loading more videos from HomePage...');
-        loadMoreVideos();
+            loadMoreVideos();
       }
     });
     if (node) observer.current.observe(node);
@@ -314,7 +314,7 @@ const HomePage = () => {
 
                   {/* Play Icon Overlay */}
                   <Box
-                    sx={{
+                sx={{
                       position: 'absolute',
                       top: '50%',
                       left: '50%',
@@ -333,11 +333,11 @@ const HomePage = () => {
                         filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8))',
                       }}
                     />
-                  </Box>
+            </Box>
 
                   {/* View Count Badge */}
-                  <Box
-                    sx={{
+            <Box
+              sx={{
                       position: 'absolute',
                       top: 4,
                       right: 4,
@@ -364,7 +364,7 @@ const HomePage = () => {
                     </Typography>
                   </Box>
                 </Box>
-              </Box>
+            </Box>
             </GlassCard>
           </Box>
         </Grow>
@@ -408,7 +408,7 @@ const HomePage = () => {
           p: 2,
         }}
       >
-        <Typography
+      <Typography
           sx={{
             color: 'white',
             fontWeight: 'bold',
@@ -423,14 +423,14 @@ const HomePage = () => {
           }}
         >
           Experience the world's first horizontal reels
-        </Typography>
+      </Typography>
 
         <Button
           variant="contained"
           size="large"
           startIcon={
-            <Box
-              sx={{
+        <Box
+          sx={{
                 width: 32,
                 height: 32,
                 borderRadius: '50%',
@@ -442,7 +442,7 @@ const HomePage = () => {
               }}
             >
               <PlayArrow sx={{ color: '#000000' }} />
-            </Box>
+        </Box>
           }
           onClick={() => videos.length > 0 && handleVideoClick(videos[0].video_id, 0)}
           sx={{
@@ -478,7 +478,7 @@ const HomePage = () => {
   const VideoGrid = () => {
     const displayVideos = isSearching ? searchResults : videos.slice(10); // Skip first video as it's featured
 
-    return (
+  return (
       <Grid container spacing={3}>
         {displayVideos.map((video, index) => {
           const isLast = index === displayVideos.length - 1;
@@ -511,8 +511,8 @@ const HomePage = () => {
                 />
 
                 {/* Views Count - Top Right Overlay */}
-                <Box
-                  sx={{
+        <Box 
+          sx={{ 
                     position: 'absolute',
                     top: 8,
                     right: 8,
@@ -537,12 +537,12 @@ const HomePage = () => {
                   >
                     {formatViewCount(video.views || 0)}
                   </Typography>
-                </Box>
+        </Box>
 
                 {/* Duration Badge - Top Left */}
                 {video.duration && (
-                  <Box
-                    sx={{
+        <Box
+          sx={{
                       position: 'absolute',
                       top: 8,
                       left: 8,
@@ -557,8 +557,8 @@ const HomePage = () => {
                     }}
                   >
                     {formatDuration(video.duration)}
-                  </Box>
-                )}
+        </Box>
+      )}
 
                 {/* Title - Bottom Left Overlay */}
                 <Box
@@ -606,7 +606,7 @@ const HomePage = () => {
         background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)',
       }}>
         <CircularProgress sx={{ color: '#BDFA03' }} />
-      </Box>
+        </Box>
     );
   }
 

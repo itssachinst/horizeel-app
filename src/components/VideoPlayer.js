@@ -327,8 +327,8 @@ const VideoPlayer = ({
         bottom: bottomExclusionZone,
         right: rightExclusionZone
       });
-      return;
-    }
+          return;
+        }
 
     console.log('Click accepted - toggling play/pause');
     
@@ -475,7 +475,7 @@ const VideoPlayer = ({
             setIsPlaying(true);
           }).catch(error => {
             console.error("Error in backward seek fallback:", error);
-                setIsPlaying(false);
+                  setIsPlaying(false);
                 });
         }
         setCurrentTime(video.currentTime);
@@ -507,7 +507,7 @@ const VideoPlayer = ({
       }
       setSnackbarMessage(isLiked ? "Like removed" : "Video liked!");
       setShowSnackbar(true);
-          } catch (error) {
+    } catch (error) {
       console.error("Error liking video:", error);
       setSnackbarMessage("Error liking video");
       setShowSnackbar(true);
@@ -519,8 +519,8 @@ const VideoPlayer = ({
     if (!currentUser) {
       setSnackbarMessage("Please log in to save videos");
       setShowSnackbar(true);
-        return;
-      }
+      return;
+    }
 
     const currentVideo = videos[currentIndex];
     if (!currentVideo?.video_id) return;
@@ -601,7 +601,7 @@ const VideoPlayer = ({
     } catch (error) {
       console.error("Error following/unfollowing user:", error);
       setSnackbarMessage("Error updating follow status");
-      setShowSnackbar(true);
+          setShowSnackbar(true);
     } finally {
       setFollowLoading(false);
     }
@@ -690,7 +690,7 @@ const VideoPlayer = ({
     // CRITICAL: Only proceed if video actually ended naturally
     // Check if video is at the end (don't check video.paused since videos auto-pause when they end)
     if (videoRef.current) {
-      const video = videoRef.current;
+    const video = videoRef.current;
       const isAtEnd = video.currentTime >= video.duration - 0.5; // Allow small tolerance
       
       // Only proceed if video actually reached the end
@@ -763,7 +763,10 @@ const VideoPlayer = ({
     setDislikes(currentVideo.dislikes || 0);
     setViews(currentVideo.views || 0);
 
-    // Update URL without navigation (only if needed)
+    // CRITICAL FIX: Disable URL updates to prevent React Router remounts
+    // The URL updates were causing VerticalFeedPage to remount and reset videos
+    // TODO: Implement URL updates without causing remounts
+    /*
     try {
       const currentPath = window.location.pathname;
       const targetPath = `/reels/${currentVideo.video_id}`;
@@ -779,6 +782,7 @@ const VideoPlayer = ({
     } catch (error) {
       console.error("Error updating URL:", error);
     }
+    */
 
     // Check saved and follow status if user is logged in
     if (currentUser) {
@@ -973,9 +977,9 @@ const VideoPlayer = ({
 
     if (isDescriptionExpanded) {
       document.addEventListener('click', handleClickOutside);
-      return () => {
+    return () => {
         document.removeEventListener('click', handleClickOutside);
-      };
+    };
     }
   }, [isDescriptionExpanded]);
 
@@ -1207,14 +1211,14 @@ const VideoPlayer = ({
           )}
 
           {/* Enhanced click overlay for reliable play/pause detection */}
-          <Box
+            <Box
             onClick={handleVideoContainerClick}
             onMouseDown={(e) => {
               // Prevent interference with other mouse handlers
               e.stopPropagation();
             }}
-            sx={{
-              position: 'absolute',
+              sx={{
+                position: 'absolute',
               top: 0,
               left: 0,
               right: 0,

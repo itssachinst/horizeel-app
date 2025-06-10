@@ -141,10 +141,10 @@ const ProfilePage = () => {
           } else if (videos.results && Array.isArray(videos.results)) {
             console.log("Extracting videos from .results property");
             extractedVideos = videos.results;
-          } else {
+      } else {
             console.error("Could not extract videos array from response object");
-            setError("Received invalid data format from server");
-            showSnackbarMessage("Received invalid data format from server", "error");
+        setError("Received invalid data format from server");
+        showSnackbarMessage("Received invalid data format from server", "error");
             setUserVideos([]);
             return;
           }

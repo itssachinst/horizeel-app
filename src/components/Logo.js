@@ -20,8 +20,8 @@ const LogoImage = styled('img')(({ theme }) => ({
 const LogoText = styled(Typography)(({ theme }) => ({
   fontWeight: 800,
   letterSpacing: '0.5px',
-  fontSize: '2.5rem',
-  color: 'white',
+  fontSize: '2rem',
+  color: '#bdfa03',
   fontFamily: 'Roboto',
   [theme.breakpoints.down('sm')]: {
     fontSize: '1.2rem',
@@ -32,8 +32,8 @@ const Logo = ({ onClick }) => {
   return (
     <LogoWrapper onClick={onClick}>
       <LogoImage src="/logo512.png" alt="Horizeel Logo" />
-      <LogoText fontFamily="Roboto-black">
-        Horizeel
+      <LogoText >
+        HORIZEEL
       </LogoText>
     </LogoWrapper>
   );

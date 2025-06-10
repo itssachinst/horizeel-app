@@ -77,7 +77,7 @@ const UploadVideo = () => {
         console.log(`Video seeked to ${video.currentTime}s for ${timeInSeconds}s thumbnail`);
         
         try {
-          const canvas = document.createElement("canvas");
+        const canvas = document.createElement("canvas");
           canvas.width = Math.min(video.videoWidth, 640); // Limit max width
           canvas.height = Math.min(video.videoHeight, 360); // Limit max height
           
@@ -88,10 +88,10 @@ const UploadVideo = () => {
             canvas.height = video.videoHeight * ratio;
           }
           
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          canvas.toBlob((blob) => {
+        canvas.toBlob((blob) => {
             if (blob && !hasResolved) {
               hasResolved = true;
               const thumbnailFile = new File([blob], `thumbnail_${timeInSeconds}s.jpg`, { type: "image/jpeg" });
@@ -342,9 +342,9 @@ const UploadVideo = () => {
             textAlign: 'center',
             mb: 3
           }}>
-            Upload Video
-          </Typography>
-          {message && (
+          Upload Video
+        </Typography>
+        {message && (
             <Typography 
               variant="body1" 
               sx={{ 
@@ -359,18 +359,18 @@ const UploadVideo = () => {
                 border: `1px solid ${message.includes('successfully') ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)'}`,
               }}
             >
-              {message}
-            </Typography>
-          )}
-          <form onSubmit={handleSubmit}>
-            <TextField
-              label="Video Title"
+            {message}
+          </Typography>
+        )}
+        <form onSubmit={handleSubmit}>
+          <TextField
+            label="Video Title"
               name="title"
-              value={videoDetails.title}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              required
+            value={videoDetails.title}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
               sx={{
                 '& .MuiOutlinedInput-root': {
                   color: 'white',
@@ -391,15 +391,15 @@ const UploadVideo = () => {
                   },
                 },
               }}
-            />
-            <TextField
-              label="Description"
-              name="description"
-              value={videoDetails.description}
-              onChange={handleChange}
-              fullWidth
-              margin="normal"
-              required
+          />
+          <TextField
+            label="Description"
+            name="description"
+            value={videoDetails.description}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+            required
               multiline
               rows={3}
               sx={{
@@ -466,11 +466,11 @@ const UploadVideo = () => {
                     </Typography>
                   </Box>
                 )}
-                <input
-                  type="file"
-                  accept="video/*"
-                  onChange={handleFileChange}
-                  required
+          <input
+            type="file"
+            accept="video/*"
+            onChange={handleFileChange}
+            required
                   style={{ display: 'none' }}
                 />
               </Box>
@@ -654,10 +654,10 @@ const UploadVideo = () => {
                   ? 'Select Video First'
                   : 'Upload Video'
               }
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
     </Box>
   );
 };
